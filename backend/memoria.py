@@ -1,4 +1,4 @@
-"""Memoria persistente de Jarvis.
+﻿"""Memoria persistente de Jarvis.
 
 Dos cosas viven aqui:
   - hechos: cosas que Jarvis debe recordar para siempre (guardadas en JSON)
@@ -13,11 +13,14 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-DATA = Path(__file__).resolve().parent.parent / "data"
-DATA.mkdir(exist_ok=True)
+from . import rutas
 
-ARCHIVO_HECHOS = DATA / "hechos.json"
-ARCHIVO_CONVERSACION = DATA / "conversacion.json"
+def ARCHIVO_HECHOS() -> Path:
+    return rutas.archivo("hechos.json")
+
+
+def ARCHIVO_CONVERSACION() -> Path:
+    return rutas.archivo("conversacion.json")
 
 
 def _leer(archivo: Path, por_defecto):
@@ -40,7 +43,7 @@ def _escribir(archivo: Path, datos):
 # --------------------------------------------------------------------------
 
 def todos_los_hechos() -> list[dict]:
-    return _leer(ARCHIVO_HECHOS, [])
+    return _leer(ARCHIVO_HECHOS(), [])
 
 
 def recordar(contenido: str, categoria: str = "general") -> dict:
@@ -59,7 +62,7 @@ def recordar(contenido: str, categoria: str = "general") -> dict:
         "creado": datetime.now().isoformat(timespec="seconds"),
     }
     hechos.append(hecho)
-    _escribir(ARCHIVO_HECHOS, hechos)
+    _escribir(ARCHIVO_HECHOS(), hechos)
     return hecho
 
 
@@ -68,7 +71,7 @@ def olvidar(id_hecho: str) -> bool:
     quedan = [h for h in hechos if h["id"] != id_hecho]
     if len(quedan) == len(hechos):
         return False
-    _escribir(ARCHIVO_HECHOS, quedan)
+    _escribir(ARCHIVO_HECHOS(), quedan)
     return True
 
 
@@ -114,13 +117,13 @@ def resumen_para_prompt(maximo: int = 60) -> str:
 # --------------------------------------------------------------------------
 
 def cargar_conversacion() -> list[dict]:
-    return _leer(ARCHIVO_CONVERSACION, [])
+    return _leer(ARCHIVO_CONVERSACION(), [])
 
 
 def guardar_conversacion(mensajes: list[dict], maximo: int = 40) -> None:
     """Guarda solo los ultimos mensajes para que el archivo no crezca sin fin."""
-    _escribir(ARCHIVO_CONVERSACION, mensajes[-maximo:])
+    _escribir(ARCHIVO_CONVERSACION(), mensajes[-maximo:])
 
 
 def borrar_conversacion() -> None:
-    _escribir(ARCHIVO_CONVERSACION, [])
+    _escribir(ARCHIVO_CONVERSACION(), [])

@@ -10,6 +10,57 @@ datos de Supabase.
 
 El punto junto al nombre está verde cuando la clave de OpenAI está bien puesta.
 
+## Desplegarlo en un servidor
+
+Railway (u otro con Railpack) detecta FastAPI, pero busca `main.py` en la raíz
+y el nuestro está en `backend/`. Por eso hay un [railpack.json](railpack.json)
+que fija el arranque:
+
+```
+uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+### Contraseña obligatoria
+
+**Si Jarvis detecta que corre hospedado y no hay `JARVIS_PASSWORD`, no sirve
+nada.** Muestra una página explicando cómo configurarla y devuelve 503.
+
+Es deliberado. Sin ella, cualquiera con la URL podría consultar tus bases de
+datos, leer tus recuerdos y gastar tus créditos de OpenAI. Un despliegue que no
+arranca es mejor que uno abierto.
+
+En local no cambia nada: sin la variable, funciona como siempre.
+
+La sesión es una cookie firmada con HMAC, `HttpOnly` y `Secure` en servidor.
+No hay estado en memoria, así que sobrevive a los reinicios.
+
+### Variables a configurar
+
+| Variable | |
+|---|---|
+| `OPENAI_API_KEY` | Obligatoria |
+| `JARVIS_PASSWORD` | Obligatoria al hospedar |
+| `JARVIS_DATA_DIR` | Ruta del volumen persistente |
+| `JARVIS_CLAVE_SECRETA` | Fija la clave de cifrado |
+| `SUPABASE_*` | Las mismas de la sección de Supabase |
+
+### El disco se borra
+
+En Railway el sistema de archivos es efímero: cada despliegue empieza de cero.
+Sin un volumen perderías los recuerdos, el caché del esquema y —lo más
+molesto— `clave.key`, sin la cual **las credenciales guardadas de tus fuentes
+quedan indescifrables**.
+
+Monta un volumen y apunta `JARVIS_DATA_DIR` ahí. Si prefieres no usarlo, al
+menos fija `JARVIS_CLAVE_SECRETA` para que la clave de cifrado sea estable
+entre despliegues.
+
+### La voz necesita HTTPS
+
+El micrófono del navegador solo funciona en contextos seguros. Railway da
+HTTPS por defecto, así que funciona; en local funciona porque `127.0.0.1`
+cuenta como seguro. Un servidor propio sin certificado se queda sin voz.
+
 ## Los dos modos
 
 | | Modo texto | Voz en vivo |

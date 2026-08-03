@@ -15,10 +15,13 @@ from pathlib import Path
 
 import httpx
 
-from . import conectores
+from . import conectores, rutas
 
-CACHE = Path(__file__).resolve().parent.parent / "data" / "esquema.json"
 VIGENCIA = timedelta(hours=12)
+
+
+def CACHE() -> Path:
+    return rutas.archivo("esquema.json")
 
 _candado = threading.Lock()
 
@@ -165,10 +168,11 @@ def filas_de(sobre: dict) -> list[dict]:
 # --------------------------------------------------------------------------
 
 def leer_cache() -> dict | None:
-    if not CACHE.exists():
+    ruta = CACHE()
+    if not ruta.exists():
         return None
     try:
-        return json.loads(CACHE.read_text(encoding="utf-8"))
+        return json.loads(ruta.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -195,8 +199,9 @@ def refrescar() -> dict | None:
             return None
 
         cache = {"creado": datetime.now().isoformat(timespec="seconds"), "tablas": tablas}
-        CACHE.parent.mkdir(exist_ok=True)
-        CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+        CACHE().write_text(
+            json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return cache
 
 

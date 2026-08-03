@@ -15,11 +15,13 @@ import time
 import uuid
 from pathlib import Path
 
-from . import secretos
-
-ARCHIVO = Path(__file__).resolve().parent.parent / "data" / "fuentes.json"
+from . import rutas, secretos
 
 _candado = threading.Lock()
+
+
+def ARCHIVO() -> Path:
+    return rutas.archivo("fuentes.json")
 
 
 # --------------------------------------------------------------------------
@@ -95,17 +97,17 @@ def tipos_para_interfaz() -> dict:
 # --------------------------------------------------------------------------
 
 def _leer() -> list[dict]:
-    if not ARCHIVO.exists():
+    ruta = ARCHIVO()
+    if not ruta.exists():
         return []
     try:
-        return json.loads(ARCHIVO.read_text(encoding="utf-8"))
+        return json.loads(ruta.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return []
 
 
 def _escribir(fuentes: list[dict]) -> None:
-    ARCHIVO.parent.mkdir(exist_ok=True)
-    ARCHIVO.write_text(
+    ARCHIVO().write_text(
         json.dumps(fuentes, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 

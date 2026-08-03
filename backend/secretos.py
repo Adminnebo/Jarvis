@@ -15,8 +15,10 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
-DATA = Path(__file__).resolve().parent.parent / "data"
-ARCHIVO_CLAVE = DATA / "clave.key"
+from . import rutas
+
+def archivo_clave() -> Path:
+    return rutas.archivo("clave.key")
 
 MARCA = "cifrado:"
 
@@ -38,10 +40,10 @@ def clave() -> bytes:
         relleno = del_entorno.encode("utf-8").ljust(32, b"0")[:32]
         return base64.urlsafe_b64encode(relleno)
 
-    DATA.mkdir(exist_ok=True)
-    if not ARCHIVO_CLAVE.exists():
-        ARCHIVO_CLAVE.write_bytes(Fernet.generate_key())
-    return ARCHIVO_CLAVE.read_bytes()
+    ruta = archivo_clave()
+    if not ruta.exists():
+        ruta.write_bytes(Fernet.generate_key())
+    return ruta.read_bytes()
 
 
 def cifrar(texto: str) -> str:

@@ -4,8 +4,14 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -17,12 +23,14 @@ RAIZ = Path(__file__).resolve().parent.parent
 load_dotenv(RAIZ / ".env", override=True)
 
 from . import (  # noqa: E402 - despues de load_dotenv a proposito
+    acceso,
     cerebro,
     conectores,
     esquema,
     fuentes,
     herramientas,
     memoria,
+    rutas,
 )
 
 WEB = RAIZ / "web"
@@ -32,9 +40,67 @@ app = FastAPI(title="Jarvis")
 
 @app.on_event("startup")
 def al_arrancar():
+    if acceso.obligatorio():
+        print(
+            "\n  AVISO: Jarvis esta hospedado y no hay JARVIS_PASSWORD.\n"
+            "  No se servira nada hasta que definas esa variable.\n"
+        )
     # Traer el esquema ahora evita que la primera pregunta sobre la base de
     # datos pague el costo de descubrirlo.
     esquema.refrescar_en_segundo_plano()
+
+
+@app.middleware("http")
+async def guardia(peticion: Request, siguiente):
+    """Nadie pasa sin contrasena cuando esto corre en un servidor."""
+    ruta = peticion.url.path
+
+    if acceso.es_libre(ruta):
+        return await siguiente(peticion)
+
+    if acceso.obligatorio():
+        return HTMLResponse(acceso.pagina_sin_proteger(), status_code=503)
+
+    if acceso.protegido() and not acceso.token_valido(peticion.cookies.get(acceso.COOKIE)):
+        # A la interfaz le mostramos el formulario; a la API, un 401 limpio.
+        if ruta.startswith("/api/"):
+            return JSONResponse(status_code=401, content={"error": "No autorizado."})
+        return HTMLResponse(acceso.pagina_login(), status_code=401)
+
+    return await siguiente(peticion)
+
+
+@app.get("/api/salud")
+def salud():
+    """Comprobacion de vida para el proveedor. No revela nada."""
+    return {"ok": True}
+
+
+@app.get("/acceso")
+def formulario_de_acceso():
+    return HTMLResponse(acceso.pagina_login())
+
+
+@app.post("/acceso")
+async def entrar(clave: str = Form("")):
+    if not acceso.protegido():
+        return RedirectResponse("/", status_code=303)
+
+    if not acceso.clave_correcta(clave):
+        return HTMLResponse(
+            acceso.pagina_login("Contrasena incorrecta."), status_code=401
+        )
+
+    respuesta = RedirectResponse("/", status_code=303)
+    respuesta.set_cookie(
+        acceso.COOKIE,
+        acceso.crear_token(),
+        max_age=acceso.DURACION,
+        httponly=True,
+        samesite="lax",
+        secure=rutas.hospedado(),   # en local va por http, ahi no aplica
+    )
+    return respuesta
 
 
 class PeticionDeChat(BaseModel):
