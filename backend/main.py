@@ -1,0 +1,191 @@
+"""Servidor local de Jarvis. Sirve la interfaz web y la API de chat."""
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+RAIZ = Path(__file__).resolve().parent.parent
+
+# override=True para que .env gane siempre: sin esto, al recargar el servidor
+# se quedan pegados los valores viejos del proceso padre y editar .env parece
+# no tener efecto.
+load_dotenv(RAIZ / ".env", override=True)
+
+from . import (  # noqa: E402 - despues de load_dotenv a proposito
+    cerebro,
+    conectores,
+    esquema,
+    fuentes,
+    herramientas,
+    memoria,
+)
+
+WEB = RAIZ / "web"
+
+app = FastAPI(title="Jarvis")
+
+
+@app.on_event("startup")
+def al_arrancar():
+    # Traer el esquema ahora evita que la primera pregunta sobre la base de
+    # datos pague el costo de descubrirlo.
+    esquema.refrescar_en_segundo_plano()
+
+
+class PeticionDeChat(BaseModel):
+    mensaje: str
+
+
+class PeticionDeHerramienta(BaseModel):
+    nombre: str
+    argumentos: str = "{}"
+
+
+class MensajeSuelto(BaseModel):
+    role: str
+    content: str
+
+
+@app.get("/api/estado")
+def estado():
+    clave = os.getenv("OPENAI_API_KEY", "").strip()
+    return {
+        "nombre": os.getenv("JARVIS_NOMBRE", "Jarvis"),
+        "usuario": os.getenv("JARVIS_USUARIO", ""),
+        "modelo": os.getenv("OPENAI_MODEL", "gpt-5.6-terra"),
+        "modelo_voz": os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1-mini"),
+        "clave_configurada": bool(clave) and not clave.startswith("sk-pon-tu-clave"),
+        "hechos_recordados": len(memoria.todos_los_hechos()),
+        "historial": memoria.cargar_conversacion(),
+        "conectores": conectores.resumen(),
+        "esquema": esquema.info(),
+    }
+
+
+@app.post("/api/esquema/refrescar")
+def refrescar_esquema():
+    """Para cuando cambies la base de datos y Jarvis siga viendo lo viejo."""
+    return {"ok": esquema.refrescar() is not None, "esquema": esquema.info()}
+
+
+@app.post("/api/chat")
+def chat(peticion: PeticionDeChat):
+    mensajes = memoria.cargar_conversacion()
+    mensajes.append({"role": "user", "content": peticion.mensaje})
+
+    def flujo():
+        for evento in cerebro.responder(mensajes):
+            yield cerebro.evento_sse(evento)
+
+    return StreamingResponse(
+        flujo(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/fuentes/tipos")
+def tipos_de_fuente():
+    """Los campos de cada motor. La interfaz dibuja los formularios con esto."""
+    return fuentes.tipos_para_interfaz()
+
+
+@app.get("/api/fuentes")
+def listar_fuentes():
+    return {"fuentes": fuentes.para_interfaz()}
+
+
+@app.post("/api/fuentes")
+def guardar_fuente(datos: dict):
+    try:
+        return fuentes.guardar(datos)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+
+
+@app.delete("/api/fuentes/{id_fuente}")
+def borrar_fuente(id_fuente: str):
+    return {"borrado": fuentes.borrar(id_fuente)}
+
+
+@app.post("/api/fuentes/probar")
+def probar_fuente(datos: dict):
+    return fuentes.probar(datos)
+
+
+@app.get("/api/fuentes/{id_fuente}/esquema")
+def esquema_de_fuente(id_fuente: str):
+    try:
+        return fuentes.esquema_de(id_fuente)
+    except Exception as error:  # noqa: BLE001
+        return JSONResponse(status_code=400, content={"error": fuentes.explicar(error)})
+
+
+@app.post("/api/fuentes/{id_fuente}/consultar")
+def consultar_fuente(id_fuente: str, datos: dict):
+    """Consola de SQL de la interfaz. Respeta el modo solo lectura."""
+    try:
+        filas = fuentes.consultar(id_fuente, datos.get("sql", ""), limite=200)
+        return {"filas": filas, "total": len(filas)}
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    except Exception as error:  # noqa: BLE001
+        return JSONResponse(status_code=400, content={"error": fuentes.explicar(error)})
+
+
+@app.post("/api/voz/token")
+def token_de_voz():
+    """Credencial efimera para que el navegador abra la sesion de voz."""
+    try:
+        return cerebro.sesion_de_voz()
+    except Exception as error:  # noqa: BLE001
+        return JSONResponse(status_code=502, content={"error": str(error)})
+
+
+@app.post("/api/herramienta")
+def ejecutar_herramienta(peticion: PeticionDeHerramienta):
+    """Ejecuta una funcion local que pidio la sesion de voz.
+
+    En modo voz el modelo habla directo con el navegador, asi que las
+    herramientas que viven en este servidor pasan por aqui. Las de Supabase no:
+    esas las resuelve OpenAI contra el MCP sin tocarnos.
+    """
+    return {"resultado": herramientas.ejecutar(peticion.nombre, peticion.argumentos)}
+
+
+@app.post("/api/conversacion/agregar")
+def agregar_a_conversacion(mensaje: MensajeSuelto):
+    """Guarda un turno de voz para que texto y voz compartan historial."""
+    mensajes = memoria.cargar_conversacion()
+    mensajes.append({"role": mensaje.role, "content": mensaje.content})
+    memoria.guardar_conversacion(mensajes)
+    return {"ok": True}
+
+
+@app.get("/api/memoria")
+def ver_memoria():
+    return {"hechos": memoria.todos_los_hechos()}
+
+
+@app.delete("/api/memoria/{id_hecho}")
+def borrar_hecho(id_hecho: str):
+    return {"borrado": memoria.olvidar(id_hecho)}
+
+
+@app.post("/api/conversacion/reiniciar")
+def reiniciar_conversacion():
+    memoria.borrar_conversacion()
+    return {"ok": True}
+
+
+@app.get("/")
+def inicio():
+    return FileResponse(WEB / "index.html")
+
+
+app.mount("/", StaticFiles(directory=WEB), name="web")

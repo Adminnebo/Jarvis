@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="barra">
+    <div class="marca">
+      <span class="punto" id="punto-estado"></span>
+      <h1 id="titulo">Jarvis</h1>
+    </div>
+    <div class="acciones">
+      <span class="insignia" id="insignia-supabase" hidden>Supabase</span>
+      <span class="meta" id="meta"></span>
+      <button id="btn-fuentes" class="boton-texto">Fuentes</button>
+      <button id="btn-memoria" class="boton-texto">Memoria</button>
+      <button id="btn-reiniciar" class="boton-texto">Reiniciar</button>
+    </div>
+  </header>
+
+  <main class="escena">
+    <div class="orbe" id="orbe">
+      <div class="anillo"></div>
+      <div class="anillo"></div>
+      <div class="nucleo"></div>
+    </div>
+    <p class="pie-orbe" id="pie-orbe">Presiona el microfono o escribe</p>
+  </main>
+
+  <section class="conversacion" id="conversacion"></section>
+
+  <footer class="entrada">
+    <button id="btn-microfono" class="boton-microfono" title="Hablar (barra espaciadora)">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/>
+        <path d="M19 11a7 7 0 0 1-14 0M12 18v3"
+              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <input id="campo" type="text" placeholder="Escribe algo..." autocomplete="off">
+    <label class="interruptor" title="Escucha continua con palabra clave">
+      <input type="checkbox" id="manos-libres">
+      <span>Manos libres</span>
+    </label>
+    <button id="btn-vivo" class="boton-vivo" title="Conversacion por voz en tiempo real">
+      Voz en vivo
+    </button>
+  </footer>
+
+  <aside class="panel" id="panel-memoria" hidden>
+    <div class="panel-barra">
+      <h2>Lo que recuerdo</h2>
+      <button id="btn-cerrar-panel" class="boton-cerrar"
+              title="Cerrar (Esc)" aria-label="Cerrar">&times;</button>
+    </div>
+    <div id="lista-memoria"></div>
+  </aside>
+
+  <aside class="panel panel-ancho" id="panel-fuentes" hidden>
+    <div class="panel-barra">
+      <h2>Fuentes de datos</h2>
+      <button id="btn-cerrar-fuentes" class="boton-cerrar"
+              title="Cerrar (Esc)" aria-label="Cerrar">&times;</button>
+    </div>
+
+    <div id="lista-fuentes"></div>
+
+    <form id="form-fuente" class="formulario">
+      <h3 id="titulo-formulario">Agregar fuente</h3>
+
+      <div class="campo">
+        <label for="nombre-fuente">Nombre *</label>
+        <input id="nombre-fuente" type="text" required
+               placeholder="Contabilidad producción">
+      </div>
+
+      <div class="campo">
+        <label for="tipo-fuente">Motor</label>
+        <select id="tipo-fuente"></select>
+      </div>
+
+      <div id="campos-fuente"></div>
+
+      <div class="campo">
+        <label for="notas-fuente">Notas</label>
+        <input id="notas-fuente" type="text"
+               placeholder="Para qué sirve. Jarvis lo lee para elegir fuente.">
+      </div>
+
+      <label class="campo-casilla">
+        <input type="checkbox" id="solo-lectura-fuente" checked>
+        <span>Solo lectura — bloquea cualquier escritura</span>
+      </label>
+
+      <label class="campo-casilla">
+        <input type="checkbox" id="activa-fuente" checked>
+        <span>Activa — Jarvis puede usarla</span>
+      </label>
+
+      <div class="formulario-acciones">
+        <button type="button" id="btn-probar-fuente" class="boton-secundario">
+          Probar conexión
+        </button>
+        <button type="submit" class="boton-primario">Guardar</button>
+        <button type="button" id="btn-cancelar-edicion" class="boton-texto" hidden>
+          Cancelar
+        </button>
+      </div>
+
+      <p id="resultado-prueba" class="resultado-prueba"></p>
+    </form>
+  </aside>
+
+  <div class="modal" id="consola-sql" hidden>
+    <div class="modal-caja">
+      <div class="panel-barra">
+        <h2 id="consola-titulo">Consultar</h2>
+        <button id="btn-cerrar-consola" class="boton-cerrar"
+                title="Cerrar (Esc)" aria-label="Cerrar">&times;</button>
+      </div>
+      <p class="ayuda-tipo" id="consola-nota"></p>
+      <textarea id="consola-sql-texto" rows="5"
+                placeholder="select * from ..."></textarea>
+      <div class="formulario-acciones">
+        <button id="btn-ejecutar-sql" class="boton-primario">
+          Ejecutar (Ctrl+Enter)
+        </button>
+      </div>
+      <div id="consola-salida"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

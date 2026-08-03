@@ -1,0 +1,14 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+openai>=2.52.1
+python-dotenv==1.0.1
+httpx==0.28.1
+
+# Cifrado de las credenciales de las fuentes de datos.
+cryptography>=45.0
+
+# Conexion directa a PostgreSQL (y a Supabase si das la cadena).
+psycopg[binary]>=3.2
+
+# Conexion a Microsoft SQL Server. Habla TDS directo, no necesita ODBC.
+pymssql>=2.3

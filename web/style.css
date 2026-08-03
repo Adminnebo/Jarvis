@@ -1,0 +1,664 @@
+:root {
+  --fondo: #07090e;
+  --panel: #0e1219;
+  --borde: #1c2432;
+  --texto: #e6ecf5;
+  --tenue: #7c8798;
+  --acento: #4da3ff;
+  --acento-suave: rgba(77, 163, 255, 0.16);
+  --peligro: #ff6b6b;
+  --ok: #3ddc84;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at 50% 0%, #101828 0%, var(--fondo) 55%);
+  color: var(--texto);
+  font: 15px/1.6 "Segoe UI", system-ui, sans-serif;
+}
+
+/* ---------- Barra superior ---------- */
+
+.barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--borde);
+  flex-wrap: wrap;
+}
+
+.marca { display: flex; align-items: center; gap: 10px; }
+
+.marca h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.punto {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--tenue);
+  box-shadow: 0 0 10px currentColor;
+  transition: background 0.3s;
+}
+.punto.ok       { background: var(--ok); }
+.punto.problema { background: var(--peligro); }
+
+.acciones { display: flex; align-items: center; gap: 14px; }
+
+.meta { color: var(--tenue); font-size: 12.5px; }
+
+.boton-texto {
+  background: none;
+  border: none;
+  color: var(--tenue);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px;
+}
+.boton-texto:hover { color: var(--acento); }
+
+/* ---------- Orbe ---------- */
+
+.escena {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 34px 20px 22px;
+}
+
+.orbe {
+  position: relative;
+  width: 116px; height: 116px;
+  display: grid;
+  place-items: center;
+}
+
+.orbe .anillo,
+.orbe .nucleo {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.orbe .anillo {
+  inset: 0;
+  border: 1px solid var(--acento);
+  opacity: 0.28;
+}
+.orbe .anillo:nth-child(2) { inset: 16px; opacity: 0.18; }
+
+.orbe .nucleo {
+  width: 46px; height: 46px;
+  background: radial-gradient(circle at 35% 30%, #9ecbff, var(--acento) 60%, #14406e);
+  box-shadow: 0 0 30px var(--acento-suave);
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+
+/* Escuchando: los anillos laten hacia afuera. */
+.orbe.escuchando .anillo { animation: latir 1.7s ease-out infinite; }
+.orbe.escuchando .anillo:nth-child(2) { animation-delay: 0.55s; }
+.orbe.escuchando .nucleo {
+  transform: scale(1.14);
+  box-shadow: 0 0 46px rgba(77, 163, 255, 0.5);
+}
+
+/* Pensando: giro lento y continuo. */
+.orbe.pensando .anillo {
+  animation: girar 2.4s linear infinite;
+  border-style: dashed;
+  opacity: 0.5;
+}
+
+/* Hablando: pulso corto y marcado. */
+.orbe.hablando .nucleo { animation: hablar 0.7s ease-in-out infinite; }
+
+@keyframes latir {
+  0%   { transform: scale(0.9); opacity: 0.5; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@keyframes girar {
+  to { transform: rotate(360deg); }
+}
+@keyframes hablar {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.22); }
+}
+
+.pie-orbe {
+  margin: 0;
+  color: var(--tenue);
+  font-size: 13px;
+  min-height: 20px;
+  text-align: center;
+}
+
+/* ---------- Conversacion ---------- */
+
+.conversacion {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 780px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.mensaje {
+  padding: 11px 15px;
+  border-radius: 14px;
+  max-width: 82%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  animation: aparecer 0.25s ease;
+}
+
+@keyframes aparecer {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+.mensaje.usuario {
+  align-self: flex-end;
+  background: var(--acento-suave);
+  border: 1px solid rgba(77, 163, 255, 0.32);
+  border-bottom-right-radius: 4px;
+}
+
+.mensaje.jarvis {
+  align-self: flex-start;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-bottom-left-radius: 4px;
+}
+
+.mensaje.error {
+  align-self: center;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  color: #ffc9c9;
+  font-size: 13.5px;
+  max-width: 100%;
+}
+
+.mensaje .nota {
+  display: block;
+  margin-top: 6px;
+  color: var(--tenue);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ---------- Barra de entrada ---------- */
+
+.entrada {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px 20px;
+  border-top: 1px solid var(--borde);
+  background: rgba(7, 9, 14, 0.9);
+  backdrop-filter: blur(8px);
+}
+
+#campo {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--borde);
+  background: var(--panel);
+  color: var(--texto);
+  font: inherit;
+  outline: none;
+}
+#campo:focus { border-color: var(--acento); }
+
+.boton-microfono {
+  width: 46px; height: 46px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--borde);
+  background: var(--panel);
+  color: var(--texto);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.boton-microfono:hover { border-color: var(--acento); color: var(--acento); }
+.boton-microfono.activo {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #04121f;
+}
+.boton-microfono svg path { fill: currentColor; }
+.boton-microfono svg path[fill="none"] { fill: none; stroke: currentColor; }
+
+.interruptor {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--tenue);
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.interruptor input { accent-color: var(--acento); cursor: pointer; }
+
+.boton-microfono:disabled,
+.interruptor input:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ---------- Voz en vivo ---------- */
+
+.boton-vivo {
+  flex: none;
+  padding: 11px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--borde);
+  background: var(--panel);
+  color: var(--texto);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.boton-vivo:hover { border-color: var(--acento); color: var(--acento); }
+
+.boton-vivo.activo {
+  background: rgba(255, 107, 107, 0.14);
+  border-color: var(--peligro);
+  color: #ffc9c9;
+  animation: respirar 2.2s ease-in-out infinite;
+}
+
+@keyframes respirar {
+  50% { box-shadow: 0 0 0 5px rgba(255, 107, 107, 0.09); }
+}
+
+/* ---------- Insignia de conector ---------- */
+
+.insignia {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(61, 220, 132, 0.4);
+  background: rgba(61, 220, 132, 0.1);
+  color: var(--ok);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* En escritura el conector deja de ser informativo y pasa a ser advertencia. */
+.insignia.insignia-alerta {
+  border-color: rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.1);
+  color: #ffc9c9;
+}
+
+/* ---------- Panel de memoria ---------- */
+
+.panel {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(400px, 92vw);
+  background: var(--panel);
+  border-left: 1px solid var(--borde);
+  padding: 18px 20px;
+  overflow-y: auto;
+  box-shadow: -18px 0 46px rgba(0, 0, 0, 0.5);
+}
+
+/* La cabecera se queda pegada arriba: si hace scroll, el boton de cerrar
+   desaparece y el panel se vuelve una trampa. */
+.panel-barra {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -18px -20px 14px;
+  padding: 14px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--borde);
+}
+.panel-barra h2 { margin: 0; font-size: 15px; font-weight: 600; }
+
+.boton-cerrar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--borde);
+  background: transparent;
+  color: var(--tenue);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.boton-cerrar:hover {
+  border-color: var(--peligro);
+  color: var(--peligro);
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.hecho {
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 9px;
+}
+
+.hecho-cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.etiqueta {
+  color: var(--acento);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hecho button {
+  background: none;
+  border: none;
+  color: var(--tenue);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.hecho button:hover { color: var(--peligro); }
+
+.vacio { color: var(--tenue); font-size: 13.5px; }
+
+/* ---------- Panel de fuentes ---------- */
+
+.panel-ancho { width: min(620px, 96vw); }
+
+.fuente {
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 13px 15px;
+  margin-bottom: 11px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.fuente.inactiva { opacity: 0.55; }
+
+.fuente-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fuente-titulo { font-weight: 600; }
+
+.fuente-etiquetas { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.chip {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  border: 1px solid var(--borde);
+  color: var(--tenue);
+  white-space: nowrap;
+}
+.chip-tipo    { border-color: rgba(77, 163, 255, 0.4); color: var(--acento); }
+.chip-ok      { border-color: rgba(61, 220, 132, 0.4); color: var(--ok); }
+.chip-alerta  { border-color: rgba(255, 107, 107, 0.45); color: #ffc9c9; }
+.chip-apagado { opacity: 0.7; }
+
+.fuente-destino {
+  margin-top: 5px;
+  color: var(--tenue);
+  font-size: 12.5px;
+  font-family: ui-monospace, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.fuente-acciones {
+  display: flex;
+  gap: 7px;
+  margin-top: 11px;
+  flex-wrap: wrap;
+}
+
+.boton-mini {
+  padding: 5px 11px;
+  border-radius: 7px;
+  border: 1px solid var(--borde);
+  background: transparent;
+  color: var(--texto);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.boton-mini:hover { border-color: var(--acento); color: var(--acento); }
+.boton-mini.peligro:hover { border-color: var(--peligro); color: var(--peligro); }
+
+.fuente-estado {
+  margin-top: 9px;
+  font-size: 12.5px;
+  color: var(--tenue);
+  min-height: 0;
+}
+.fuente-estado.bien { color: var(--ok); }
+.fuente-estado.mal  { color: #ffc9c9; }
+
+.fuente-estado details { margin-top: 4px; }
+.fuente-estado summary { cursor: pointer; color: var(--acento); }
+
+.esquema-tablas {
+  max-height: 260px;
+  overflow-y: auto;
+  margin-top: 8px;
+  border-left: 2px solid var(--borde);
+  padding-left: 11px;
+}
+.esquema-tabla { margin-bottom: 8px; font-size: 12px; }
+.esquema-tabla strong { display: block; color: var(--texto); }
+.esquema-tabla span { color: var(--tenue); overflow-wrap: anywhere; }
+
+/* ---------- Formulario ---------- */
+
+.formulario {
+  border-top: 1px solid var(--borde);
+  margin-top: 20px;
+  padding-top: 18px;
+}
+.formulario h3 { margin: 0 0 14px; font-size: 14px; font-weight: 600; }
+
+.campo { margin-bottom: 13px; }
+
+.campo label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12.5px;
+  color: var(--tenue);
+}
+
+.campo input[type="text"],
+.campo input[type="password"],
+.campo select,
+#consola-sql-texto {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--borde);
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+}
+.campo input:focus,
+.campo select:focus,
+#consola-sql-texto:focus { border-color: var(--acento); }
+
+.campo small {
+  display: block;
+  margin-top: 5px;
+  color: var(--tenue);
+  font-size: 11.5px;
+}
+
+.campo-casilla {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 11px;
+  font-size: 13px;
+  color: var(--tenue);
+  cursor: pointer;
+}
+.campo-casilla input { accent-color: var(--acento); cursor: pointer; }
+.campo-casilla label { margin: 0; }
+
+.ayuda-tipo {
+  margin: 0 0 14px;
+  color: var(--tenue);
+  font-size: 12.5px;
+}
+
+.formulario-acciones {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.boton-primario, .boton-secundario {
+  padding: 9px 18px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.boton-primario {
+  background: var(--acento);
+  color: #04121f;
+  font-weight: 600;
+}
+.boton-primario:hover { filter: brightness(1.1); }
+.boton-secundario {
+  background: transparent;
+  border-color: var(--borde);
+  color: var(--texto);
+}
+.boton-secundario:hover { border-color: var(--acento); color: var(--acento); }
+
+.resultado-prueba {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--tenue);
+  overflow-wrap: anywhere;
+}
+.resultado-prueba.bien { color: var(--ok); }
+.resultado-prueba.mal  { color: #ffc9c9; }
+
+/* ---------- Consola SQL ---------- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  z-index: 10;
+}
+
+/* Sin esto el modal nunca se oculta: `display: grid` de la regla de arriba
+   le gana al `display: none` que el navegador aplica a [hidden], y la ventana
+   queda fija en pantalla aunque el codigo la marque como oculta. */
+.modal[hidden],
+.panel[hidden] { display: none; }
+
+.modal-caja {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  padding: 18px 20px;
+  width: min(940px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+/* Dentro del modal la cabecera tambien se queda fija al hacer scroll. */
+.modal-caja .panel-barra {
+  margin: -18px -20px 14px;
+  border-radius: 14px 14px 0 0;
+}
+
+#consola-sql-texto {
+  font-family: ui-monospace, Consolas, monospace;
+  resize: vertical;
+}
+
+.consola-meta {
+  color: var(--tenue);
+  font-size: 12.5px;
+  margin: 16px 0 8px;
+}
+
+.tabla-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+}
+
+.tabla-scroll table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+}
+
+.tabla-scroll th, .tabla-scroll td {
+  padding: 7px 11px;
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+  white-space: nowrap;
+}
+
+.tabla-scroll th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  color: var(--acento);
+  font-weight: 600;
+}
+
+.tabla-scroll td.nulo { color: var(--tenue); }
+.tabla-scroll tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+
+@media (max-width: 620px) {
+  .escena { padding-top: 22px; }
+  .orbe { width: 88px; height: 88px; }
+  .orbe .nucleo { width: 36px; height: 36px; }
+  .interruptor span { display: none; }
+}
