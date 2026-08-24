@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, Response
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -204,13 +204,30 @@ def consultar_fuente(id_fuente: str, datos: dict):
         return JSONResponse(status_code=400, content={"error": fuentes.explicar(error)})
 
 
-@app.post("/api/voz/token")
-def token_de_voz():
-    """Credencial efimera para que el navegador abra la sesion de voz."""
+@app.get("/api/voz/config")
+def config_de_voz():
+    """Lo que el navegador necesita antes de abrir el microfono."""
+    return cerebro.ajustes_de_voz()
+
+
+@app.post("/api/voz/sdp")
+async def negociar_voz(peticion: Request):
+    """Intercambio SDP con OpenAI por cuenta del navegador.
+
+    El navegador no puede hablar con api.openai.com directamente: lo bloquea
+    CORS en cuanto la pagina no viene de localhost. Pasando por aqui, ademas,
+    la API key no sale nunca del servidor.
+    """
+    oferta = (await peticion.body()).decode("utf-8")
+    if not oferta.strip():
+        return JSONResponse(status_code=400, content={"error": "Falta el SDP."})
+
     try:
-        return cerebro.sesion_de_voz()
+        respuesta = cerebro.negociar_webrtc(oferta)
     except Exception as error:  # noqa: BLE001
         return JSONResponse(status_code=502, content={"error": str(error)})
+
+    return Response(content=respuesta, media_type="application/sdp")
 
 
 @app.post("/api/herramienta")

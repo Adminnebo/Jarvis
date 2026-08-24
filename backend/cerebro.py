@@ -81,9 +81,18 @@ Base de datos (Supabase):
 - Solo si NINGUNA consulta del catalogo sirve, escribe SQL con `execute_sql`.
   Es varias veces mas lento, asi que es el ultimo recurso, no el primero.
 - Nunca llames a list_tables: ya tienes el esquema completo mas abajo.
-- Nunca anuncies lo que vas a hacer. Nada de "voy a buscarlo", "dejame revisar"
-  ni "un momento". Consulta primero y habla solo cuando tengas el dato. El
-  silencio mientras consultas es normal y esperado.
+- Al llamar a una herramienta NO pidas confirmacion. Se proactivo. Todas tus
+  consultas son de solo lectura y tardan menos de un segundo: en cuanto
+  entiendas la intencion, ejecutalas.
+- NO anuncies lo que vas a hacer cuando la consulta es rapida y {usuario} no
+  gana nada con el aviso, que es siempre en tu caso. Nada de "voy a buscarlo",
+  "dejame revisar", "un momento" ni "ahora te digo". Consulta y habla solo
+  cuando tengas el dato. El silencio de un segundo es normal y esperado.
+- Tampoco anuncies cuando la respuesta es directa, cuando {usuario} solo esta
+  confirmando o corrigiendo algo, ni cuando lo ultimo que oiste fue silencio,
+  ruido de fondo o una conversacion ajena.
+- Si no entendiste bien el audio, pregunta lo justo y sigue. No repitas lo que
+  creiste oir palabra por palabra.
 - Si la pregunta es ambigua, elige la interpretacion mas razonable, responde, y
   di brevemente que asumiste. No preguntes antes de consultar.
 - Los resultados se leen en voz alta: resume. Di el total y lo relevante, no
@@ -323,58 +332,67 @@ def puerta_de_microfono() -> dict:
     }
 
 
-def sesion_de_voz() -> dict:
-    """Pide a OpenAI una credencial efimera para que el navegador se conecte.
+def configuracion_de_sesion() -> dict:
+    modelo = os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1")
 
-    La API key real nunca sale de este servidor: el navegador recibe un token
-    de un solo uso y vida corta.
+    return {
+        "type": "realtime",
+        "model": modelo,
+        "instructions": instrucciones(),
+        # Cuanto piensa antes de hablar. 'low' es el punto recomendado para
+        # agentes de voz; 'minimal' responde antes pero acierta menos con las
+        # herramientas, y aqui casi todo turno lleva una consulta.
+        "reasoning": {"effort": os.getenv("JARVIS_ESFUERZO", "low")},
+        "audio": {
+            "input": {
+                "transcription": {"model": "gpt-live-transcribe"},
+                # Filtra el ruido antes de que llegue al detector de voz, asi
+                # que mejora tambien la deteccion de turnos.
+                # far_field = microfono de portatil o de sala.
+                # near_field = diadema o microfono pegado a la boca.
+                "noise_reduction": {
+                    "type": os.getenv("JARVIS_MICROFONO", "far_field")
+                },
+                "turn_detection": deteccion_de_turno(),
+            },
+            "output": {"voice": os.getenv("JARVIS_VOZ", "marin")},
+        },
+        "tools": catalogo_de_herramientas(),
+        "tool_choice": "auto",
+    }
+
+
+def ajustes_de_voz() -> dict:
+    """Lo que el navegador necesita saber antes de conectar."""
+    return {
+        "modelo": os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1"),
+        "voz": os.getenv("JARVIS_VOZ", "marin"),
+        "puerta": puerta_de_microfono(),
+    }
+
+
+def negociar_webrtc(sdp_oferta: str) -> str:
+    """Hace el intercambio SDP con OpenAI en nombre del navegador.
+
+    El navegador no puede llamar a api.openai.com directamente: el navegador
+    bloquea la peticion por CORS en cuanto la pagina no se sirve desde
+    localhost. Ademas, pasando por aqui la API key nunca llega al cliente y no
+    hacen falta credenciales efimeras.
     """
     import httpx
 
-    modelo = os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1-mini")
-    voz = os.getenv("JARVIS_VOZ", "marin")
-
-    configuracion = {
-        "session": {
-            "type": "realtime",
-            "model": modelo,
-            "instructions": instrucciones(),
-            "audio": {
-                "input": {
-                    "transcription": {"model": "gpt-live-transcribe"},
-                    # Filtra el ruido antes de que llegue al detector de voz,
-                    # asi que mejora tambien la deteccion de turnos.
-                    # far_field = microfono de portatil o de sala.
-                    # near_field = diadema o microfono pegado a la boca.
-                    "noise_reduction": {
-                        "type": os.getenv("JARVIS_MICROFONO", "far_field")
-                    },
-                    "turn_detection": deteccion_de_turno(),
-                },
-                "output": {"voice": voz},
-            },
-            "tools": catalogo_de_herramientas(),
-            "tool_choice": "auto",
-        }
-    }
-
-    with httpx.Client(timeout=30) as http:
+    with httpx.Client(timeout=60) as http:
         respuesta = http.post(
-            "https://api.openai.com/v1/realtime/client_secrets",
-            headers={
-                "Authorization": f"Bearer {clave_openai()}",
-                "Content-Type": "application/json",
+            "https://api.openai.com/v1/realtime/calls",
+            headers={"Authorization": f"Bearer {clave_openai()}"},
+            # Multipart con dos campos sueltos: el SDP crudo y la sesion.
+            files={
+                "sdp": (None, sdp_oferta),
+                "session": (None, json.dumps(configuracion_de_sesion())),
             },
-            json=configuracion,
         )
 
     if respuesta.status_code >= 400:
-        raise RuntimeError(f"OpenAI rechazo la sesion de voz: {respuesta.text}")
+        raise RuntimeError(f"OpenAI rechazo la sesion de voz: {respuesta.text[:400]}")
 
-    datos = respuesta.json()
-    return {
-        "token": datos["value"],
-        "modelo": modelo,
-        "voz": voz,
-        "puerta": puerta_de_microfono(),
-    }
+    return respuesta.text

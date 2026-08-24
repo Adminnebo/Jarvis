@@ -98,10 +98,34 @@ export function crearSesionDeVoz(eventos) {
     if (canal?.readyState === "open") canal.send(JSON.stringify(mensaje));
   }
 
+  /* Una sola respuesta puede estar viva a la vez. Pedir otra antes de que
+     termine devuelve "Conversation already has an active response in
+     progress" y el turno se pierde.
+
+     Pasaba siempre que Jarvis usaba una herramienta: el aviso de que la
+     herramienta acabo llega ANTES de que la respuesta se cierre, y con dos
+     herramientas en el mismo turno se pedia dos veces. Aqui se anota que hace
+     falta una respuesta y se lanza cuando de verdad se puede. */
+
+  let respuestaActiva = false;
+  let herramientasEnCurso = 0;
+  let respuestaPendiente = false;
+
+  function pedirRespuesta() {
+    respuestaPendiente = true;
+    intentarResponder();
+  }
+
+  function intentarResponder() {
+    if (!respuestaPendiente || respuestaActiva || herramientasEnCurso > 0) return;
+    respuestaPendiente = false;
+    enviar({ type: "response.create" });
+  }
+
   async function conectar() {
     avisar("onEstado", "conectando", "Conectando...");
 
-    const respuesta = await fetch("/api/voz/token", { method: "POST" });
+    const respuesta = await fetch("/api/voz/config");
     const datos = await respuesta.json();
     if (!respuesta.ok) throw new Error(datos.error || "No pude abrir la sesion de voz");
 
@@ -145,16 +169,18 @@ export function crearSesionDeVoz(eventos) {
     const oferta = await conexion.createOffer();
     await conexion.setLocalDescription(oferta);
 
-    const sdp = await fetch("https://api.openai.com/v1/realtime/calls", {
+    // El intercambio va por nuestro servidor: llamar a api.openai.com desde
+    // aqui lo bloquea CORS salvo en localhost, y ademas expondria la clave.
+    const sdp = await fetch("/api/voz/sdp", {
       method: "POST",
       body: oferta.sdp,
-      headers: {
-        Authorization: `Bearer ${datos.token}`,
-        "Content-Type": "application/sdp",
-      },
+      headers: { "Content-Type": "application/sdp" },
     });
 
-    if (!sdp.ok) throw new Error(`OpenAI rechazo la conexion (${sdp.status})`);
+    if (!sdp.ok) {
+      const detalle = await sdp.json().catch(() => ({}));
+      throw new Error(detalle.error || `No se pudo negociar la conexion (${sdp.status})`);
+    }
 
     await conexion.setRemoteDescription({ type: "answer", sdp: await sdp.text() });
     return datos;
@@ -197,23 +223,35 @@ export function crearSesionDeVoz(eventos) {
         }
         break;
 
+      case "response.created":
+        respuestaActiva = true;
+        break;
+
       case "response.output_item.done":
-        if (evento.item?.type === "function_call") await resolverFuncion(evento.item);
+        if (evento.item?.type === "function_call") resolverFuncion(evento.item);
         break;
 
       case "response.done":
+        respuestaActiva = false;
         puerta?.jarvisTermina();
         avisar("onEstado", "listo", "Te escucho");
+        // Si mientras tanto acabo una herramienta, ahora si toca responder.
+        intentarResponder();
         break;
 
       case "error":
+        // Un error deja la respuesta cerrada; si no lo reflejamos, el resto
+        // de la sesion se queda esperando a una respuesta que ya no existe.
+        respuestaActiva = false;
         avisar("onError", evento.error?.message || "Error en la sesion de voz.");
+        intentarResponder();
         break;
     }
   }
 
   async function resolverFuncion(item) {
     avisar("onHerramienta", item.name);
+    herramientasEnCurso++;
 
     let resultado;
     try {
@@ -235,7 +273,9 @@ export function crearSesionDeVoz(eventos) {
         output: resultado,
       },
     });
-    enviar({ type: "response.create" });
+
+    herramientasEnCurso--;
+    pedirRespuesta();
   }
 
   function escribir(texto) {
@@ -247,7 +287,7 @@ export function crearSesionDeVoz(eventos) {
         content: [{ type: "input_text", text: texto }],
       },
     });
-    enviar({ type: "response.create" });
+    pedirRespuesta();
   }
 
   function silenciar(silencio) {
