@@ -31,8 +31,14 @@ export function crearSesionDeVoz(eventos) {
 
     // El microfono se pide despues del token: si OpenAI rechaza la sesion,
     // no molestamos al usuario con el permiso del navegador.
+    // El navegador limpia el audio antes de enviarlo; OpenAI vuelve a
+    // filtrarlo con noise_reduction. Las dos capas suman en un sitio ruidoso.
     const microfono = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
     });
     pista = microfono.getAudioTracks()[0];
 

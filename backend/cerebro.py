@@ -120,7 +120,13 @@ Como consultar estas fuentes:
 - Si salen varios parecidos, di cuantos hay y describe el primero. No los
   recites todos en voz alta.
 - Si la pregunta no dice de que fuente es y hay varias, elige la que encaje por
-  su nombre o sus notas, y menciona cual usaste."""
+  su nombre o sus notas, y menciona cual usaste.
+- **Las notas de cada fuente son reglas de negocio de {usuario}. Obedecelas al
+  pie de la letra**: dicen que columna usar y como llamar a las cosas. Si una
+  nota fija que precio dar, da ese y no menciones los demas salvo que te los
+  pidan.
+- Nunca leas en voz alta el nombre tecnico de una columna. Di "cuesta 164.44",
+  no "el P1 es 164.44"."""
 
     texto += f"\n\nEsto es lo que ya sabes de {usuario}:\n{memoria.resumen_para_prompt()}"
     return texto
@@ -278,6 +284,31 @@ def evento_sse(evento: dict) -> str:
 # Modo voz en vivo (Realtime)
 # --------------------------------------------------------------------------
 
+def deteccion_de_turno() -> dict:
+    """Cuando decide el modelo que terminaste de hablar.
+
+    Los valores por defecto de OpenAI estan pensados para un sitio silencioso.
+    Con ruido de fondo cortan a media frase y, peor, un golpe o una voz ajena
+    interrumpen a Jarvis mientras habla. Se sube el umbral y se alarga el
+    silencio necesario, a costa de un pelin mas de espera al final de la frase.
+    """
+    return {
+        "type": "server_vad",
+        # Cuanto mas alto, mas fuerte hay que hablar para que cuente como voz.
+        "threshold": float(os.getenv("JARVIS_UMBRAL_VOZ", "0.65")),
+        # Audio que se conserva justo antes de detectar voz, para no comerse
+        # la primera silaba.
+        "prefix_padding_ms": 300,
+        # Cuanto silencio hace falta para dar el turno por terminado. Subirlo
+        # evita que una pausa para pensar corte la frase.
+        "silence_duration_ms": int(os.getenv("JARVIS_SILENCIO_MS", "700")),
+        "create_response": True,
+        # Se puede interrumpir a Jarvis hablando encima. Ponlo en false si el
+        # ruido del local lo sigue cortando.
+        "interrupt_response": os.getenv("JARVIS_INTERRUMPIBLE", "true").lower() != "false",
+    }
+
+
 def sesion_de_voz() -> dict:
     """Pide a OpenAI una credencial efimera para que el navegador se conecte.
 
@@ -297,6 +328,14 @@ def sesion_de_voz() -> dict:
             "audio": {
                 "input": {
                     "transcription": {"model": "gpt-live-transcribe"},
+                    # Filtra el ruido antes de que llegue al detector de voz,
+                    # asi que mejora tambien la deteccion de turnos.
+                    # far_field = microfono de portatil o de sala.
+                    # near_field = diadema o microfono pegado a la boca.
+                    "noise_reduction": {
+                        "type": os.getenv("JARVIS_MICROFONO", "far_field")
+                    },
+                    "turn_detection": deteccion_de_turno(),
                 },
                 "output": {"voice": voz},
             },
