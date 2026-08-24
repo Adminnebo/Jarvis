@@ -54,6 +54,48 @@ body {
 .punto.ok       { background: var(--ok); }
 .punto.problema { background: var(--peligro); }
 
+/* Bombillo de version: azul encendido = estas viendo el ultimo cambio.
+   Ambar parpadeando = el servidor ya tiene una version mas nueva. */
+
+.bombillo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  margin-left: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--borde);
+  background: transparent;
+  color: var(--tenue);
+  font: inherit;
+  font-size: 11px;
+  font-family: ui-monospace, Consolas, monospace;
+  letter-spacing: 0.04em;
+  cursor: default;
+  transition: color 0.3s, border-color 0.3s, background 0.3s;
+}
+
+.bombillo.encendido {
+  color: var(--acento);
+  border-color: rgba(77, 163, 255, 0.45);
+  background: var(--acento-suave);
+  /* El resplandor es lo que hace que se lea como un bombillo encendido. */
+  filter: drop-shadow(0 0 5px rgba(77, 163, 255, 0.55));
+}
+
+.bombillo.viejo {
+  color: #ffd08a;
+  border-color: rgba(255, 190, 100, 0.5);
+  background: rgba(255, 190, 100, 0.12);
+  cursor: pointer;
+  animation: parpadeo 1.4s ease-in-out infinite;
+}
+.bombillo.viejo:hover { filter: brightness(1.2); }
+
+@keyframes parpadeo {
+  50% { opacity: 0.45; }
+}
+
 .acciones { display: flex; align-items: center; gap: 14px; }
 
 .meta { color: var(--tenue); font-size: 12.5px; }

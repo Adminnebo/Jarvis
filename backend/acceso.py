@@ -126,7 +126,7 @@ def pagina_sin_proteger() -> str:
 # Que se puede pedir sin haber entrado
 # --------------------------------------------------------------------------
 
-LIBRES = ("/acceso", "/api/salud")
+LIBRES = ("/acceso", "/api/salud", "/api/version")
 
 
 def es_libre(ruta: str) -> bool:

@@ -567,6 +567,46 @@ $("btn-reiniciar").addEventListener("click", async () => {
 // Arranque
 // --------------------------------------------------------------------------
 
+// --------------------------------------------------------------------------
+// Bombillo de version
+// --------------------------------------------------------------------------
+
+/* Azul encendido: esta pagina es la ultima version publicada.
+   Ambar parpadeando: el servidor ya desplego otra y tu navegador tiene la
+   vieja en cache. Pulsando recarga saltandose la cache. */
+
+const bombillo = $("bombillo");
+const bombilloTexto = $("bombillo-texto");
+let versionCargada = null;
+
+async function vigilarVersion() {
+  let datos;
+  try {
+    datos = await (await fetch("/api/version", { cache: "no-store" })).json();
+  } catch {
+    return;   // sin conexion no se puede saber; se deja como esta
+  }
+
+  if (versionCargada === null) {
+    versionCargada = datos.completa;
+    bombilloTexto.textContent = datos.version;
+  }
+
+  const alDia = datos.completa === versionCargada;
+  bombillo.classList.toggle("encendido", alDia);
+  bombillo.classList.toggle("viejo", !alDia);
+  bombillo.title = alDia
+    ? `Ultima version (${datos.version}) · desde ${datos.arrancado.replace("T", " ")}`
+    : `Hay una version nueva (${datos.version}). Pulsa para recargar.`;
+}
+
+bombillo.addEventListener("click", () => {
+  if (bombillo.classList.contains("viejo")) location.reload();
+});
+
+// Cada minuto basta: es para enterarse de un despliegue, no para vigilar.
+setInterval(vigilarVersion, 60000);
+
 async function cargarEstado() {
   try {
     const estado = await (await fetch("/api/estado")).json();
@@ -599,6 +639,7 @@ async function cargarEstado() {
 }
 
 (async function iniciar() {
+  vigilarVersion();
   const estado = await cargarEstado();
 
   if (estado && !estado.clave_configurada) {

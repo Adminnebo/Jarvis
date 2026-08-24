@@ -31,6 +31,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     herramientas,
     memoria,
     rutas,
+    version,
 )
 
 WEB = RAIZ / "web"
@@ -74,6 +75,12 @@ async def guardia(peticion: Request, siguiente):
 def salud():
     """Comprobacion de vida para el proveedor. No revela nada."""
     return {"ok": True}
+
+
+@app.get("/api/version")
+def version_actual():
+    """Libre de autenticacion: la usa la pagina para detectar despliegues."""
+    return version.info()
 
 
 @app.get("/acceso")
@@ -130,6 +137,7 @@ def estado():
         "historial": memoria.cargar_conversacion(),
         "conectores": conectores.resumen(),
         "esquema": esquema.info(),
+        "version": version.info(),
     }
 
 
