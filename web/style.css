@@ -54,15 +54,17 @@ body {
 .punto.ok       { background: var(--ok); }
 .punto.problema { background: var(--peligro); }
 
-/* Bombillo de version: azul encendido = estas viendo el ultimo cambio.
-   Ambar parpadeando = el servidor ya tiene una version mas nueva. */
+/* Dos LED juntos:
+     azul  = estas viendo la ultima version publicada
+     verde = todas las bases de datos responden
+   Apagados (grises) cuando algo falla; el azul parpadea si hay que recargar. */
 
 .bombillo {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 9px 3px 7px;
-  margin-left: 4px;
+  gap: 6px;
+  padding: 4px 10px;
+  margin-left: 6px;
   border-radius: 999px;
   border: 1px solid var(--borde);
   background: transparent;
@@ -72,28 +74,46 @@ body {
   font-family: ui-monospace, Consolas, monospace;
   letter-spacing: 0.04em;
   cursor: default;
-  transition: color 0.3s, border-color 0.3s, background 0.3s;
+}
+.bombillo.recargable { cursor: pointer; }
+.bombillo.recargable:hover { border-color: var(--acento); }
+
+.led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  /* Apagado: se ve el hueco del LED, no desaparece. */
+  background: #2a3444;
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.6);
+  transition: background 0.3s, box-shadow 0.3s;
 }
 
-.bombillo.encendido {
-  color: var(--acento);
-  border-color: rgba(77, 163, 255, 0.45);
-  background: var(--acento-suave);
-  /* El resplandor es lo que hace que se lea como un bombillo encendido. */
-  filter: drop-shadow(0 0 5px rgba(77, 163, 255, 0.55));
+.led-azul.on {
+  background: var(--acento);
+  box-shadow: 0 0 7px 1px rgba(77, 163, 255, 0.8);
 }
 
-.bombillo.viejo {
-  color: #ffd08a;
-  border-color: rgba(255, 190, 100, 0.5);
-  background: rgba(255, 190, 100, 0.12);
-  cursor: pointer;
-  animation: parpadeo 1.4s ease-in-out infinite;
+.led-verde.on {
+  background: var(--ok);
+  box-shadow: 0 0 7px 1px rgba(61, 220, 132, 0.75);
 }
-.bombillo.viejo:hover { filter: brightness(1.2); }
+
+/* Version vieja: el azul avisa parpadeando en ambar. */
+.led-azul.desfasado {
+  background: #ffb057;
+  box-shadow: 0 0 7px 1px rgba(255, 176, 87, 0.8);
+  animation: parpadeo 1.2s ease-in-out infinite;
+}
+
+/* Alguna base caida: el verde parpadea en rojo. */
+.led-verde.fallo {
+  background: var(--peligro);
+  box-shadow: 0 0 7px 1px rgba(255, 107, 107, 0.8);
+  animation: parpadeo 1.2s ease-in-out infinite;
+}
 
 @keyframes parpadeo {
-  50% { opacity: 0.45; }
+  50% { opacity: 0.25; }
 }
 
 .acciones { display: flex; align-items: center; gap: 14px; }

@@ -577,7 +577,16 @@ $("btn-reiniciar").addEventListener("click", async () => {
 
 const bombillo = $("bombillo");
 const bombilloTexto = $("bombillo-texto");
+const ledVersion = $("led-version");
+const ledDatos = $("led-datos");
+
 let versionCargada = null;
+let avisoVersion = "";
+let avisoDatos = "";
+
+function actualizarTitulo() {
+  bombillo.title = [avisoVersion, avisoDatos].filter(Boolean).join("\n");
+}
 
 async function vigilarVersion() {
   let datos;
@@ -593,19 +602,50 @@ async function vigilarVersion() {
   }
 
   const alDia = datos.completa === versionCargada;
-  bombillo.classList.toggle("encendido", alDia);
-  bombillo.classList.toggle("viejo", !alDia);
-  bombillo.title = alDia
-    ? `Ultima version (${datos.version}) · desde ${datos.arrancado.replace("T", " ")}`
+  ledVersion.classList.toggle("on", alDia);
+  ledVersion.classList.toggle("desfasado", !alDia);
+  bombillo.classList.toggle("recargable", !alDia);
+
+  avisoVersion = alDia
+    ? `Version ${datos.version} — la ultima publicada`
     : `Hay una version nueva (${datos.version}). Pulsa para recargar.`;
+  actualizarTitulo();
+}
+
+async function vigilarDatos() {
+  let salud;
+  try {
+    salud = await (await fetch("/api/fuentes/salud")).json();
+  } catch {
+    return;
+  }
+
+  const todasOk = salud.todas_ok;
+  ledDatos.classList.toggle("on", todasOk);
+  ledDatos.classList.toggle("fallo", salud.total > 0 && !todasOk);
+
+  if (!salud.total) {
+    avisoDatos = "Sin bases de datos configuradas";
+  } else if (todasOk) {
+    const detalle = salud.fuentes
+      .map((f) => `${f.nombre}: ${f.latencia_ms} ms`)
+      .join("\n");
+    avisoDatos = `${salud.conectadas} de ${salud.total} bases conectadas\n${detalle}`;
+  } else {
+    const caidas = salud.fuentes.filter((f) => !f.ok)
+      .map((f) => `${f.nombre}: ${f.mensaje}`)
+      .join("\n");
+    avisoDatos = `Bases con problema:\n${caidas}`;
+  }
+  actualizarTitulo();
 }
 
 bombillo.addEventListener("click", () => {
-  if (bombillo.classList.contains("viejo")) location.reload();
+  if (bombillo.classList.contains("recargable")) location.reload();
 });
 
 // Cada minuto basta: es para enterarse de un despliegue, no para vigilar.
-setInterval(vigilarVersion, 60000);
+setInterval(() => { vigilarVersion(); vigilarDatos(); }, 60000);
 
 async function cargarEstado() {
   try {
@@ -640,6 +680,7 @@ async function cargarEstado() {
 
 (async function iniciar() {
   vigilarVersion();
+  vigilarDatos();
   const estado = await cargarEstado();
 
   if (estado && !estado.clave_configurada) {

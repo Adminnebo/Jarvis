@@ -9,6 +9,7 @@ nuevo no obliga a tocar el frontend.
 """
 
 import json
+import os
 import re
 import threading
 import time
@@ -202,6 +203,50 @@ def guardar(datos: dict) -> dict:
     olvidar_esquema(id_fuente)
 
     return {"id": id_fuente}
+
+
+def sembrar_desde_entorno() -> list[str]:
+    """Crea las fuentes definidas en JARVIS_FUENTES si todavia no existen.
+
+    En un servidor el disco se borra en cada despliegue y con el se van las
+    fuentes, asi que configurarlas por la interfaz no basta: al segundo
+    despliegue no habria base de productos y Jarvis se quedaria sin precios.
+    Definidas como variable de entorno vuelven solas cada vez que arranca.
+
+    Solo crea lo que falta. Si editas una fuente desde la interfaz, tu cambio
+    manda mientras el disco aguante.
+    """
+    crudo = os.getenv("JARVIS_FUENTES", "").strip()
+    if not crudo:
+        return []
+
+    try:
+        definidas = json.loads(crudo)
+    except json.JSONDecodeError as error:
+        print(f"  AVISO: JARVIS_FUENTES no es JSON valido ({error}). Se ignora.")
+        return []
+
+    if not isinstance(definidas, list):
+        print("  AVISO: JARVIS_FUENTES debe ser una lista. Se ignora.")
+        return []
+
+    existentes = {f["id"] for f in todas()}
+    creadas = []
+
+    for definicion in definidas:
+        id_fuente = (definicion.get("id") or "").strip()
+        if not id_fuente:
+            print("  AVISO: una fuente de JARVIS_FUENTES no tiene id. Se salta.")
+            continue
+        if id_fuente in existentes:
+            continue
+        try:
+            guardar({**definicion, "id": id_fuente})
+            creadas.append(definicion.get("nombre", id_fuente))
+        except ValueError as error:
+            print(f"  AVISO: no pude crear la fuente '{id_fuente}': {error}")
+
+    return creadas
 
 
 def borrar(id_fuente: str) -> bool:
@@ -621,6 +666,57 @@ def probar(datos: dict) -> dict:
             "mensaje": explicar(error),
             "latencia_ms": round((time.perf_counter() - inicio) * 1000),
         }
+
+
+# --------------------------------------------------------------------------
+# Salud de las conexiones
+# --------------------------------------------------------------------------
+
+VIGENCIA_SALUD = 60   # segundos
+
+_salud: dict | None = None
+_salud_en = 0.0
+_candado_salud = threading.Lock()
+
+
+def salud(refrescar: bool = False) -> dict:
+    """Estado de todas las fuentes activas, cacheado.
+
+    Sin cache, cada carga de la pagina abriria conexiones a todas las bases.
+    """
+    global _salud, _salud_en
+
+    ahora = time.monotonic()
+    if not refrescar and _salud and ahora - _salud_en < VIGENCIA_SALUD:
+        return _salud
+
+    with _candado_salud:
+        # Otro hilo pudo refrescarlo mientras esperabamos.
+        if not refrescar and _salud and time.monotonic() - _salud_en < VIGENCIA_SALUD:
+            return _salud
+
+        detalle = []
+        for fuente in activas():
+            resultado = probar({"id": fuente["id"], "tipo": fuente["tipo"], "config": {}})
+            detalle.append({
+                "id": fuente["id"],
+                "nombre": fuente["nombre"],
+                "tipo": fuente["tipo"],
+                "ok": resultado["ok"],
+                "mensaje": resultado["mensaje"],
+                "latencia_ms": resultado.get("latencia_ms"),
+                "tablas": resultado.get("tablas"),
+            })
+
+        _salud = {
+            "fuentes": detalle,
+            "total": len(detalle),
+            "conectadas": sum(1 for f in detalle if f["ok"]),
+            "todas_ok": bool(detalle) and all(f["ok"] for f in detalle),
+        }
+        _salud_en = time.monotonic()
+
+    return _salud
 
 
 def explicar(error: Exception) -> str:

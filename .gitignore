@@ -1,6 +1,7 @@
-.env
-data/
-__pycache__/
 *.pyc
+.env
 .venv/
+JARVIS_FUENTES.txt
+__pycache__/
+data/
 venv/

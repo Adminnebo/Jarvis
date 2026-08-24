@@ -41,6 +41,12 @@ app = FastAPI(title="Jarvis")
 
 @app.on_event("startup")
 def al_arrancar():
+    # Antes que nada: en un servidor el disco viene vacio y las fuentes hay
+    # que recrearlas, o no habria acceso a la base de productos.
+    creadas = fuentes.sembrar_desde_entorno()
+    if creadas:
+        print(f"  Fuentes recreadas desde JARVIS_FUENTES: {', '.join(creadas)}")
+
     if acceso.obligatorio():
         print(
             "\n  AVISO: Jarvis esta hospedado y no hay JARVIS_PASSWORD.\n"
@@ -190,6 +196,12 @@ def borrar_fuente(id_fuente: str):
 @app.post("/api/fuentes/probar")
 def probar_fuente(datos: dict):
     return fuentes.probar(datos)
+
+
+@app.get("/api/fuentes/salud")
+def salud_de_fuentes(refrescar: bool = False):
+    """Si todas las bases responden. Alimenta el LED verde de la cabecera."""
+    return fuentes.salud(refrescar=refrescar)
 
 
 @app.get("/api/fuentes/{id_fuente}/esquema")
