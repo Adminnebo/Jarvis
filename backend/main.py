@@ -56,6 +56,9 @@ def al_arrancar():
     # datos pague el costo de descubrirlo.
     esquema.refrescar_en_segundo_plano()
 
+    # Y mantener las conexiones calientes evita que la pague en reconectar.
+    fuentes.vigilar_conexiones()
+
 
 @app.middleware("http")
 async def guardia(peticion: Request, siguiente):

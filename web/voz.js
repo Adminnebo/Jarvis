@@ -31,6 +31,12 @@ function crearPuerta(flujo, pista, ajustes, alMedir) {
   const muestras = new Float32Array(analizador.fftSize);
   let jarvisHablando = false;
   let vozDesde = 0;
+  let cerradoDesde = 0;
+
+  // Si algo va mal y nadie avisa de que Jarvis termino, el microfono se
+  // quedaria cerrado para siempre y pareceria que dejo de oir. Pasado este
+  // tiempo se reabre por las malas.
+  const MAXIMO_CERRADO = 25000;
 
   function volumen() {
     analizador.getFloatTimeDomainData(muestras);
@@ -50,6 +56,16 @@ function crearPuerta(flujo, pista, ajustes, alMedir) {
     if (!jarvisHablando) {
       pista.enabled = true;
       vozDesde = 0;
+      cerradoDesde = 0;
+      return;
+    }
+
+    // Red de seguridad: nunca dejar el microfono cerrado indefinidamente.
+    if (cerradoDesde && performance.now() - cerradoDesde > MAXIMO_CERRADO) {
+      jarvisHablando = false;
+      pista.enabled = true;
+      vozDesde = 0;
+      cerradoDesde = 0;
       return;
     }
 
@@ -65,13 +81,20 @@ function crearPuerta(flujo, pista, ajustes, alMedir) {
 
   return {
     jarvisEmpiezaAHablar() {
+      // Solo actua en el cambio de estado. Antes se llamaba en cada fragmento
+      // de voz —varias veces por segundo— y cada llamada reiniciaba el
+      // contador, asi que nunca se acumulaban los milisegundos necesarios
+      // para interrumpirlo.
+      if (jarvisHablando) return;
       jarvisHablando = true;
       vozDesde = 0;
+      cerradoDesde = performance.now();
       pista.enabled = false;
     },
     jarvisTermina() {
       jarvisHablando = false;
       vozDesde = 0;
+      cerradoDesde = 0;
       if (pista) pista.enabled = true;
     },
     cerrar() {
@@ -249,33 +272,45 @@ export function crearSesionDeVoz(eventos) {
     }
   }
 
+  const ESPERA_HERRAMIENTA = 25000;
+
   async function resolverFuncion(item) {
     avisar("onHerramienta", item.name);
     herramientasEnCurso++;
 
     let resultado;
     try {
+      // Con tiempo limite: si una base no responde y esperasemos para siempre,
+      // el turno nunca se cerraria y Jarvis se quedaria mudo.
+      const corte = AbortSignal.timeout(ESPERA_HERRAMIENTA);
       const respuesta = await fetch("/api/herramienta", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nombre: item.name, argumentos: item.arguments || "{}" }),
+        signal: corte,
       });
       resultado = (await respuesta.json()).resultado;
     } catch (error) {
-      resultado = `Error al ejecutar ${item.name}: ${error.message}`;
+      resultado = error.name === "TimeoutError"
+        ? `La consulta ${item.name} tardo demasiado. Dilo y ofrece reintentar.`
+        : `Error al ejecutar ${item.name}: ${error.message}`;
+    } finally {
+      // Pase lo que pase hay que devolver algo y soltar el contador, o el
+      // turno se queda colgado.
+      try {
+        enviar({
+          type: "conversation.item.create",
+          item: {
+            type: "function_call_output",
+            call_id: item.call_id,
+            output: resultado ?? `Error desconocido en ${item.name}.`,
+          },
+        });
+      } finally {
+        herramientasEnCurso--;
+        pedirRespuesta();
+      }
     }
-
-    enviar({
-      type: "conversation.item.create",
-      item: {
-        type: "function_call_output",
-        call_id: item.call_id,
-        output: resultado,
-      },
-    });
-
-    herramientasEnCurso--;
-    pedirRespuesta();
   }
 
   function escribir(texto) {

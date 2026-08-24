@@ -550,6 +550,24 @@ def terminos_de(texto: str) -> list[str]:
     return vistos
 
 
+DESCRIPTIVAS = ("descripcion", "description", "nombre", "name", "titulo", "title")
+
+
+def columna_descriptiva(columnas: list[str]) -> str:
+    """La columna donde vive el nombre de la cosa.
+
+    Importa para puntuar: coincidir en la descripcion vale mucho mas que
+    coincidir en un codigo. Antes se usaba la primera columna de texto sin
+    mirar, que en la tabla de productos es 'Codigo' —un numero— asi que la
+    descripcion, que es justo lo que la gente dice al hablar, puntuaba menos.
+    """
+    for pista in DESCRIPTIVAS:
+        for columna in columnas:
+            if pista in columna.lower():
+                return columna
+    return columnas[0]
+
+
 def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
                     limite: int = 8) -> list[dict]:
     """Busca por texto y devuelve las mejores coincidencias primero.
@@ -573,7 +591,7 @@ def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
 
     # Muchas columnas de texto disparan la consulta sin mejorar el resultado.
     columnas = columnas[:8]
-    principal = columnas[0]
+    principal = columna_descriptiva(columnas)
 
     def patron(columna: str, termino: str) -> str:
         # Un termino que empieza por cifra debe empezar tambien palabra: si no,
@@ -585,10 +603,10 @@ def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
     def en_alguna(termino: str) -> str:
         return "(" + " or ".join(patron(c, termino) for c in columnas) + ")"
 
-    # Una coincidencia en la descripcion principal vale doble: el producto que
-    # se llama asi gana al que solo lo menciona en una nota larga.
+    # Coincidir en la descripcion vale el triple: el producto que se llama asi
+    # gana al que solo lo menciona de pasada en una nota larga.
     puntuacion = " + ".join(
-        f"case when {patron(principal, t)} then 2 else 0 end + "
+        f"case when {patron(principal, t)} then 3 else 0 end + "
         f"case when {en_alguna(t)} then 1 else 0 end"
         for t in terminos
     )
@@ -717,6 +735,33 @@ def salud(refrescar: bool = False) -> dict:
         _salud_en = time.monotonic()
 
     return _salud
+
+
+def mantener_vivas() -> None:
+    """Consulta trivial a cada fuente activa para que la conexion no muera.
+
+    Sin esto, la primera pregunta despues de un rato paga el reconectar entero
+    —casi un segundo contra SQL Server— y hablando eso se nota. El servidor de
+    la base tambien cierra las conexiones ociosas por su cuenta.
+    """
+    for fuente in activas():
+        try:
+            consultar(fuente["id"], "select 1 as vivo", limite=1)
+        except Exception:  # noqa: BLE001 - si falla, la proxima reconecta
+            soltar_conexion(fuente["id"])
+
+
+def vigilar_conexiones(cada_segundos: int = 120) -> None:
+    """Hilo de fondo que mantiene las conexiones calientes."""
+    def bucle():
+        while True:
+            time.sleep(cada_segundos)
+            try:
+                mantener_vivas()
+            except Exception:  # noqa: BLE001 - nunca debe matar el hilo
+                pass
+
+    threading.Thread(target=bucle, daemon=True).start()
 
 
 def explicar(error: Exception) -> str:
