@@ -7,11 +7,87 @@
    Las herramientas de Supabase no aparecen aqui: OpenAI las resuelve contra
    el MCP en sus propios servidores. */
 
+/* Puerta local de microfono.
+
+   El detector de OpenAI solo mide energia: un portazo la supera igual que una
+   voz, y `interrupt_response` es todo o nada. Subir el umbral no distingue —
+   solo obliga a gritar.
+
+   Asi que filtramos aqui, antes de que el audio salga de la maquina. Mientras
+   Jarvis habla el microfono queda cerrado y solo se abre si el nivel se
+   mantiene alto durante varios ciclos seguidos: un golpe o una tos duran un
+   instante, una persona hablando no. Cuando Jarvis calla, el microfono queda
+   siempre abierto para no perder ni una silaba. */
+
+function crearPuerta(flujo, pista, ajustes, alMedir) {
+  const umbral = ajustes?.umbral ?? 0.045;
+  const sostenido = ajustes?.sostenido_ms ?? 220;
+
+  const contexto = new (window.AudioContext || window.webkitAudioContext)();
+  const analizador = contexto.createAnalyser();
+  analizador.fftSize = 512;
+  contexto.createMediaStreamSource(flujo).connect(analizador);
+
+  const muestras = new Float32Array(analizador.fftSize);
+  let jarvisHablando = false;
+  let vozDesde = 0;
+
+  function volumen() {
+    analizador.getFloatTimeDomainData(muestras);
+    let suma = 0;
+    for (const valor of muestras) suma += valor * valor;
+    return Math.sqrt(suma / muestras.length);
+  }
+
+  const reloj = setInterval(() => {
+    if (!pista) return;
+
+    const nivel = volumen();
+    // El medidor sirve para calibrar: se ve si el ruido de fondo roza el
+    // umbral y hay que subirlo, o si tu voz no llega y hay que bajarlo.
+    alMedir?.(nivel, umbral, pista.enabled);
+
+    if (!jarvisHablando) {
+      pista.enabled = true;
+      vozDesde = 0;
+      return;
+    }
+
+    if (nivel >= umbral) {
+      if (!vozDesde) vozDesde = performance.now();
+      // Sostenido el tiempo suficiente: es alguien hablando, dejalo pasar.
+      if (performance.now() - vozDesde >= sostenido) pista.enabled = true;
+    } else {
+      vozDesde = 0;
+      pista.enabled = false;
+    }
+  }, 40);
+
+  return {
+    jarvisEmpiezaAHablar() {
+      jarvisHablando = true;
+      vozDesde = 0;
+      pista.enabled = false;
+    },
+    jarvisTermina() {
+      jarvisHablando = false;
+      vozDesde = 0;
+      if (pista) pista.enabled = true;
+    },
+    cerrar() {
+      clearInterval(reloj);
+      contexto.close().catch(() => {});
+    },
+  };
+}
+
+
 export function crearSesionDeVoz(eventos) {
   let conexion = null;
   let canal = null;
   let pista = null;
   let audio = null;
+  let puerta = null;
   let cerrada = false;
 
   function avisar(nombre, ...argumentos) {
@@ -41,6 +117,9 @@ export function crearSesionDeVoz(eventos) {
       },
     });
     pista = microfono.getAudioTracks()[0];
+    puerta = crearPuerta(microfono, pista, datos.puerta,
+                         (nivel, umbral, abierto) =>
+                           avisar("onNivel", nivel, umbral, abierto));
 
     conexion = new RTCPeerConnection();
 
@@ -93,7 +172,18 @@ export function crearSesionDeVoz(eventos) {
         break;
 
       // --- Lo que responde Jarvis ---
+      case "output_audio_buffer.started":
+        puerta?.jarvisEmpiezaAHablar();
+        break;
+
+      case "output_audio_buffer.stopped":
+      case "output_audio_buffer.cleared":
+        puerta?.jarvisTermina();
+        break;
+
       case "response.output_audio_transcript.delta":
+        // Respaldo por si el navegador no emite los eventos del buffer.
+        puerta?.jarvisEmpiezaAHablar();
         avisar("onRespuestaParcial", evento.delta);
         break;
 
@@ -112,6 +202,7 @@ export function crearSesionDeVoz(eventos) {
         break;
 
       case "response.done":
+        puerta?.jarvisTermina();
         avisar("onEstado", "listo", "Te escucho");
         break;
 
@@ -165,11 +256,12 @@ export function crearSesionDeVoz(eventos) {
 
   function cerrar() {
     cerrada = true;
+    puerta?.cerrar();
     pista?.stop();
     canal?.close();
     conexion?.close();
     if (audio) audio.srcObject = null;
-    conexion = canal = pista = audio = null;
+    conexion = canal = pista = audio = puerta = null;
     avisar("onCierre");
   }
 

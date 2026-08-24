@@ -374,6 +374,10 @@ async function enviar(mensaje) {
 
 let burbujaViva = null;   // burbuja que se va llenando mientras Jarvis habla
 
+const medidor = $("medidor");
+const barraMedidor = $("medidor-barra");
+const umbralMedidor = $("medidor-umbral");
+
 async function guardarTurno(role, content) {
   try {
     await fetch("/api/conversacion/agregar", {
@@ -398,6 +402,7 @@ async function abrirVozEnVivo() {
   btnVivo.classList.add("activo");
   btnVivo.textContent = "Cortar";
   campo.placeholder = "Escribe y te responde hablando...";
+  medidor.hidden = false;
 
   sesionViva = crearSesionDeVoz({
     onEstado: (modo, texto) => {
@@ -424,6 +429,14 @@ async function abrirVozEnVivo() {
       cargarEstado();
     },
 
+    onNivel: (nivel, umbral, abierto) => {
+      // Escala fija: por encima de 0.15 ya es voz claramente alta.
+      const porcentaje = (valor) => Math.min(100, (valor / 0.15) * 100);
+      barraMedidor.style.width = `${porcentaje(nivel)}%`;
+      barraMedidor.classList.toggle("abierto", abierto);
+      umbralMedidor.style.left = `${porcentaje(umbral)}%`;
+    },
+
     onHerramienta: (nombre) => estadoVisual("pensando", `Consultando ${nombre}...`),
 
     onError: (mensaje) => burbuja("error", mensaje),
@@ -448,6 +461,8 @@ function cerrarVozEnVivo() {
   sesion?.cerrar();
 
   burbujaViva = null;
+  medidor.hidden = true;
+  barraMedidor.style.width = "0%";
   btnVivo.classList.remove("activo");
   btnVivo.textContent = "Voz en vivo";
   btnMicrofono.disabled = !Reconocimiento;

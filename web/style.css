@@ -143,6 +143,35 @@ body {
   text-align: center;
 }
 
+/* Medidor de microfono: para calibrar el umbral viendo el ruido real. */
+.medidor {
+  position: relative;
+  width: min(260px, 70vw);
+  height: 5px;
+  border-radius: 3px;
+  background: var(--borde);
+  overflow: hidden;
+}
+
+.medidor-barra {
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  background: var(--tenue);
+  transition: width 0.06s linear, background 0.15s;
+}
+/* Verde cuando el microfono esta pasando audio a OpenAI. */
+.medidor-barra.abierto { background: var(--ok); }
+
+.medidor-umbral {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--acento);
+  opacity: 0.9;
+}
+
 /* ---------- Conversacion ---------- */
 
 .conversacion {

@@ -294,8 +294,10 @@ def deteccion_de_turno() -> dict:
     """
     return {
         "type": "server_vad",
-        # Cuanto mas alto, mas fuerte hay que hablar para que cuente como voz.
-        "threshold": float(os.getenv("JARVIS_UMBRAL_VOZ", "0.65")),
+        # Moderado a proposito: quien filtra el ruido mientras Jarvis habla es
+        # la puerta del navegador, que distingue un golpe de una voz por su
+        # duracion. Subirlo aqui solo obligaria a hablar mas fuerte siempre.
+        "threshold": float(os.getenv("JARVIS_UMBRAL_VOZ", "0.55")),
         # Audio que se conserva justo antes de detectar voz, para no comerse
         # la primera silaba.
         "prefix_padding_ms": 300,
@@ -303,9 +305,21 @@ def deteccion_de_turno() -> dict:
         # evita que una pausa para pensar corte la frase.
         "silence_duration_ms": int(os.getenv("JARVIS_SILENCIO_MS", "700")),
         "create_response": True,
-        # Se puede interrumpir a Jarvis hablando encima. Ponlo en false si el
-        # ruido del local lo sigue cortando.
+        # Se le puede hablar encima para cortarlo, como a una persona.
         "interrupt_response": os.getenv("JARVIS_INTERRUMPIBLE", "true").lower() != "false",
+    }
+
+
+def puerta_de_microfono() -> dict:
+    """Ajustes de la puerta que corre en el navegador.
+
+    `umbral` es el volumen minimo para considerar que hay alguien hablando, y
+    `sostenido_ms` cuanto debe mantenerse. Ahi esta la diferencia entre un
+    ruido y una persona: el ruido no dura.
+    """
+    return {
+        "umbral": float(os.getenv("JARVIS_PUERTA_UMBRAL", "0.045")),
+        "sostenido_ms": int(os.getenv("JARVIS_PUERTA_SOSTENIDO_MS", "220")),
     }
 
 
@@ -358,4 +372,9 @@ def sesion_de_voz() -> dict:
         raise RuntimeError(f"OpenAI rechazo la sesion de voz: {respuesta.text}")
 
     datos = respuesta.json()
-    return {"token": datos["value"], "modelo": modelo, "voz": voz}
+    return {
+        "token": datos["value"],
+        "modelo": modelo,
+        "voz": voz,
+        "puerta": puerta_de_microfono(),
+    }
