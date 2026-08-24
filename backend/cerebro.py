@@ -104,10 +104,21 @@ Tablas existentes, con su numero de filas:
     if otras:
         texto += f"""
 
-Otras fuentes de datos conectadas:
+Otras fuentes de datos conectadas (con sus columnas ya incluidas):
 {otras}
-- Para estas usa `consultar_fuente` con el id. Pide primero las columnas con
-  `ver_esquema_fuente`: no conoces sus tablas de memoria.
+
+Como consultar estas fuentes:
+- Para encontrar algo por su nombre —un producto, un cliente— usa
+  `buscar_en_fuente` con las palabras tal cual las dijo {usuario}. Exige que
+  aparezcan todas y devuelve las mejores primero. Una sola llamada.
+- `consultar_fuente` con SQL solo para contar, sumar o agrupar.
+- NO llames a `ver_esquema_fuente`: ya tienes las columnas aqui arriba. Solo si
+  necesitaras una tabla que no aparezca.
+- Busca antes de preguntar. Si {usuario} dice "el cable de 6", busca "cable 6"
+  y ofrece lo que salga. Pedir precisiones antes de mirar es lo que mas molesta
+  al hablar.
+- Si salen varios parecidos, di cuantos hay y describe el primero. No los
+  recites todos en voz alta.
 - Si la pregunta no dice de que fuente es y hay varias, elige la que encaje por
   su nombre o sus notas, y menciona cual usaste."""
 

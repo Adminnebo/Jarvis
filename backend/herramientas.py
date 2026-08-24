@@ -179,6 +179,32 @@ def consultar_fuente(fuente: str, sql: str) -> str:
 
 
 @herramienta(
+    "Busca filas por texto en una tabla de una fuente conectada. Es tu via "
+    "preferida para encontrar un producto, un cliente o cualquier registro a "
+    "partir de como lo nombra el usuario: exige que aparezcan todas las "
+    "palabras y devuelve las mejores coincidencias primero. Usala en vez de "
+    "escribir SQL con LIKE.",
+    fuente="El id de la fuente",
+    tabla="Nombre de la tabla donde buscar",
+    texto="Las palabras del usuario, tal cual las dijo",
+)
+def buscar_en_fuente(fuente: str, tabla: str, texto: str) -> str:
+    from . import fuentes
+
+    try:
+        filas = fuentes.buscar_en_tabla(fuente, tabla, texto, limite=8)
+    except ValueError as error:
+        return f"Error: {error}"
+    except Exception as error:  # noqa: BLE001
+        return f"Error al buscar: {fuentes.explicar(error)}"
+
+    if not filas:
+        return (f"Nada coincide con '{texto}' en {tabla}. "
+                "Prueba con menos palabras o solo la marca.")
+    return json.dumps(filas, ensure_ascii=False, default=str)[:6000]
+
+
+@herramienta(
     "Lista las tablas y columnas de una fuente de datos conectada. Usala "
     "antes de escribir SQL para esa fuente.",
     fuente="El id de la fuente",

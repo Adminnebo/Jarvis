@@ -197,6 +197,10 @@ def guardar(datos: dict) -> dict:
 
         _escribir(guardadas)
 
+    # Las credenciales pueden haber cambiado: la conexion viva ya no vale.
+    soltar_conexion(id_fuente)
+    olvidar_esquema(id_fuente)
+
     return {"id": id_fuente}
 
 
@@ -207,6 +211,9 @@ def borrar(id_fuente: str) -> bool:
         if len(quedan) == len(guardadas):
             return False
         _escribir(quedan)
+
+    soltar_conexion(id_fuente)
+    olvidar_esquema(id_fuente)
     return True
 
 
@@ -270,48 +277,112 @@ def url_postgres(config: dict) -> str:
     return f"postgresql://{usuario}:{clave}@{config['host']}:{puerto}/{config['base']}{ssl}"
 
 
-def consultar_postgres(config: dict, sql: str, limite: int) -> list[dict]:
+# --------------------------------------------------------------------------
+# Conexiones reutilizadas
+# --------------------------------------------------------------------------
+
+# Abrir una conexion a SQL Server cuesta ~0.9s y ejecutar la consulta ~0.1s:
+# reconectar en cada pregunta era casi todo el tiempo de respuesta. Aqui se
+# guarda una conexion viva por fuente. Si se cae, se reabre y se reintenta.
+_conexiones: dict[str, object] = {}
+_candado_conexiones = threading.Lock()
+
+
+def soltar_conexion(id_fuente: str) -> None:
+    """Cierra y olvida la conexion guardada. Al editar una fuente hay que
+    llamarlo, si no seguiriamos usando las credenciales viejas."""
+    with _candado_conexiones:
+        conexion = _conexiones.pop(id_fuente, None)
+    if conexion is not None:
+        try:
+            conexion.close()
+        except Exception:  # noqa: BLE001 - ya la estabamos descartando
+            pass
+
+
+def _con_reintento(id_fuente: str | None, abrir, ejecutar):
+    """Ejecuta reusando la conexion; si esta muerta, reabre y reintenta una vez."""
+    if id_fuente is None:
+        conexion = abrir()
+        try:
+            return ejecutar(conexion)
+        finally:
+            try:
+                conexion.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    with _candado_conexiones:
+        conexion = _conexiones.get(id_fuente)
+
+    if conexion is not None:
+        try:
+            return ejecutar(conexion)
+        except Exception:  # noqa: BLE001 - puede ser solo la conexion caida
+            soltar_conexion(id_fuente)
+
+    conexion = abrir()
+    with _candado_conexiones:
+        _conexiones[id_fuente] = conexion
+    return ejecutar(conexion)
+
+
+def consultar_postgres(config: dict, sql: str, limite: int,
+                       id_fuente: str | None = None) -> list[dict]:
     import psycopg
     from psycopg.rows import dict_row
 
-    with psycopg.connect(url_postgres(config), connect_timeout=15) as conexion:
+    def abrir():
+        conexion = psycopg.connect(url_postgres(config), connect_timeout=15,
+                                   autocommit=True)
         conexion.read_only = True   # la garantia real, a nivel de transaccion
+        return conexion
+
+    def ejecutar(conexion):
         with conexion.cursor(row_factory=dict_row) as cursor:
             cursor.execute(sql)
             return [dict(f) for f in cursor.fetchmany(limite)]
 
+    return _con_reintento(id_fuente, abrir, ejecutar)
 
-def consultar_mssql(config: dict, sql: str, limite: int) -> list[dict]:
+
+def consultar_mssql(config: dict, sql: str, limite: int,
+                    id_fuente: str | None = None) -> list[dict]:
     import pymssql
 
-    servidor = config["host"]
-    if config.get("instancia"):
-        servidor = f"{servidor}\\{config['instancia']}"
+    def abrir():
+        servidor = config["host"]
+        if config.get("instancia"):
+            servidor = f"{servidor}\\{config['instancia']}"
+        conexion = pymssql.connect(
+            server=servidor,
+            port=str(config.get("puerto") or 1433),
+            user=config["usuario"],
+            password=config.get("password", ""),
+            database=config["base"],
+            timeout=30,
+            login_timeout=15,
+            as_dict=True,
+        )
+        cursor = conexion.cursor()
+        # Evita bloquear al resto de la base mientras leemos.
+        cursor.execute("SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;")
+        cursor.close()
+        return conexion
 
-    conexion = pymssql.connect(
-        server=servidor,
-        port=str(config.get("puerto") or 1433),
-        user=config["usuario"],
-        password=config.get("password", ""),
-        database=config["base"],
-        timeout=30,
-        login_timeout=15,
-        as_dict=True,
-    )
-    try:
+    def ejecutar(conexion):
         with conexion.cursor(as_dict=True) as cursor:
-            # Evita bloquear al resto de la base mientras leemos.
-            cursor.execute("SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;")
             cursor.execute(sql)
             return [dict(f) for f in cursor.fetchmany(limite)]
-    finally:
-        conexion.close()
+
+    return _con_reintento(id_fuente, abrir, ejecutar)
 
 
-def consultar_supabase(config: dict, sql: str, limite: int) -> list[dict]:
+def consultar_supabase(config: dict, sql: str, limite: int,
+                       id_fuente: str | None = None) -> list[dict]:
     # Con cadena directa vamos por Postgres, que es mucho mas rapido.
     if config.get("url"):
-        return consultar_postgres({"url": config["url"]}, sql, limite)
+        return consultar_postgres({"url": config["url"]}, sql, limite, id_fuente)
 
     from . import esquema
 
@@ -338,7 +409,156 @@ def consultar(id_fuente: str, sql: str, limite: int = 200) -> list[dict]:
     if fuente.get("solo_lectura", True):
         validar_solo_lectura(sql)
 
-    return MOTORES[fuente["tipo"]](fuente["config"], sql, limite)
+    return MOTORES[fuente["tipo"]](fuente["config"], sql, limite, id_fuente)
+
+
+# --------------------------------------------------------------------------
+# Busqueda por texto
+# --------------------------------------------------------------------------
+
+TIPOS_TEXTO = ("char", "varchar", "nvarchar", "nchar", "text", "ntext", "citext")
+
+
+def columnas_de_texto(id_fuente: str, tabla: str) -> tuple[str, list[str]]:
+    """Nombre real de la tabla y sus columnas de texto, sin distinguir mayusculas."""
+    esquema_fuente = esquema_de(id_fuente)
+    buscada = tabla.strip().lower()
+
+    for entrada in esquema_fuente["tablas"]:
+        if entrada["tabla"].lower() != buscada:
+            continue
+        columnas = []
+        for definicion in entrada["columnas"].split(", "):
+            partes = definicion.rsplit(" ", 1)
+            if len(partes) == 2 and partes[1].lower() in TIPOS_TEXTO:
+                columnas.append(partes[0])
+        return entrada["tabla"], columnas
+
+    disponibles = ", ".join(t["tabla"] for t in esquema_fuente["tablas"])
+    raise ValueError(f"No existe la tabla '{tabla}'. Las que hay: {disponibles}")
+
+
+def limpiar_termino(termino: str) -> str:
+    """Deja solo lo que puede aparecer en una descripcion o una referencia.
+
+    Las referencias llevan barras, puntos y guiones ('ACV-14/3', '6.0MM'), asi
+    que se conservan; lo que se va es todo lo que podria cerrar la cadena SQL.
+    """
+    return re.sub(r"[^\w\sáéíóúüñÁÉÍÓÚÜÑ./-]", "", termino)[:40]
+
+
+# Palabras que aparecen en cualquier frase y no distinguen nada.
+VACIAS = {
+    "de", "la", "el", "los", "las", "un", "una", "unos", "unas", "del", "al",
+    "para", "con", "por", "que", "en", "lo", "su", "sus", "es", "hay", "me",
+    "te", "se", "y", "o", "tiene", "tienes", "dame", "busca", "buscame",
+    "cuanto", "cuesta", "precio", "producto", "productos",
+}
+
+# Como se dice frente a como esta escrito. En un catalogo de materiales las
+# medidas se guardan en cifras y el usuario las dice en palabras: sin esto,
+# "tres cuartos" jamas encuentra 3/4.
+EQUIVALENCIAS = [
+    ("tres cuartos", "3/4"), ("un cuarto", "1/4"), ("dos cuartos", "1/2"),
+    ("tres octavos", "3/8"), ("cinco octavos", "5/8"), ("siete octavos", "7/8"),
+    ("un octavo", "1/8"), ("media pulgada", "1/2"), ("medio", "1/2"),
+    ("pulgada y media", "1.5"), ("una pulgada", "1"),
+    ("milimetros", "mm"), ("milimetro", "mm"), ("pulgadas", ""), ("pulgada", ""),
+    ("cero", "0"), ("uno", "1"), ("dos", "2"), ("tres", "3"), ("cuatro", "4"),
+    ("cinco", "5"), ("seis", "6"), ("siete", "7"), ("ocho", "8"),
+    ("nueve", "9"), ("diez", "10"), ("doce", "12"), ("catorce", "14"),
+    ("dieciseis", "16"), ("veinte", "20"),
+]
+
+
+def unir_medidas(frase: str) -> str:
+    """Pega el numero a su unidad: '6 milimetros' -> '6.0mm'.
+
+    Separados pierden la relacion y el '6' suelto coincide con '16.0MM' o con
+    el calibre '(6)'. El catalogo guarda '6.0MM', asi que se canoniza a eso.
+    """
+    def canonico(coincidencia: re.Match) -> str:
+        numero = coincidencia.group(1)
+        return f" {numero}mm " if "." in numero else f" {numero}.0mm "
+
+    return re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:milimetros?|mm)\b", canonico, frase)
+
+
+def terminos_de(texto: str) -> list[str]:
+    """Convierte lo que se dijo en terminos buscables."""
+    frase = texto.lower()
+    for hablado, escrito in EQUIVALENCIAS:
+        frase = re.sub(rf"\b{re.escape(hablado)}\b", f" {escrito} ", frase)
+    frase = unir_medidas(frase)
+
+    vistos: list[str] = []
+    for palabra in frase.split():
+        limpio = limpiar_termino(palabra).strip(".-/")
+        if not limpio or limpio in VACIAS or limpio in vistos:
+            continue
+        # Un solo caracter solo sirve si es una cifra: en un catalogo de
+        # materiales los calibres son "6", "8", "4", y perderlos hace que
+        # "alambre 6 negro" devuelva el de 4.
+        if len(limpio) < 2 and not limpio.isdigit():
+            continue
+        vistos.append(limpio)
+    return vistos
+
+
+def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
+                    limite: int = 8) -> list[dict]:
+    """Busca por texto y devuelve las mejores coincidencias primero.
+
+    No exige que aparezcan todas las palabras: puntua cada fila por cuantas
+    encuentra y ordena por esa puntuacion. Exigirlas todas era demasiado
+    estricto —'letra LB tres cuartos' no encontraba 'LETRA LB IMC 3/4'— y
+    exigir una sola devuelve basura. Puntuar da lo mejor de ambas.
+    """
+    fuente = obtener(id_fuente)
+    if fuente is None:
+        raise ValueError(f"No existe la fuente '{id_fuente}'.")
+
+    nombre_real, columnas = columnas_de_texto(id_fuente, tabla)
+    if not columnas:
+        raise ValueError(f"La tabla '{nombre_real}' no tiene columnas de texto.")
+
+    terminos = terminos_de(texto)
+    if not terminos:
+        raise ValueError("Hace falta algo que buscar.")
+
+    # Muchas columnas de texto disparan la consulta sin mejorar el resultado.
+    columnas = columnas[:8]
+    principal = columnas[0]
+
+    def patron(columna: str, termino: str) -> str:
+        # Un termino que empieza por cifra debe empezar tambien palabra: si no,
+        # '6.0mm' coincide dentro de '16.0MM' y da el calibre equivocado.
+        if termino[0].isdigit():
+            return f"({columna} like '% {termino}%' or {columna} like '{termino}%')"
+        return f"{columna} like '%{termino}%'"
+
+    def en_alguna(termino: str) -> str:
+        return "(" + " or ".join(patron(c, termino) for c in columnas) + ")"
+
+    # Una coincidencia en la descripcion principal vale doble: el producto que
+    # se llama asi gana al que solo lo menciona en una nota larga.
+    puntuacion = " + ".join(
+        f"case when {patron(principal, t)} then 2 else 0 end + "
+        f"case when {en_alguna(t)} then 1 else 0 end"
+        for t in terminos
+    )
+
+    donde = " or ".join(en_alguna(t) for t in terminos)
+
+    if fuente["tipo"] == "mssql":
+        sql = (f"select top {limite} *, ({puntuacion}) as _relevancia "
+               f"from {nombre_real} where {donde} order by _relevancia desc")
+    else:
+        sql = (f"select *, ({puntuacion}) as _relevancia "
+               f"from {nombre_real} where {donde} "
+               f"order by _relevancia desc limit {limite}")
+
+    return MOTORES[fuente["tipo"]](fuente["config"], sql, limite, id_fuente)
 
 
 # --------------------------------------------------------------------------
@@ -488,14 +708,26 @@ SQL_COLUMNAS = {
 }
 
 
-def esquema_de(id_fuente: str) -> dict:
+# El esquema de una fuente no cambia entre preguntas, pero leerlo cuesta un
+# viaje entero a la base. Se cachea en memoria y se tira al editar la fuente.
+_esquemas: dict[str, dict] = {}
+
+
+def olvidar_esquema(id_fuente: str) -> None:
+    _esquemas.pop(id_fuente, None)
+
+
+def esquema_de(id_fuente: str, refrescar: bool = False) -> dict:
     """Tablas y columnas de una fuente, agrupadas."""
+    if not refrescar and id_fuente in _esquemas:
+        return _esquemas[id_fuente]
+
     fuente = obtener(id_fuente)
     if fuente is None:
         raise ValueError(f"No existe la fuente '{id_fuente}'.")
 
     filas = MOTORES[fuente["tipo"]](
-        fuente["config"], SQL_COLUMNAS[fuente["tipo"]], 5000
+        fuente["config"], SQL_COLUMNAS[fuente["tipo"]], 5000, id_fuente
     )
 
     tablas: dict[str, list[str]] = {}
@@ -504,7 +736,7 @@ def esquema_de(id_fuente: str) -> dict:
             else f"{fila['esquema']}.{fila['tabla']}"
         tablas.setdefault(nombre, []).append(f"{fila['columna']} {fila['tipo']}")
 
-    return {
+    resultado = {
         "fuente": fuente["nombre"],
         "tipo": fuente["tipo"],
         "tablas": [
@@ -512,18 +744,51 @@ def esquema_de(id_fuente: str) -> dict:
             for nombre, columnas in tablas.items()
         ],
     }
+    _esquemas[id_fuente] = resultado
+    return resultado
+
+
+# Cuanto esquema cabe en el prompt antes de que pese mas de lo que ayuda.
+TOPE_ESQUEMA_EN_PROMPT = 6000
 
 
 def resumen_para_prompt() -> str:
-    """Lo que Jarvis necesita saber para elegir fuente sin preguntar."""
+    """Fuentes y sus columnas, para que Jarvis no gaste un viaje preguntandolas.
+
+    Incluir el esquema aqui ahorra la llamada a `ver_esquema_fuente` en cada
+    pregunta, que era un viaje completo al modelo y a la base. Si una fuente es
+    demasiado grande solo van los nombres de tabla y el modelo pide el detalle.
+    """
     lista = activas()
     if not lista:
         return ""
 
-    lineas = []
+    bloques = []
     for fuente in lista:
         etiqueta = CATALOGO_TIPOS[fuente["tipo"]]["etiqueta"]
         permiso = "solo lectura" if fuente.get("solo_lectura", True) else "lectura y escritura"
         nota = f" — {fuente['notas']}" if fuente.get("notas") else ""
-        lineas.append(f'- id "{fuente["id"]}": {fuente["nombre"]} ({etiqueta}, {permiso}){nota}')
-    return "\n".join(lineas)
+        cabecera = f'- id "{fuente["id"]}": {fuente["nombre"]} ({etiqueta}, {permiso}){nota}'
+
+        # La base principal ya va documentada aparte, con su catalogo.
+        if fuente["tipo"] == "supabase" and not fuente.get("notas", "").strip():
+            bloques.append(cabecera)
+            continue
+
+        try:
+            esquema_fuente = esquema_de(fuente["id"])
+        except Exception:  # noqa: BLE001 - sin esquema seguimos, solo mas lento
+            bloques.append(cabecera)
+            continue
+
+        detalle = "\n".join(
+            f"    {t['tabla']}: {t['columnas']}" for t in esquema_fuente["tablas"]
+        )
+        if len(detalle) > TOPE_ESQUEMA_EN_PROMPT:
+            detalle = "    tablas: " + ", ".join(
+                t["tabla"] for t in esquema_fuente["tablas"]
+            ) + "\n    (usa ver_esquema_fuente para las columnas)"
+
+        bloques.append(f"{cabecera}\n{detalle}")
+
+    return "\n".join(bloques)
