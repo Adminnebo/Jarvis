@@ -26,6 +26,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     acceso,
     cerebro,
     conectores,
+    consumo,
     esquema,
     fuentes,
     herramientas,
@@ -270,6 +271,29 @@ def agregar_a_conversacion(mensaje: MensajeSuelto):
     mensajes = memoria.cargar_conversacion()
     mensajes.append({"role": mensaje.role, "content": mensaje.content})
     memoria.guardar_conversacion(mensajes)
+    return {"ok": True}
+
+
+@app.get("/api/consumo")
+def ver_consumo(periodo: str = "7d", modo: str = "todos", modelo: str = "todos"):
+    """Tokens y dolares, con los filtros del tablero."""
+    return consumo.consultar(periodo=periodo, modo=modo, modelo=modelo)
+
+
+@app.post("/api/consumo/voz")
+def anotar_consumo_de_voz(datos: dict):
+    """Lo manda el navegador: en voz el uso llega por el canal de datos."""
+    modelo = datos.get("modelo") or os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1")
+
+    if datos.get("segundos_sesion"):
+        return consumo.registrar_sesion(modelo, float(datos["segundos_sesion"]))
+
+    return consumo.registrar("voz", modelo, datos.get("uso") or {})
+
+
+@app.delete("/api/consumo")
+def borrar_consumo():
+    consumo.borrar()
     return {"ok": True}
 
 

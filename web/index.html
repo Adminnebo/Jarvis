@@ -21,6 +21,7 @@
     <div class="acciones">
       <span class="insignia" id="insignia-supabase" hidden>Supabase</span>
       <span class="meta" id="meta"></span>
+      <button id="btn-consumo" class="boton-texto">Consumo</button>
       <button id="btn-fuentes" class="boton-texto">Fuentes</button>
       <button id="btn-memoria" class="boton-texto">Memoria</button>
       <button id="btn-reiniciar" class="boton-texto">Reiniciar</button>
@@ -124,6 +125,47 @@
 
       <p id="resultado-prueba" class="resultado-prueba"></p>
     </form>
+  </aside>
+
+  <aside class="panel panel-ancho" id="panel-consumo" hidden>
+    <div class="panel-barra">
+      <h2>Consumo y costo</h2>
+      <button id="btn-cerrar-consumo" class="boton-cerrar"
+              title="Cerrar (Esc)" aria-label="Cerrar">&times;</button>
+    </div>
+
+    <div class="filtros">
+      <label>
+        <span>Periodo</span>
+        <select id="filtro-periodo">
+          <option value="hoy">Hoy</option>
+          <option value="24h">Últimas 24 h</option>
+          <option value="7d" selected>7 días</option>
+          <option value="30d">30 días</option>
+          <option value="todo">Todo</option>
+        </select>
+      </label>
+      <label>
+        <span>Modo</span>
+        <select id="filtro-modo">
+          <option value="todos">Todos</option>
+          <option value="voz">Voz en vivo</option>
+          <option value="texto">Texto</option>
+        </select>
+      </label>
+      <label>
+        <span>Modelo</span>
+        <select id="filtro-modelo">
+          <option value="todos">Todos</option>
+        </select>
+      </label>
+      <button id="btn-refrescar-consumo" class="boton-mini">Actualizar</button>
+      <button id="btn-borrar-consumo" class="boton-mini peligro">Borrar historial</button>
+    </div>
+
+    <div id="resumen-consumo"></div>
+    <div id="tabla-consumo"></div>
+    <div id="detalle-consumo"></div>
   </aside>
 
   <div class="modal" id="consola-sql" hidden>

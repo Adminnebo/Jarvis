@@ -151,6 +151,7 @@ export function crearSesionDeVoz(eventos) {
     const respuesta = await fetch("/api/voz/config");
     const datos = await respuesta.json();
     if (!respuesta.ok) throw new Error(datos.error || "No pude abrir la sesion de voz");
+    modeloEnUso = datos.modelo;
 
     // El microfono se pide despues del token: si OpenAI rechaza la sesion,
     // no molestamos al usuario con el permiso del navegador.
@@ -206,6 +207,7 @@ export function crearSesionDeVoz(eventos) {
     }
 
     await conexion.setRemoteDescription({ type: "answer", sdp: await sdp.text() });
+    sesionDesde = performance.now();
     return datos;
   }
 
@@ -258,6 +260,8 @@ export function crearSesionDeVoz(eventos) {
         respuestaActiva = false;
         puerta?.jarvisTermina();
         avisar("onEstado", "listo", "Te escucho");
+        // El uso solo llega aqui: en voz no pasa por nuestro servidor.
+        anotarConsumo(evento.response?.usage);
         // Si mientras tanto acabo una herramienta, ahora si toca responder.
         intentarResponder();
         break;
@@ -270,6 +274,37 @@ export function crearSesionDeVoz(eventos) {
         intentarResponder();
         break;
     }
+  }
+
+  /* El gasto de la voz solo se ve aqui: el audio va directo entre el
+     navegador y OpenAI, asi que el servidor no puede contarlo por su cuenta.
+     Se le reenvia cada uso y, al cerrar, cuanto duro la sesion, que es lo que
+     permite calcular el costo por minuto. */
+
+  let modeloEnUso = null;
+  let sesionDesde = null;
+
+  function anotarConsumo(uso) {
+    if (!uso) return;
+    fetch("/api/consumo/voz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ modelo: modeloEnUso, uso }),
+    }).catch(() => {});   // contabilizar nunca debe estorbar la conversacion
+  }
+
+  function anotarSesion() {
+    if (!sesionDesde) return;
+    const segundos = (performance.now() - sesionDesde) / 1000;
+    sesionDesde = null;
+    if (segundos < 1) return;
+    // keepalive para que salga aunque se cierre la pestana justo despues.
+    fetch("/api/consumo/voz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ modelo: modeloEnUso, segundos_sesion: segundos }),
+      keepalive: true,
+    }).catch(() => {});
   }
 
   const ESPERA_HERRAMIENTA = 25000;
@@ -331,6 +366,7 @@ export function crearSesionDeVoz(eventos) {
 
   function cerrar() {
     cerrada = true;
+    anotarSesion();
     puerta?.cerrar();
     pista?.stop();
     canal?.close();

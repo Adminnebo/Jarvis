@@ -579,6 +579,95 @@ body {
 .esquema-tabla strong { display: block; color: var(--texto); }
 .esquema-tabla span { color: var(--tenue); overflow-wrap: anywhere; }
 
+/* ---------- Tablero de consumo ---------- */
+
+.filtros {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--tenue);
+}
+
+.filtros select {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--borde);
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.filtros select:focus { border-color: var(--acento); }
+
+.tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tarjeta {
+  border: 1px solid var(--borde);
+  border-radius: 11px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* La cifra que se viene a buscar: cuanto cuesta un minuto hablando. */
+.tarjeta.destacada {
+  border-color: rgba(77, 163, 255, 0.45);
+  background: var(--acento-suave);
+}
+
+.tarjeta-etiqueta {
+  font-size: 11px;
+  color: var(--tenue);
+  letter-spacing: 0.03em;
+}
+
+.tarjeta-valor {
+  font-size: 21px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.tarjeta.destacada .tarjeta-valor { color: var(--acento); }
+
+.tarjeta-pie { font-size: 11.5px; color: var(--tenue); }
+
+#tabla-consumo h3 {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+#tabla-consumo td, #detalle-consumo td { font-variant-numeric: tabular-nums; }
+
+.nota-precio {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #ffd08a;
+}
+
+#detalle-consumo { margin-top: 20px; }
+#detalle-consumo summary {
+  cursor: pointer;
+  color: var(--acento);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
 /* ---------- Formulario ---------- */
 
 .formulario {

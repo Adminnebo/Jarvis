@@ -11,7 +11,15 @@ from collections.abc import Iterator
 
 from openai import OpenAI
 
-from . import conectores, consultas, esquema, fuentes, herramientas, memoria
+from . import (
+    conectores,
+    consultas,
+    consumo,
+    esquema,
+    fuentes,
+    herramientas,
+    memoria,
+)
 
 MAX_RONDAS_DE_HERRAMIENTAS = 6
 
@@ -212,6 +220,7 @@ def responder(mensajes: list[dict]) -> Iterator[dict]:
 
                 elif tipo == "response.completed":
                     salida = list(evento.response.output)
+                    anotar_consumo(modelo, getattr(evento.response, "usage", None))
 
                 elif tipo == "error":
                     yield {"tipo": "error", "dato": str(getattr(evento, "message", evento))}
@@ -258,6 +267,17 @@ def responder(mensajes: list[dict]) -> Iterator[dict]:
         "tipo": "error",
         "dato": "Me enrede usando herramientas y no llegue a una respuesta.",
     }
+
+
+def anotar_consumo(modelo: str, uso) -> None:
+    """Guarda el gasto del turno. Nunca debe tumbar la respuesta."""
+    if uso is None:
+        return
+    try:
+        datos = uso.model_dump() if hasattr(uso, "model_dump") else dict(uso)
+        consumo.registrar("texto", modelo, datos)
+    except Exception:  # noqa: BLE001 - contabilizar no es critico
+        pass
 
 
 def para_reenviar(item) -> dict:

@@ -6,6 +6,7 @@
 
 import { crearSesionDeVoz } from "./voz.js";
 import { abrirPanelFuentes } from "./fuentes.js";
+import { abrirPanelConsumo } from "./consumo.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -530,6 +531,7 @@ $("btn-cerrar-panel").addEventListener("click", () => {
 });
 
 $("btn-fuentes").addEventListener("click", abrirPanelFuentes);
+$("btn-consumo").addEventListener("click", abrirPanelConsumo);
 
 // --------------------------------------------------------------------------
 // Cerrar paneles: Escape y clic en el fondo
