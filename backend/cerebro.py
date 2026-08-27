@@ -210,6 +210,11 @@ def responder(mensajes: list[dict], extra: str = "") -> Iterator[dict]:
         try:
             flujo = api.responses.create(
                 model=modelo,
+                # Sin esto el modelo razona al effort por defecto y una consulta
+                # simple pagaba seis segundos solo para decidir que herramienta
+                # llamar. 'low' baja eso a uno o dos sin perder el tool-calling;
+                # 'minimal' es mas rapido pero acierta menos con las herramientas.
+                reasoning={"effort": os.getenv("JARVIS_ESFUERZO_CHAT", "low")},
                 instructions=instrucciones(extra),
                 input=entrada,
                 tools=catalogo_de_herramientas(con_conectores),
