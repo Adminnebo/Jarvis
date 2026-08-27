@@ -122,6 +122,10 @@ async def entrar(clave: str = Form("")):
 
 class PeticionDeChat(BaseModel):
     mensaje: str
+    # El cliente puede pedir respuestas cortas para su pantalla. Va aparte del
+    # mensaje a proposito: dentro quedaria en el historial y seguiria acortando
+    # las respuestas de los demas clientes, que comparten la conversacion.
+    breve: bool = False
 
 
 class PeticionDeHerramienta(BaseModel):
@@ -162,8 +166,15 @@ def chat(peticion: PeticionDeChat):
     mensajes = memoria.cargar_conversacion()
     mensajes.append({"role": "user", "content": peticion.mensaje})
 
+    extra = (
+        "Respondes en la pantalla de un reloj y en voz alta: maximo dos frases, "
+        "sin listas ni encabezados."
+        if peticion.breve
+        else ""
+    )
+
     def flujo():
-        for evento in cerebro.responder(mensajes):
+        for evento in cerebro.responder(mensajes, extra):
             yield cerebro.evento_sse(evento)
 
     return StreamingResponse(

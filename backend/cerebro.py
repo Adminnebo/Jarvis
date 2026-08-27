@@ -50,7 +50,7 @@ def clave_openai() -> str:
     return clave
 
 
-def instrucciones() -> str:
+def instrucciones(extra: str = "") -> str:
     nombre = os.getenv("JARVIS_NOMBRE", "Jarvis")
     usuario = os.getenv("JARVIS_USUARIO", "el usuario")
     ciudad = os.getenv("JARVIS_CIUDAD", "")
@@ -63,6 +63,27 @@ Como hablas:
   cortas, sin markdown, sin vinetas, sin emojis, sin URLs largas.
 - Se breve. Dos o tres frases salvo que te pidan detalle.
 - Si no sabes algo, dilo. Nunca inventes datos.
+
+Cuando consultas algo:
+- Al llamar a una herramienta NO pidas confirmacion. Se proactivo: en cuanto
+  entiendas la intencion, ejecutala.
+- NO anuncies lo que vas a hacer. Nada de "voy a buscarlo", "dejame revisar",
+  "un momento" ni "ahora te digo". Consulta y habla cuando tengas el dato: el
+  silencio de un segundo es normal y esperado.
+- **Nunca cierres un turno prometiendo una consulta que no hiciste.** Si tu
+  ultima frase iba a ser "lo busco" o "intento de nuevo", buscalo ahora y
+  responde con el resultado. Si no pudiste, di por que.
+- Tampoco anuncies cuando la respuesta es directa, cuando {usuario} solo esta
+  confirmando o corrigiendo algo, ni cuando lo ultimo que oiste fue silencio,
+  ruido de fondo o una conversacion ajena.
+- Si la pregunta es ambigua, elige la interpretacion mas razonable, responde, y
+  di brevemente que asumiste. No preguntes antes de consultar.
+- Si no entendiste bien el audio, pregunta lo justo y sigue. No repitas lo que
+  creiste oir palabra por palabra.
+- Los resultados se leen en voz alta: resume. Di el total y lo relevante, no
+  listas largas de filas. Redondea los numeros grandes: "diecisiete millones
+  novecientos mil", no la cifra exacta al centavo.
+- Nunca leas identificadores largos, hashes ni URLs en voz alta.
 
 Memoria:
 - Cuando {usuario} mencione algo que valga la pena recordar (gustos, personas,
@@ -89,25 +110,6 @@ Base de datos (Supabase):
 - Solo si NINGUNA consulta del catalogo sirve, escribe SQL con `execute_sql`.
   Es varias veces mas lento, asi que es el ultimo recurso, no el primero.
 - Nunca llames a list_tables: ya tienes el esquema completo mas abajo.
-- Al llamar a una herramienta NO pidas confirmacion. Se proactivo. Todas tus
-  consultas son de solo lectura y tardan menos de un segundo: en cuanto
-  entiendas la intencion, ejecutalas.
-- NO anuncies lo que vas a hacer cuando la consulta es rapida y {usuario} no
-  gana nada con el aviso, que es siempre en tu caso. Nada de "voy a buscarlo",
-  "dejame revisar", "un momento" ni "ahora te digo". Consulta y habla solo
-  cuando tengas el dato. El silencio de un segundo es normal y esperado.
-- Tampoco anuncies cuando la respuesta es directa, cuando {usuario} solo esta
-  confirmando o corrigiendo algo, ni cuando lo ultimo que oiste fue silencio,
-  ruido de fondo o una conversacion ajena.
-- Si no entendiste bien el audio, pregunta lo justo y sigue. No repitas lo que
-  creiste oir palabra por palabra.
-- Si la pregunta es ambigua, elige la interpretacion mas razonable, responde, y
-  di brevemente que asumiste. No preguntes antes de consultar.
-- Los resultados se leen en voz alta: resume. Di el total y lo relevante, no
-  listas largas de filas. Redondea los numeros grandes: "diecisiete millones
-  novecientos mil", no la cifra exacta al centavo.
-- Nunca leas identificadores largos, hashes ni URLs en voz alta.
-
 - Si necesitas escribir SQL a mano, pide antes las columnas con `ver_esquema`.
   No adivines nombres de columnas.
 
@@ -146,6 +148,14 @@ Como consultar estas fuentes:
   no "el P1 es 164.44"."""
 
     texto += f"\n\nEsto es lo que ya sabes de {usuario}:\n{memoria.resumen_para_prompt()}"
+
+    # Instruccion de un solo turno: la manda el cliente (un reloj pide frases
+    # cortas) y va aqui, no en el mensaje del usuario. Metida en el mensaje
+    # quedaria en el historial y seguiria condicionando los turnos siguientes,
+    # incluidos los de otros clientes que comparten la conversacion.
+    if extra:
+        texto += f"\n\n{extra}"
+
     return texto
 
 
@@ -165,7 +175,7 @@ def es_fallo_de_conector(error: Exception) -> bool:
     return "MCP server" in str(error)
 
 
-def responder(mensajes: list[dict]) -> Iterator[dict]:
+def responder(mensajes: list[dict], extra: str = "") -> Iterator[dict]:
     """Genera la respuesta como un flujo de eventos.
 
     Eventos posibles:
@@ -200,7 +210,7 @@ def responder(mensajes: list[dict]) -> Iterator[dict]:
         try:
             flujo = api.responses.create(
                 model=modelo,
-                instructions=instrucciones(),
+                instructions=instrucciones(extra),
                 input=entrada,
                 tools=catalogo_de_herramientas(con_conectores),
                 stream=True,
@@ -365,7 +375,13 @@ def configuracion_de_sesion() -> dict:
         "reasoning": {"effort": os.getenv("JARVIS_ESFUERZO", "low")},
         "audio": {
             "input": {
-                "transcription": {"model": "gpt-live-transcribe"},
+                # Sin idioma fijo, el transcriptor lo adivina en cada turno y
+                # con frases cortas o ruido se va a otro idioma: una pregunta
+                # de dos palabras volvia transcrita en coreano.
+                "transcription": {
+                    "model": "gpt-live-transcribe",
+                    "language": os.getenv("JARVIS_IDIOMA", "es"),
+                },
                 # Filtra el ruido antes de que llegue al detector de voz, asi
                 # que mejora tambien la deteccion de turnos.
                 # far_field = microfono de portatil o de sala.
