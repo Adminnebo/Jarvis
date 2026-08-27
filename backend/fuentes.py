@@ -568,6 +568,44 @@ def columna_descriptiva(columnas: list[str]) -> str:
     return columnas[0]
 
 
+# Donde la gente escribe como llama a las cosas, mas alla del nombre oficial:
+# sinonimos, usos, notas. Es donde vive el lenguaje hablado.
+ALTERNATIVAS = ("alterna", "alternativa", "sinonimo", "uso", "comun",
+                "observacion", "nota", "comentario", "etiqueta", "tag")
+
+# Identificadores. Coinciden por accidente y gastan cupo de busqueda.
+IDENTIFICADORAS = ("codigo", "code", "codbar", "barra", "barcode", "ean", "upc",
+                   "sku", "referencia", "ref", "unidad", "und", "um")
+
+# Nombres cortos que serian identificadores pero no contienen ninguna pista
+# larga: 'id' esta dentro de demasiadas palabras para buscarlo como fragmento
+# ('humedad', 'medida'), asi que van por coincidencia exacta.
+IDENTIFICADORAS_EXACTAS = ("id", "pk", "no", "num", "nro")
+
+
+def ordenar_por_utilidad(columnas: list[str]) -> list[str]:
+    """Primero donde vive el lenguaje, al final los codigos.
+
+    El recorte a ocho columnas era por orden de tabla, no por utilidad. En un
+    catalogo de productos las ocho primeras se iban en Codigo, Referencia,
+    CodBar y Und, y dejaban fuera DescripcionAlterna —justo la columna donde
+    estan las palabras que usa la gente: 'cable de goma', 'alambre italiano'.
+    Buscar por como se dice no encontraba nada.
+    """
+    def peso(columna: str) -> int:
+        bajo = columna.lower()
+        if any(p in bajo for p in DESCRIPTIVAS):
+            return 0
+        if any(p in bajo for p in ALTERNATIVAS):
+            return 1
+        if bajo in IDENTIFICADORAS_EXACTAS or any(p in bajo for p in IDENTIFICADORAS):
+            return 3
+        return 2
+
+    # sorted es estable: dentro de cada grupo se respeta el orden de la tabla.
+    return sorted(columnas, key=peso)
+
+
 def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
                     limite: int = 8) -> list[dict]:
     """Busca por texto y devuelve las mejores coincidencias primero.
@@ -589,8 +627,9 @@ def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
     if not terminos:
         raise ValueError("Hace falta algo que buscar.")
 
-    # Muchas columnas de texto disparan la consulta sin mejorar el resultado.
-    columnas = columnas[:8]
+    # Muchas columnas de texto disparan la consulta sin mejorar el resultado;
+    # ordenarlas antes evita gastar el cupo en codigos y perder las utiles.
+    columnas = ordenar_por_utilidad(columnas)[:8]
     principal = columna_descriptiva(columnas)
 
     def patron(columna: str, termino: str) -> str:
