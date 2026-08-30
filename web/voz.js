@@ -105,6 +105,28 @@ function crearPuerta(flujo, pista, ajustes, alMedir) {
 }
 
 
+/* Espera a que el navegador termine de juntar candidatos ICE.
+
+   Con tope de tiempo: en algunas redes el gathering nunca se declara completo
+   y quedarse esperando seria peor que enviar lo que ya se tiene. */
+function esperarCandidatos(conexion, tope = 3000) {
+  if (conexion.iceGatheringState === "complete") return Promise.resolve();
+
+  return new Promise((listo) => {
+    const terminar = () => {
+      conexion.removeEventListener("icegatheringstatechange", alCambiar);
+      clearTimeout(reloj);
+      listo();
+    };
+    const alCambiar = () => {
+      if (conexion.iceGatheringState === "complete") terminar();
+    };
+    const reloj = setTimeout(terminar, tope);
+    conexion.addEventListener("icegatheringstatechange", alCambiar);
+  });
+}
+
+
 export function crearSesionDeVoz(eventos) {
   let conexion = null;
   let canal = null;
@@ -169,7 +191,13 @@ export function crearSesionDeVoz(eventos) {
                          (nivel, umbral, abierto) =>
                            avisar("onNivel", nivel, umbral, abierto));
 
-    conexion = new RTCPeerConnection();
+    // OpenAI contesta en modo ice-lite: no hace chequeos de conectividad por
+    // su cuenta, asi que el navegador tiene que aportar candidatos validos.
+    // Sin STUN solo junta candidatos de red local y la conexion no se
+    // establece: la pantalla se quedaba en "Conectando..." para siempre.
+    conexion = new RTCPeerConnection({
+      iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }],
+    });
 
     audio = new Audio();
     audio.autoplay = true;
@@ -183,6 +211,19 @@ export function crearSesionDeVoz(eventos) {
     canal.addEventListener("message", (mensaje) => manejar(JSON.parse(mensaje.data)));
     canal.addEventListener("open", () => avisar("onEstado", "listo", "Te escucho"));
 
+    // Sin esto, un ICE que no cuaja deja la pantalla en "Conectando..." sin
+    // decir nada. Mejor avisar que quedarse mudo.
+    conexion.oniceconnectionstatechange = () => {
+      const e = conexion.iceConnectionState;
+      if (e === "checking") avisar("onEstado", "conectando", "Enlazando audio...");
+      if (e === "failed") {
+        avisar("onError",
+          "No se pudo establecer el audio con OpenAI. " +
+          "Suele ser la red: prueba con otra wifi o con datos del telefono.");
+        cerrar();
+      }
+    };
+
     conexion.onconnectionstatechange = () => {
       if (["failed", "disconnected"].includes(conexion.connectionState) && !cerrada) {
         avisar("onError", "Se perdio la conexion de voz.");
@@ -193,11 +234,16 @@ export function crearSesionDeVoz(eventos) {
     const oferta = await conexion.createOffer();
     await conexion.setLocalDescription(oferta);
 
+    // Hay que esperar a tener los candidatos: `oferta.sdp` es la version de
+    // antes de recolectarlos, y OpenAI necesita que vengan dentro. Enviando
+    // esa version la negociacion respondia bien pero nunca conectaba.
+    await esperarCandidatos(conexion);
+
     // El intercambio va por nuestro servidor: llamar a api.openai.com desde
     // aqui lo bloquea CORS salvo en localhost, y ademas expondria la clave.
     const sdp = await fetch("/api/voz/sdp", {
       method: "POST",
-      body: oferta.sdp,
+      body: conexion.localDescription.sdp,
       headers: { "Content-Type": "application/sdp" },
     });
 
