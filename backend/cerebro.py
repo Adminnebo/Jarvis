@@ -131,6 +131,11 @@ Como consultar estas fuentes:
   `buscar_en_fuente` con las palabras tal cual las dijo {usuario}. Exige que
   aparezcan todas y devuelve las mejores primero. Una sola llamada.
 - `consultar_fuente` con SQL solo para contar, sumar o agrupar.
+- Las tablas marcadas con "[N filas]" son grandes. En las enormes (ventas,
+  historicos de cientos de miles o millones de filas) NUNCA uses
+  `buscar_en_fuente` ni un `select *` sin filtro: escanearlas cuelga. Usa
+  `consultar_fuente` con `where` (por fecha, codigo o vendedor) y agrega con
+  `sum`/`group by`. Si no acotas un historico, filtra al periodo mas reciente.
 - NO llames a `ver_esquema_fuente`: ya tienes las columnas aqui arriba. Solo si
   necesitaras una tabla que no aparezca.
 - Busca antes de preguntar. Si {usuario} dice "el cable de 6", busca "cable 6"

@@ -627,6 +627,16 @@ def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
     if not columnas:
         raise ValueError(f"La tabla '{nombre_real}' no tiene columnas de texto.")
 
+    # En tablas enormes el LIKE escanea millones de filas y cuelga la sesion.
+    # Cortamos antes y le decimos al modelo que cambie a SQL con filtro.
+    n = contar_filas(id_fuente, nombre_real)
+    if n is not None and n > UMBRAL_TABLA_GRANDE:
+        raise ValueError(
+            f"'{nombre_real}' tiene {n:,} filas: demasiadas para buscar por "
+            "texto. Usa consultar_fuente con SQL, filtrando con WHERE (por fecha, "
+            "codigo o vendedor) y agrupando con SUM/GROUP BY. No la escanees entera."
+        )
+
     terminos = terminos_de(texto)
     if not terminos:
         raise ValueError("Hace falta algo que buscar.")
@@ -896,9 +906,58 @@ SQL_COLUMNAS = {
 # viaje entero a la base. Se cachea en memoria y se tira al editar la fuente.
 _esquemas: dict[str, dict] = {}
 
+# Numero de filas por tabla (fuente, tabla) -> filas. Se llena a demanda y se
+# usa para no escanear por texto tablas enormes y para avisar su tamano en el
+# prompt.
+_conteos: dict[tuple[str, str], int] = {}
+
+# A partir de aqui una tabla es demasiado grande para buscar por texto (LIKE
+# escanea todo). Encima de esto hay que consultar con SQL: filtro y agregacion.
+UMBRAL_TABLA_GRANDE = 50000
+
 
 def olvidar_esquema(id_fuente: str) -> None:
     _esquemas.pop(id_fuente, None)
+    for clave in [k for k in _conteos if k[0] == id_fuente]:
+        _conteos.pop(clave, None)
+
+
+def contar_filas(id_fuente: str, tabla: str) -> int | None:
+    """Filas de una tabla, cacheado. None si no se pudo contar.
+
+    COUNT(*) usa el indice y es rapido incluso con millones de filas; lo
+    guardamos para no repetirlo en cada pregunta.
+    """
+    clave = (id_fuente, tabla)
+    if clave in _conteos:
+        return _conteos[clave]
+    fuente = obtener(id_fuente)
+    if fuente is None:
+        return None
+
+    n = None
+    try:
+        if fuente["tipo"] == "mssql":
+            # Metadata del indice: instantaneo, NO escanea (clave con millones de
+            # filas). Las vistas no tienen filas aqui: caen al COUNT de abajo.
+            filas = MOTORES["mssql"](
+                fuente["config"],
+                "SELECT SUM(p.rows) AS n FROM sys.partitions p "
+                f"WHERE p.object_id = OBJECT_ID('{tabla}') AND p.index_id IN (0, 1)",
+                1, id_fuente,
+            )
+            crudo = filas[0].get("n") if filas else None
+            n = int(crudo) if crudo is not None else None
+        if n is None:
+            filas = MOTORES[fuente["tipo"]](
+                fuente["config"], f"SELECT COUNT(*) AS n FROM {tabla}", 1, id_fuente
+            )
+            n = int(next(iter(filas[0].values()))) if filas else 0
+    except Exception:  # noqa: BLE001 - si no se puede contar, seguimos sin el dato
+        return None
+
+    _conteos[clave] = n
+    return n
 
 
 def guardar_config_tablas(id_fuente: str, config_tablas: dict) -> dict:
@@ -943,6 +1002,7 @@ def esquema_con_estado(id_fuente: str) -> dict:
             "columnas": t["columnas"],
             "activa": bool(cfg.get("activa", True)),
             "leyenda": cfg.get("leyenda", ""),
+            "filas": contar_filas(id_fuente, t["tabla"]),
         })
     return {"fuente": esq["fuente"], "tipo": esq["tipo"], "tablas": tablas}
 
@@ -1019,9 +1079,17 @@ def resumen_para_prompt() -> str:
             if config_tablas.get(t["tabla"], {}).get("activa", True)
         ]
 
-        def con_leyenda(nombre: str, cfg=config_tablas) -> str:
+        def con_leyenda(nombre: str, cfg=config_tablas, fid=fuente["id"]) -> str:
             ley = cfg.get(nombre, {}).get("leyenda", "")
-            return f"{nombre} ({ley})" if ley else nombre
+            n = contar_filas(fid, nombre)
+            partes = [nombre]
+            if n and n > UMBRAL_TABLA_GRANDE:
+                partes.append(f"[{n:,} filas: NO buscar por texto, consulta con SQL agregado y filtro de fecha]")
+            elif n and n > 10000:
+                partes.append(f"[{n:,} filas]")
+            if ley:
+                partes.append(f"({ley})")
+            return " ".join(partes)
 
         detalle = "\n".join(
             f"    {con_leyenda(t['tabla'])}: {t['columnas']}" for t in tablas_activas

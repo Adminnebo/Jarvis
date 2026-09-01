@@ -346,6 +346,13 @@ async function verEsquema(id, nodo) {
     const cab = document.createElement("label");
     cab.className = "esquema-tabla-cab";
     cab.append(check, nombre);
+    if (tabla.filas != null) {
+      const cnt = document.createElement("span");
+      cnt.className = "tabla-filas" + (tabla.filas > 50000 ? " grande" : "");
+      cnt.textContent = tabla.filas.toLocaleString("es") + " filas";
+      if (tabla.filas > 50000) cnt.title = "Muy grande: Jarvis la consulta con SQL agregado, no por búsqueda de texto";
+      cab.append(cnt);
+    }
 
     const leyenda = document.createElement("input");
     leyenda.type = "text";

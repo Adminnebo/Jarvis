@@ -628,6 +628,14 @@ body {
   outline: none;
   border-color: var(--acento);
 }
+.tabla-filas {
+  margin-left: auto;
+  flex: none;
+  font-size: 11px;
+  color: var(--tenue);
+  white-space: nowrap;
+}
+.tabla-filas.grande { color: var(--peligro); font-weight: 600; }
 .boton-mini.guardar-tablas { margin-top: 10px; }
 
 /* ---------- Tablero de consumo ---------- */
