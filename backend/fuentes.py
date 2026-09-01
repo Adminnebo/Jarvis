@@ -1014,21 +1014,21 @@ def resumen_para_prompt() -> str:
         # Solo las tablas activas van al prompt, con su leyenda como pista de
         # cuando usarlas. La leyenda la pone el usuario en el panel de tablas.
         config_tablas = fuente.get("tablas", {})
-        activas = [
+        tablas_activas = [
             t for t in esquema_fuente["tablas"]
             if config_tablas.get(t["tabla"], {}).get("activa", True)
         ]
 
-        def con_leyenda(nombre: str) -> str:
-            ley = config_tablas.get(nombre, {}).get("leyenda", "")
+        def con_leyenda(nombre: str, cfg=config_tablas) -> str:
+            ley = cfg.get(nombre, {}).get("leyenda", "")
             return f"{nombre} ({ley})" if ley else nombre
 
         detalle = "\n".join(
-            f"    {con_leyenda(t['tabla'])}: {t['columnas']}" for t in activas
+            f"    {con_leyenda(t['tabla'])}: {t['columnas']}" for t in tablas_activas
         )
         if len(detalle) > TOPE_ESQUEMA_EN_PROMPT:
             detalle = "    tablas: " + ", ".join(
-                con_leyenda(t["tabla"]) for t in activas
+                con_leyenda(t["tabla"]) for t in tablas_activas
             ) + "\n    (usa ver_esquema_fuente para las columnas)"
 
         bloques.append(f"{cabecera}\n{detalle}")
