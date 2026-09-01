@@ -325,9 +325,50 @@ async function verEsquema(id, nodo) {
     "sirve cada una, así busca en la correcta.";
   detalle.appendChild(ayuda);
 
-  const cuerpo = document.createElement("div");
-  cuerpo.className = "esquema-tablas";
+  // Indicador de guardado: se actualiza solo al cambiar algo, sin boton.
+  const estado = document.createElement("span");
+  estado.className = "guardado-estado";
+  resumen.appendChild(estado);
+
   const controles = [];
+
+  // Guarda TODO el estado (todas las tablas) cada vez que algo cambia. Se manda
+  // completo porque el backend reemplaza el mapa: asi no se pierde el resto.
+  let temporizador = null;
+  async function guardarTablas() {
+    estado.textContent = " · guardando…";
+    estado.className = "guardado-estado guardando";
+    const tablas = {};
+    for (const c of controles) {
+      tablas[c.tabla] = { activa: c.check.checked, leyenda: c.leyenda.value.trim() };
+    }
+    try {
+      const r = await fetch(`/api/fuentes/${id}/tablas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tablas }),
+      });
+      const res = await r.json();
+      if (res.ok) {
+        estado.textContent = " · guardado ✓";
+        estado.className = "guardado-estado ok";
+      } else {
+        estado.textContent = " · " + (res.error || "error");
+        estado.className = "guardado-estado mal";
+      }
+    } catch {
+      estado.textContent = " · error de red";
+      estado.className = "guardado-estado mal";
+    }
+    const act = Object.values(tablas).filter((t) => t.activa).length;
+    resumen.firstChild.textContent = `${datos.tablas.length} tablas · ${act} activas`;
+  }
+  // Pequeña espera para no guardar en cada tecla mientras se escribe la leyenda.
+  function guardarPronto() {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(guardarTablas, 600);
+  }
+
   for (const tabla of datos.tablas) {
     const fila = document.createElement("div");
     fila.className = "esquema-tabla" + (tabla.activa ? "" : " apagada");
@@ -336,9 +377,10 @@ async function verEsquema(id, nodo) {
     check.type = "checkbox";
     check.checked = tabla.activa;
     check.title = "Activar o desactivar esta tabla";
-    check.addEventListener("change", () =>
-      fila.classList.toggle("apagada", !check.checked),
-    );
+    check.addEventListener("change", () => {
+      fila.classList.toggle("apagada", !check.checked);
+      guardarTablas(); // el check guarda de inmediato
+    });
 
     const nombre = document.createElement("strong");
     nombre.textContent = tabla.tabla;
@@ -359,6 +401,9 @@ async function verEsquema(id, nodo) {
     leyenda.className = "leyenda-tabla";
     leyenda.placeholder = "Leyenda: para qué sirve (ej. saldos y deudas de clientes)";
     leyenda.value = tabla.leyenda || "";
+    // Guarda al salir del campo o al dejar de escribir un momento.
+    leyenda.addEventListener("blur", guardarTablas);
+    leyenda.addEventListener("input", guardarPronto);
 
     const columnas = document.createElement("span");
     columnas.textContent = tabla.columnas;
@@ -368,31 +413,6 @@ async function verEsquema(id, nodo) {
     controles.push({ tabla: tabla.tabla, check, leyenda });
   }
   detalle.appendChild(cuerpo);
-
-  const guardar = boton("Guardar tablas", async () => {
-    const tablas = {};
-    for (const c of controles) {
-      tablas[c.tabla] = { activa: c.check.checked, leyenda: c.leyenda.value.trim() };
-    }
-    guardar.disabled = true;
-    const previo = guardar.textContent;
-    guardar.textContent = "Guardando...";
-    try {
-      const r = await fetch(`/api/fuentes/${id}/tablas`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tablas }),
-      });
-      const res = await r.json();
-      guardar.textContent = res.ok ? "Guardado ✓" : (res.error || "Error");
-      const act = Object.values(tablas).filter((t) => t.activa).length;
-      resumen.textContent = `${datos.tablas.length} tablas · ${act} activas`;
-    } catch {
-      guardar.textContent = "Error de red";
-    }
-    setTimeout(() => { guardar.textContent = previo; guardar.disabled = false; }, 1600);
-  }, "guardar-tablas");
-  detalle.appendChild(guardar);
 
   nodo.appendChild(detalle);
 }

@@ -636,7 +636,10 @@ body {
   white-space: nowrap;
 }
 .tabla-filas.grande { color: var(--peligro); font-weight: 600; }
-.boton-mini.guardar-tablas { margin-top: 10px; }
+.guardado-estado { font-size: 11px; font-weight: 400; }
+.guardado-estado.guardando { color: var(--tenue); }
+.guardado-estado.ok { color: var(--ok); }
+.guardado-estado.mal { color: var(--peligro); }
 
 /* ---------- Tablero de consumo ---------- */
 
