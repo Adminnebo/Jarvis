@@ -314,22 +314,79 @@ async function verEsquema(id, nodo) {
   detalle.open = true;
 
   const resumen = document.createElement("summary");
-  resumen.textContent = `${datos.tablas.length} tablas`;
+  const numActivas = datos.tablas.filter((t) => t.activa).length;
+  resumen.textContent = `${datos.tablas.length} tablas · ${numActivas} activas`;
   detalle.appendChild(resumen);
+
+  const ayuda = document.createElement("p");
+  ayuda.className = "esquema-ayuda";
+  ayuda.textContent =
+    "Desactiva las tablas que Jarvis no debe usar. La leyenda le dice para qué " +
+    "sirve cada una, así busca en la correcta.";
+  detalle.appendChild(ayuda);
 
   const cuerpo = document.createElement("div");
   cuerpo.className = "esquema-tablas";
+  const controles = [];
   for (const tabla of datos.tablas) {
     const fila = document.createElement("div");
-    fila.className = "esquema-tabla";
+    fila.className = "esquema-tabla" + (tabla.activa ? "" : " apagada");
+
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.checked = tabla.activa;
+    check.title = "Activar o desactivar esta tabla";
+    check.addEventListener("change", () =>
+      fila.classList.toggle("apagada", !check.checked),
+    );
+
     const nombre = document.createElement("strong");
     nombre.textContent = tabla.tabla;
+
+    const cab = document.createElement("label");
+    cab.className = "esquema-tabla-cab";
+    cab.append(check, nombre);
+
+    const leyenda = document.createElement("input");
+    leyenda.type = "text";
+    leyenda.className = "leyenda-tabla";
+    leyenda.placeholder = "Leyenda: para qué sirve (ej. saldos y deudas de clientes)";
+    leyenda.value = tabla.leyenda || "";
+
     const columnas = document.createElement("span");
     columnas.textContent = tabla.columnas;
-    fila.append(nombre, columnas);
+
+    fila.append(cab, leyenda, columnas);
     cuerpo.appendChild(fila);
+    controles.push({ tabla: tabla.tabla, check, leyenda });
   }
   detalle.appendChild(cuerpo);
+
+  const guardar = boton("Guardar tablas", async () => {
+    const tablas = {};
+    for (const c of controles) {
+      tablas[c.tabla] = { activa: c.check.checked, leyenda: c.leyenda.value.trim() };
+    }
+    guardar.disabled = true;
+    const previo = guardar.textContent;
+    guardar.textContent = "Guardando...";
+    try {
+      const r = await fetch(`/api/fuentes/${id}/tablas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tablas }),
+      });
+      const res = await r.json();
+      guardar.textContent = res.ok ? "Guardado ✓" : (res.error || "Error");
+      const act = Object.values(tablas).filter((t) => t.activa).length;
+      resumen.textContent = `${datos.tablas.length} tablas · ${act} activas`;
+    } catch {
+      guardar.textContent = "Error de red";
+    }
+    setTimeout(() => { guardar.textContent = previo; guardar.disabled = false; }, 1600);
+  }, "guardar-tablas");
+  detalle.appendChild(guardar);
+
   nodo.appendChild(detalle);
 }
 

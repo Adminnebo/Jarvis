@@ -189,6 +189,10 @@ def guardar(datos: dict) -> dict:
             "solo_lectura": bool(datos.get("solo_lectura", True)),
             "activa": bool(datos.get("activa", True)),
             "notas": (datos.get("notas") or "").strip(),
+            # Activacion y leyenda por tabla. Al editar la fuente se conserva lo
+            # que ya habia: se administra aparte, en el panel de tablas.
+            "tablas": datos.get("tablas") if "tablas" in datos
+                      else (previa or {}).get("tablas", {}),
         }
 
         if previa:
@@ -897,6 +901,52 @@ def olvidar_esquema(id_fuente: str) -> None:
     _esquemas.pop(id_fuente, None)
 
 
+def guardar_config_tablas(id_fuente: str, config_tablas: dict) -> dict:
+    """Activa/desactiva tablas y guarda su leyenda, sin tocar el resto.
+
+    La leyenda es una pista en lenguaje natural (p. ej. "saldos y deudas de
+    clientes") que va al prompt para que el modelo sepa en que tabla buscar.
+    Las desactivadas no aparecen en el prompt.
+    """
+    limpio = {}
+    for nombre, cfg in (config_tablas or {}).items():
+        cfg = cfg or {}
+        limpio[str(nombre)] = {
+            "activa": bool(cfg.get("activa", True)),
+            "leyenda": (cfg.get("leyenda") or "").strip(),
+        }
+
+    with _candado:
+        guardadas = _leer()
+        fuente = next((f for f in guardadas if f["id"] == id_fuente), None)
+        if fuente is None:
+            raise ValueError(f"No existe la fuente '{id_fuente}'.")
+        fuente["tablas"] = limpio
+        _escribir(guardadas)
+
+    return {"ok": True, "tablas": limpio}
+
+
+def esquema_con_estado(id_fuente: str) -> dict:
+    """El esquema de la fuente, con el estado (activa/leyenda) de cada tabla.
+
+    Es lo que consume el panel de tablas: combina el esquema real de la base
+    con la config que guardo el usuario, sin ensuciar el cache de esquema_de.
+    """
+    esq = esquema_de(id_fuente)
+    config_tablas = (obtener(id_fuente) or {}).get("tablas", {})
+    tablas = []
+    for t in esq["tablas"]:
+        cfg = config_tablas.get(t["tabla"], {})
+        tablas.append({
+            "tabla": t["tabla"],
+            "columnas": t["columnas"],
+            "activa": bool(cfg.get("activa", True)),
+            "leyenda": cfg.get("leyenda", ""),
+        })
+    return {"fuente": esq["fuente"], "tipo": esq["tipo"], "tablas": tablas}
+
+
 def esquema_de(id_fuente: str, refrescar: bool = False) -> dict:
     """Tablas y columnas de una fuente, agrupadas."""
     if not refrescar and id_fuente in _esquemas:
@@ -961,12 +1011,24 @@ def resumen_para_prompt() -> str:
             bloques.append(cabecera)
             continue
 
+        # Solo las tablas activas van al prompt, con su leyenda como pista de
+        # cuando usarlas. La leyenda la pone el usuario en el panel de tablas.
+        config_tablas = fuente.get("tablas", {})
+        activas = [
+            t for t in esquema_fuente["tablas"]
+            if config_tablas.get(t["tabla"], {}).get("activa", True)
+        ]
+
+        def con_leyenda(nombre: str) -> str:
+            ley = config_tablas.get(nombre, {}).get("leyenda", "")
+            return f"{nombre} ({ley})" if ley else nombre
+
         detalle = "\n".join(
-            f"    {t['tabla']}: {t['columnas']}" for t in esquema_fuente["tablas"]
+            f"    {con_leyenda(t['tabla'])}: {t['columnas']}" for t in activas
         )
         if len(detalle) > TOPE_ESQUEMA_EN_PROMPT:
             detalle = "    tablas: " + ", ".join(
-                t["tabla"] for t in esquema_fuente["tablas"]
+                con_leyenda(t["tabla"]) for t in activas
             ) + "\n    (usa ver_esquema_fuente para las columnas)"
 
         bloques.append(f"{cabecera}\n{detalle}")

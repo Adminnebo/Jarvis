@@ -222,7 +222,18 @@ def salud_de_fuentes(refrescar: bool = False):
 @app.get("/api/fuentes/{id_fuente}/esquema")
 def esquema_de_fuente(id_fuente: str):
     try:
-        return fuentes.esquema_de(id_fuente)
+        return fuentes.esquema_con_estado(id_fuente)
+    except Exception as error:  # noqa: BLE001
+        return JSONResponse(status_code=400, content={"error": fuentes.explicar(error)})
+
+
+@app.post("/api/fuentes/{id_fuente}/tablas")
+def guardar_tablas_de_fuente(id_fuente: str, datos: dict):
+    """Activa/desactiva tablas y guarda su leyenda para el prompt."""
+    try:
+        return fuentes.guardar_config_tablas(id_fuente, datos.get("tablas", {}))
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
     except Exception as error:  # noqa: BLE001
         return JSONResponse(status_code=400, content={"error": fuentes.explicar(error)})
 
