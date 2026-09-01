@@ -699,3 +699,16 @@ async function cargarEstado() {
 
   enReposo();
 })();
+
+// La barra superior es sticky y su alto cambia con el ancho (los botones bajan
+// de linea en pantallas angostas). Publicamos ese alto en --alto-barra para que
+// la barra de entrada y los paneles arranquen justo debajo, sin taparse.
+(function medirAltoBarra() {
+  const barra = document.querySelector(".barra");
+  if (!barra) return;
+  const aplicar = () =>
+    document.documentElement.style.setProperty("--alto-barra", barra.offsetHeight + "px");
+  aplicar();
+  window.addEventListener("resize", aplicar);
+  if (window.ResizeObserver) new ResizeObserver(aplicar).observe(barra);
+})();

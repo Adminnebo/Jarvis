@@ -25,12 +25,17 @@ body {
 /* ---------- Barra superior ---------- */
 
 .barra {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 14px 22px;
   border-bottom: 1px solid var(--borde);
+  background: rgba(7, 9, 14, 0.92);
+  backdrop-filter: blur(8px);
   flex-wrap: wrap;
 }
 
@@ -298,7 +303,7 @@ body {
    conversacion crezca, y no hay que bajar para escribir. */
 .entrada {
   position: sticky;
-  top: 0;
+  top: var(--alto-barra, 56px);
   z-index: 3;
   display: flex;
   align-items: center;
@@ -409,7 +414,11 @@ body {
 
 .panel {
   position: fixed;
-  top: 0; right: 0; bottom: 0;
+  /* Debajo de la barra superior: si arranca en top:0 tapa el logo y los
+     botones del header y su titulo queda cortado contra el borde. */
+  top: var(--alto-barra, 56px);
+  right: 0; bottom: 0;
+  z-index: 20;
   width: min(400px, 92vw);
   background: var(--panel);
   border-left: 1px solid var(--borde);
