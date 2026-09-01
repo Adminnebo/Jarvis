@@ -245,6 +245,17 @@ def config_de_voz():
     return cerebro.ajustes_de_voz()
 
 
+@app.get("/api/voz/sesion")
+def sesion_de_voz():
+    """Configuracion completa de la sesion de voz: instrucciones + herramientas.
+
+    La usa el puente del reloj para levantar un modo de voz alterno (Gemini
+    Live) con exactamente el mismo cerebro y las mismas herramientas que la voz
+    de OpenAI. Es de solo lectura y no altera el flujo existente.
+    """
+    return cerebro.configuracion_de_sesion()
+
+
 @app.post("/api/voz/sdp")
 async def negociar_voz(peticion: Request):
     """Intercambio SDP con OpenAI por cuenta del navegador.
