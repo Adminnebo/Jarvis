@@ -369,6 +369,8 @@ async function verEsquema(id, nodo) {
     temporizador = setTimeout(guardarTablas, 600);
   }
 
+  const cuerpo = document.createElement("div");
+  cuerpo.className = "esquema-tablas";
   for (const tabla of datos.tablas) {
     const fila = document.createElement("div");
     fila.className = "esquema-tabla" + (tabla.activa ? "" : " apagada");
