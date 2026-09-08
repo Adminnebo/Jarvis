@@ -26,6 +26,10 @@ def herramienta(descripcion: str, **descripciones_de_parametros: str):
         requeridos = []
 
         for nombre, parametro in firma.parameters.items():
+            # 'usuario' lo inyecta ejecutar(), no lo elige el modelo: si
+            # apareciera en el esquema podria escribir en la memoria de otro.
+            if nombre == "usuario":
+                continue
             propiedades[nombre] = {
                 "type": "string",
                 "description": descripciones_de_parametros.get(nombre, nombre),
@@ -36,6 +40,7 @@ def herramienta(descripcion: str, **descripciones_de_parametros: str):
         # Forma plana: es la que usan tanto la Responses API como Realtime.
         REGISTRO[funcion.__name__] = {
             "funcion": funcion,
+            "necesita_usuario": "usuario" in firma.parameters,
             "esquema": {
                 "type": "function",
                 "name": funcion.__name__,
@@ -56,7 +61,7 @@ def esquemas() -> list[dict]:
     return [entrada["esquema"] for entrada in REGISTRO.values()]
 
 
-def ejecutar(nombre: str, argumentos_json: str) -> str:
+def ejecutar(nombre: str, argumentos_json: str, usuario: str) -> str:
     """Corre una herramienta y devuelve siempre texto, incluso si falla.
 
     Un error aqui no debe tumbar la conversacion: se lo devolvemos al modelo
@@ -68,6 +73,8 @@ def ejecutar(nombre: str, argumentos_json: str) -> str:
 
     try:
         argumentos = json.loads(argumentos_json or "{}")
+        if entrada["necesita_usuario"]:
+            argumentos["usuario"] = usuario
         resultado = entrada["funcion"](**argumentos)
         if isinstance(resultado, str):
             return resultado
@@ -87,8 +94,8 @@ def ejecutar(nombre: str, argumentos_json: str) -> str:
     contenido="El hecho a recordar, escrito en tercera persona y completo por si solo",
     categoria="Una de: personal, trabajo, preferencias, contactos, proyectos, general",
 )
-def recordar(contenido: str, categoria: str = "general") -> str:
-    hecho = memoria.recordar(contenido, categoria)
+def recordar(contenido: str, categoria: str = "general", usuario: str = "") -> str:
+    hecho = memoria.recordar(usuario, contenido, categoria)
     return f"Guardado (id {hecho['id']}): {hecho['contenido']}"
 
 
@@ -97,8 +104,8 @@ def recordar(contenido: str, categoria: str = "general") -> str:
     "algo que te conto antes y no lo tengas presente en esta conversacion.",
     consulta="Palabras clave de lo que buscas",
 )
-def buscar_memoria(consulta: str) -> str:
-    resultados = memoria.buscar(consulta)
+def buscar_memoria(consulta: str, usuario: str = "") -> str:
+    resultados = memoria.buscar(usuario, consulta)
     if not resultados:
         return "No hay nada en la memoria sobre eso."
     return "\n".join(f"- ({h['categoria']}) {h['contenido']}" for h in resultados)
@@ -109,8 +116,8 @@ def buscar_memoria(consulta: str) -> str:
     "o corrige un dato que resulto ser falso.",
     id_hecho="El id de 8 caracteres del hecho a borrar",
 )
-def olvidar(id_hecho: str) -> str:
-    return "Listo, lo olvide." if memoria.olvidar(id_hecho) else "No encontre ese hecho."
+def olvidar(id_hecho: str, usuario: str = "") -> str:
+    return "Listo, lo olvide." if memoria.olvidar(usuario, id_hecho) else "No encontre ese hecho."
 
 
 # --------------------------------------------------------------------------
