@@ -83,3 +83,70 @@ def test_sin_nombre_se_usa_la_parte_del_correo():
 
 def test_un_perfil_inexistente_no_entra():
     assert supabase_sesion.usuario_de_perfil(None) is None
+
+
+def test_entrar_con_un_token_bueno(configurado, monkeypatch):
+    monkeypatch.setattr(supabase_sesion, "id_de_token",
+                        lambda t: "11111111-2222-3333-4444-555555555555")
+    monkeypatch.setattr(supabase_sesion, "perfil_cacheado",
+                        lambda u: perfil_de(permissions=["jarvis.usar"]))
+    assert supabase_sesion.entrar("un-token").rol == "usuario"
+
+
+def test_entrar_con_un_token_invalido(configurado, monkeypatch):
+    monkeypatch.setattr(supabase_sesion, "id_de_token", lambda t: None)
+    assert supabase_sesion.entrar("un-token") is None
+
+
+def test_si_supabase_falla_no_entra_nadie(configurado, monkeypatch):
+    def revienta(_):
+        raise RuntimeError("Supabase no responde")
+
+    monkeypatch.setattr(supabase_sesion, "id_de_token", revienta)
+    # Nunca modo abierto: un fallo deja fuera, no deja pasar.
+    assert supabase_sesion.entrar("un-token") is None
+
+
+def test_con_el_puente_apagado_no_entra_nadie():
+    assert supabase_sesion.entrar("un-token") is None
+
+
+def test_revalidar_devuelve_none_si_le_quitaron_el_permiso(configurado, monkeypatch):
+    previo = supabase_sesion.usuario_de_perfil(perfil_de(permissions=["jarvis.usar"]))
+    monkeypatch.setattr(supabase_sesion, "perfil_cacheado",
+                        lambda u: perfil_de(permissions=["inbox.send"]))
+    assert supabase_sesion.revalidar(previo) is None
+
+
+def test_revalidar_actualiza_el_rol(configurado, monkeypatch):
+    previo = supabase_sesion.usuario_de_perfil(perfil_de(permissions=["jarvis.usar"]))
+    monkeypatch.setattr(supabase_sesion, "perfil_cacheado",
+                        lambda u: perfil_de(permissions=["jarvis.admin"]))
+    assert supabase_sesion.revalidar(previo).rol == "admin"
+
+
+def test_revalidar_ignora_a_los_de_contrasena(configurado):
+    from backend import acceso
+
+    de_variable = acceso.Usuario("admin", "Lucas", "admin")
+    # No lleva el prefijo: no se toca la base por el.
+    assert supabase_sesion.revalidar(de_variable) is de_variable
+
+
+def test_el_perfil_se_cachea_un_minuto(configurado, monkeypatch):
+    llamadas = []
+
+    def contar(uuid):
+        llamadas.append(uuid)
+        return perfil_de(permissions=["jarvis.usar"])
+
+    supabase_sesion.limpiar_cache()
+    monkeypatch.setattr(supabase_sesion, "perfil", contar)
+
+    uuid = "11111111-2222-3333-4444-555555555555"
+    supabase_sesion.perfil_cacheado(uuid)
+    supabase_sesion.perfil_cacheado(uuid)
+    supabase_sesion.perfil_cacheado(uuid)
+
+    # Tres consultas seguidas, una sola ida a la base.
+    assert len(llamadas) == 1

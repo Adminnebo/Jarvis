@@ -161,3 +161,39 @@ def usuario_de_perfil(datos: dict | None):
     nombre = (datos.get("full_name") or "").strip() or correo.split("@")[0] or "Alguien"
 
     return acceso.Usuario(f"{PREFIJO}{datos['id']}", nombre, rol)
+
+
+def entrar(token: str):
+    """El usuario que corresponde a un token de panel, o None.
+
+    Cualquier fallo devuelve None. Un problema con Supabase deja a la gente
+    fuera; nunca la deja pasar.
+    """
+    if not configurado():
+        return None
+
+    try:
+        uuid = id_de_token(token)
+        if not uuid:
+            return None
+        return usuario_de_perfil(perfil_cacheado(uuid))
+    except Exception:  # noqa: BLE001 - no poder comprobar es no entrar
+        return None
+
+
+def revalidar(usuario):
+    """Comprueba que quien vino de un panel sigue teniendo permiso.
+
+    Los usuarios de contrasena por variable pasan intactos: su permiso vive en
+    el entorno, no en la base.
+    """
+    if not usuario or not usuario.id.startswith(PREFIJO):
+        return usuario
+
+    if not configurado():
+        return None
+
+    try:
+        return usuario_de_perfil(perfil_cacheado(usuario.id[len(PREFIJO):]))
+    except Exception:  # noqa: BLE001
+        return None
