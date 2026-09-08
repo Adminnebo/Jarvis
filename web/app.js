@@ -655,6 +655,11 @@ async function cargarEstado() {
 
     $("titulo").textContent = estado.nombre;
     document.title = estado.nombre;
+
+    // Comodidad, no seguridad: el servidor ya devuelve 403 a quien no es admin.
+    const esAdmin = estado.rol === "admin";
+    $("btn-fuentes").hidden = !esAdmin;
+    $("btn-consumo").hidden = !esAdmin;
     if (!sesionViva) {
       $("meta").textContent =
         `${estado.modelo} · ${estado.hechos_recordados} recuerdos`;

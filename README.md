@@ -34,14 +34,42 @@ En local no cambia nada: sin la variable, funciona como siempre.
 La sesión es una cookie firmada con HMAC, `HttpOnly` y `Secure` en servidor.
 No hay estado en memoria, así que sobrevive a los reinicios.
 
+### Varias personas
+
+Cada persona tiene su propia contraseña, en su propia variable:
+
+```
+JARVIS_PASSWORD=...          # la tuya: administras Jarvis
+JARVIS_PASSWORD_JORGE=...    # Jorge
+```
+
+La pantalla de acceso no pide usuario: **la contraseña que escribes ya dice
+quién eres**, así que tienen que ser distintas entre sí. Si dos coinciden,
+Jarvis avisa al arrancar, porque serían indistinguibles y compartirían memoria.
+
+Cada uno tiene su conversación, su memoria y su nombre —que sale del sufijo de
+la variable—. Las fuentes de datos, el esquema y las leyendas de tablas son
+comunes: son de la empresa, no de la persona.
+
+Quien entra con `JARVIS_PASSWORD` es el administrador y el único que puede
+tocar las fuentes, refrescar el esquema y ver el consumo. Los demás solo
+conversan, aunque Jarvis sí consulta las bases en su nombre.
+
+Para quitarle el acceso a alguien, borra su variable y vuelve a desplegar. Para
+cerrar todas las sesiones a la vez, cambia `JARVIS_CLAVE_SECRETA`.
+
+La memoria de cuando había un solo usuario se adjudica sola al administrador la
+primera vez que arranca. Los archivos viejos no se borran.
+
 ### Variables a configurar
 
 | Variable | |
 |---|---|
 | `OPENAI_API_KEY` | Obligatoria |
-| `JARVIS_PASSWORD` | Obligatoria al hospedar |
+| `JARVIS_PASSWORD` | Obligatoria al hospedar. Quien entra con ella administra |
+| `JARVIS_PASSWORD_<NOMBRE>` | Una por cada persona más que pueda entrar |
 | `JARVIS_DATA_DIR` | Ruta del volumen persistente |
-| `JARVIS_CLAVE_SECRETA` | Fija la clave de cifrado |
+| `JARVIS_CLAVE_SECRETA` | Cifra las credenciales y firma las sesiones |
 | `SUPABASE_*` | Las mismas de la sección de Supabase |
 
 ### El disco se borra
