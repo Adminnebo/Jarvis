@@ -127,3 +127,26 @@ def guardar_conversacion(id_usuario: str, mensajes: list[dict], maximo: int = 40
 
 def borrar_conversacion(id_usuario: str) -> None:
     _escribir(ARCHIVO_CONVERSACION(id_usuario), [])
+
+
+# --------------------------------------------------------------------------
+# Migracion
+# --------------------------------------------------------------------------
+
+def migrar_archivos_sueltos(id_admin: str) -> None:
+    """Adjudica al admin la memoria de cuando habia un solo usuario.
+
+    Se ejecuta al arrancar. Es idempotente: si el admin ya tiene su archivo,
+    no toca nada, porque lo suyo es mas nuevo que lo que hubiera suelto.
+
+    Los archivos viejos no se borran: quedan como respaldo frio por si algo
+    salio mal.
+    """
+    for viejo, nuevo in (
+        (rutas.archivo("hechos.json"), ARCHIVO_HECHOS(id_admin)),
+        (rutas.archivo("conversacion.json"), ARCHIVO_CONVERSACION(id_admin)),
+    ):
+        if not viejo.exists() or nuevo.exists():
+            continue
+        nuevo.write_text(viejo.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"  Memoria migrada: {viejo.name} -> {nuevo.name}")

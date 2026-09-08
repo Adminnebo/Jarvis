@@ -1,3 +1,5 @@
+import json
+
 from backend import memoria
 
 
@@ -39,3 +41,43 @@ def test_la_conversacion_es_de_cada_uno():
 
     memoria.borrar_conversacion("lucas")
     assert memoria.cargar_conversacion("lucas") == []
+
+
+def _escribir_archivos_viejos(carpeta):
+    (carpeta / "hechos.json").write_text(
+        json.dumps([{"id": "aaa11111", "contenido": "Un recuerdo viejo",
+                     "categoria": "general", "creado": "2026-01-01T00:00:00"}]),
+        encoding="utf-8",
+    )
+    (carpeta / "conversacion.json").write_text(
+        json.dumps([{"role": "user", "content": "hola de antes"}]),
+        encoding="utf-8",
+    )
+
+
+def test_el_admin_hereda_los_archivos_sueltos(entorno_limpio):
+    _escribir_archivos_viejos(entorno_limpio)
+
+    memoria.migrar_archivos_sueltos("admin")
+
+    assert memoria.todos_los_hechos("admin")[0]["contenido"] == "Un recuerdo viejo"
+    assert memoria.cargar_conversacion("admin")[0]["content"] == "hola de antes"
+    # Los viejos quedan como respaldo frio.
+    assert (entorno_limpio / "hechos.json").exists()
+
+
+def test_migrar_dos_veces_no_pisa_lo_nuevo(entorno_limpio):
+    _escribir_archivos_viejos(entorno_limpio)
+    memoria.migrar_archivos_sueltos("admin")
+
+    memoria.recordar("admin", "Un recuerdo nuevo", "general")
+    memoria.migrar_archivos_sueltos("admin")
+
+    contenidos = [h["contenido"] for h in memoria.todos_los_hechos("admin")]
+    assert "Un recuerdo nuevo" in contenidos
+    assert len(contenidos) == 2
+
+
+def test_sin_archivos_viejos_no_hace_nada():
+    memoria.migrar_archivos_sueltos("admin")
+    assert memoria.todos_los_hechos("admin") == []
