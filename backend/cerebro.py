@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from openai import OpenAI
 
 from . import (
+    acceso,
     conectores,
     consultas,
     consumo,
@@ -50,15 +51,15 @@ def clave_openai() -> str:
     return clave
 
 
-def instrucciones(extra: str = "") -> str:
+def instrucciones(usuario: acceso.Usuario, extra: str = "") -> str:
     nombre = os.getenv("JARVIS_NOMBRE", "Jarvis")
-    usuario = os.getenv("JARVIS_USUARIO", "el usuario")
+    nombre_usuario = usuario.nombre
     ciudad = os.getenv("JARVIS_CIUDAD", "")
 
-    texto = f"""Eres {nombre}, el asistente personal de {usuario}.
+    texto = f"""Eres {nombre}, el asistente personal de {nombre_usuario}.
 
 Como hablas:
-- En espanol, natural y directo. Tuteas a {usuario}.
+- En espanol, natural y directo. Tuteas a {nombre_usuario}.
 - Tus respuestas se leen en voz alta, asi que escribe para el oido: frases
   cortas, sin markdown, sin vinetas, sin emojis, sin URLs largas.
 - Se breve. Dos o tres frases salvo que te pidan detalle.
@@ -73,7 +74,7 @@ Cuando consultas algo:
 - **Nunca cierres un turno prometiendo una consulta que no hiciste.** Si tu
   ultima frase iba a ser "lo busco" o "intento de nuevo", buscalo ahora y
   responde con el resultado. Si no pudiste, di por que.
-- Tampoco anuncies cuando la respuesta es directa, cuando {usuario} solo esta
+- Tampoco anuncies cuando la respuesta es directa, cuando {nombre_usuario} solo esta
   confirmando o corrigiendo algo, ni cuando lo ultimo que oiste fue silencio,
   ruido de fondo o una conversacion ajena.
 - Si la pregunta es ambigua, elige la interpretacion mas razonable, responde, y
@@ -86,12 +87,12 @@ Cuando consultas algo:
 - Nunca leas identificadores largos, hashes ni URLs en voz alta.
 
 Memoria:
-- Cuando {usuario} mencione algo que valga la pena recordar (gustos, personas,
+- Cuando {nombre_usuario} mencione algo que valga la pena recordar (gustos, personas,
   proyectos, rutinas, decisiones), guardalo con `recordar` sin avisar ni pedir
   permiso. No interrumpas la conversacion para confirmarlo.
 - Si te preguntan algo que deberias saber de antes, usa `buscar_memoria`.
 
-Contexto: la ciudad por defecto de {usuario} es {ciudad or 'desconocida'}."""
+Contexto: la ciudad por defecto de {nombre_usuario} es {ciudad or 'desconocida'}."""
 
     if conectores.supabase():
         modo = (
@@ -104,7 +105,7 @@ Contexto: la ciudad por defecto de {usuario} es {ciudad or 'desconocida'}."""
         texto += f"""
 
 Base de datos (Supabase):
-- Tienes acceso a la base de datos real de {usuario}. {modo}
+- Tienes acceso a la base de datos real de {nombre_usuario}. {modo}
 - **Usa `consultar_datos` con una consulta del catalogo de abajo.** Estan ya
   escritas y probadas, responden en decimas de segundo. Es tu via principal.
 - Solo si NINGUNA consulta del catalogo sirve, escribe SQL con `execute_sql`.
@@ -128,7 +129,7 @@ Otras fuentes de datos conectadas (con sus columnas ya incluidas):
 
 Como consultar estas fuentes:
 - Para encontrar algo por su nombre —un producto, un cliente— usa
-  `buscar_en_fuente` con las palabras tal cual las dijo {usuario}. Exige que
+  `buscar_en_fuente` con las palabras tal cual las dijo {nombre_usuario}. Exige que
   aparezcan todas y devuelve las mejores primero. Una sola llamada.
 - `consultar_fuente` con SQL solo para contar, sumar o agrupar.
 - Las tablas marcadas con "[N filas]" son grandes. En las enormes (ventas,
@@ -138,21 +139,24 @@ Como consultar estas fuentes:
   `sum`/`group by`. Si no acotas un historico, filtra al periodo mas reciente.
 - NO llames a `ver_esquema_fuente`: ya tienes las columnas aqui arriba. Solo si
   necesitaras una tabla que no aparezca.
-- Busca antes de preguntar. Si {usuario} dice "el cable de 6", busca "cable 6"
+- Busca antes de preguntar. Si {nombre_usuario} dice "el cable de 6", busca "cable 6"
   y ofrece lo que salga. Pedir precisiones antes de mirar es lo que mas molesta
   al hablar.
 - Si salen varios parecidos, di cuantos hay y describe el primero. No los
   recites todos en voz alta.
 - Si la pregunta no dice de que fuente es y hay varias, elige la que encaje por
   su nombre o sus notas, y menciona cual usaste.
-- **Las notas de cada fuente son reglas de negocio de {usuario}. Obedecelas al
+- **Las notas de cada fuente son reglas de negocio de {nombre_usuario}. Obedecelas al
   pie de la letra**: dicen que columna usar y como llamar a las cosas. Si una
   nota fija que precio dar, da ese y no menciones los demas salvo que te los
   pidan.
 - Nunca leas en voz alta el nombre tecnico de una columna. Di "cuesta 164.44",
   no "el P1 es 164.44"."""
 
-    texto += f"\n\nEsto es lo que ya sabes de {usuario}:\n{memoria.resumen_para_prompt()}"
+    texto += (
+        f"\n\nEsto es lo que ya sabes de {nombre_usuario}:\n"
+        f"{memoria.resumen_para_prompt(usuario.id)}"
+    )
 
     # Instruccion de un solo turno: la manda el cliente (un reloj pide frases
     # cortas) y va aqui, no en el mensaje del usuario. Metida en el mensaje
@@ -180,7 +184,7 @@ def es_fallo_de_conector(error: Exception) -> bool:
     return "MCP server" in str(error)
 
 
-def responder(mensajes: list[dict], extra: str = "") -> Iterator[dict]:
+def responder(mensajes: list[dict], usuario: acceso.Usuario, extra: str = "") -> Iterator[dict]:
     """Genera la respuesta como un flujo de eventos.
 
     Eventos posibles:
@@ -220,7 +224,7 @@ def responder(mensajes: list[dict], extra: str = "") -> Iterator[dict]:
                 # llamar. 'low' baja eso a uno o dos sin perder el tool-calling;
                 # 'minimal' es mas rapido pero acierta menos con las herramientas.
                 reasoning={"effort": os.getenv("JARVIS_ESFUERZO_CHAT", "low")},
-                instructions=instrucciones(extra),
+                instructions=instrucciones(usuario, extra),
                 input=entrada,
                 tools=catalogo_de_herramientas(con_conectores),
                 stream=True,
@@ -267,14 +271,16 @@ def responder(mensajes: list[dict], extra: str = "") -> Iterator[dict]:
         # Las llamadas MCP las resuelve OpenAI antes de llegar aqui.
         if not llamadas:
             mensajes.append({"role": "assistant", "content": texto})
-            memoria.guardar_conversacion(mensajes)
+            memoria.guardar_conversacion(usuario.id, mensajes)
             yield {"tipo": "fin", "dato": mensajes}
             return
 
         entrada.extend(para_reenviar(item) for item in salida)
 
         for llamada in llamadas:
-            resultado = herramientas.ejecutar(llamada.name, llamada.arguments)
+            resultado = herramientas.ejecutar(
+                llamada.name, llamada.arguments, usuario.id
+            )
             entrada.append(
                 {
                     "type": "function_call_output",
@@ -372,13 +378,13 @@ def puerta_de_microfono() -> dict:
     }
 
 
-def configuracion_de_sesion() -> dict:
+def configuracion_de_sesion(usuario: acceso.Usuario) -> dict:
     modelo = os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1")
 
     return {
         "type": "realtime",
         "model": modelo,
-        "instructions": instrucciones(),
+        "instructions": instrucciones(usuario),
         # Cuanto piensa antes de hablar. 'low' es el punto recomendado para
         # agentes de voz; 'minimal' responde antes pero acierta menos con las
         # herramientas, y aqui casi todo turno lleva una consulta.
@@ -417,7 +423,7 @@ def ajustes_de_voz() -> dict:
     }
 
 
-def negociar_webrtc(sdp_oferta: str) -> str:
+def negociar_webrtc(sdp_oferta: str, usuario: acceso.Usuario) -> str:
     """Hace el intercambio SDP con OpenAI en nombre del navegador.
 
     El navegador no puede llamar a api.openai.com directamente: el navegador
@@ -434,7 +440,7 @@ def negociar_webrtc(sdp_oferta: str) -> str:
             # Multipart con dos campos sueltos: el SDP crudo y la sesion.
             files={
                 "sdp": (None, sdp_oferta),
-                "session": (None, json.dumps(configuracion_de_sesion())),
+                "session": (None, json.dumps(configuracion_de_sesion(usuario))),
             },
         )
 
