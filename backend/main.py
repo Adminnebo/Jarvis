@@ -53,6 +53,10 @@ def al_arrancar():
             "\n  AVISO: Jarvis esta hospedado y no hay JARVIS_PASSWORD.\n"
             "  No se servira nada hasta que definas esa variable.\n"
         )
+
+    acceso.avisar_de_contrasenas_repetidas()
+    memoria.migrar_archivos_sueltos(acceso.por_defecto().id)
+
     # Traer el esquema ahora evita que la primera pregunta sobre la base de
     # datos pague el costo de descubrirlo.
     esquema.refrescar_en_segundo_plano()
@@ -63,7 +67,11 @@ def al_arrancar():
 
 @app.middleware("http")
 async def guardia(peticion: Request, siguiente):
-    """Nadie pasa sin contrasena cuando esto corre en un servidor."""
+    """Nadie pasa sin contrasena cuando esto corre en un servidor.
+
+    Ademas deja en peticion.state.usuario quien es, para que las rutas puedan
+    leerlo sin volver a validar la cookie.
+    """
     ruta = peticion.url.path
 
     if acceso.es_libre(ruta):
@@ -72,12 +80,24 @@ async def guardia(peticion: Request, siguiente):
     if acceso.obligatorio():
         return HTMLResponse(acceso.pagina_sin_proteger(), status_code=503)
 
-    if acceso.protegido() and not acceso.token_valido(peticion.cookies.get(acceso.COOKIE)):
-        # A la interfaz le mostramos el formulario; a la API, un 401 limpio.
-        if ruta.startswith("/api/"):
-            return JSONResponse(status_code=401, content={"error": "No autorizado."})
-        return HTMLResponse(acceso.pagina_login(), status_code=401)
+    if acceso.protegido():
+        usuario = acceso.usuario_de_token(peticion.cookies.get(acceso.COOKIE))
+        if usuario is None:
+            # A la interfaz le mostramos el formulario; a la API, un 401 limpio.
+            if ruta.startswith("/api/"):
+                return JSONResponse(status_code=401, content={"error": "No autorizado."})
+            return HTMLResponse(acceso.pagina_login(), status_code=401)
+    else:
+        # En local, sin contrasena, todo se atribuye al usuario por defecto.
+        usuario = acceso.por_defecto()
 
+    if acceso.exige_admin(ruta, peticion.method) and usuario.rol != "admin":
+        return JSONResponse(
+            status_code=403,
+            content={"error": "Esto solo lo puede hacer quien administra Jarvis."},
+        )
+
+    peticion.state.usuario = usuario
     return await siguiente(peticion)
 
 
@@ -103,7 +123,8 @@ async def entrar(clave: str = Form("")):
     if not acceso.protegido():
         return RedirectResponse("/", status_code=303)
 
-    if not acceso.clave_correcta(clave):
+    usuario = acceso.quien_entra(clave)
+    if usuario is None:
         return HTMLResponse(
             acceso.pagina_login("Contrasena incorrecta."), status_code=401
         )
@@ -111,7 +132,7 @@ async def entrar(clave: str = Form("")):
     respuesta = RedirectResponse("/", status_code=303)
     respuesta.set_cookie(
         acceso.COOKIE,
-        acceso.crear_token(),
+        acceso.crear_token(usuario),
         max_age=acceso.DURACION,
         httponly=True,
         samesite="lax",
