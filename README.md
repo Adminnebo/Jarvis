@@ -61,6 +61,21 @@ cerrar todas las sesiones a la vez, cambia `JARVIS_CLAVE_SECRETA`.
 La memoria de cuando había un solo usuario se adjudica sola al administrador la
 primera vez que arranca. Los archivos viejos no se borran.
 
+### Entrar desde los paneles
+
+Quien use el inbox, cotizaciones o cobranzas puede entrar a Jarvis de un clic,
+sin escribir contraseña. El super admin lo concede marcando **Usar Jarvis** en
+el panel de usuarios; **Administrar Jarvis** le da además fuentes, esquema y
+consumo.
+
+Jarvis valida la sesión de Supabase del panel y relee el perfil cada minuto, así
+que quitar la casilla deja fuera a la persona enseguida, sin esperar a que
+caduque su cookie.
+
+Necesita `SUPABASE_ANON_KEY` y `SUPABASE_DB_URL`. Si falta alguna, este acceso
+queda apagado —se avisa al arrancar— y las contraseñas por variable siguen
+funcionando.
+
 ### Variables a configurar
 
 | Variable | |
@@ -70,6 +85,7 @@ primera vez que arranca. Los archivos viejos no se borran.
 | `JARVIS_PASSWORD_<NOMBRE>` | Una por cada persona más que pueda entrar |
 | `JARVIS_DATA_DIR` | Ruta del volumen persistente |
 | `JARVIS_CLAVE_SECRETA` | Cifra las credenciales y firma las sesiones |
+| `SUPABASE_ANON_KEY` | Clave pública. Habilita entrar desde los paneles |
 | `SUPABASE_*` | Las mismas de la sección de Supabase |
 
 ### El disco se borra

@@ -56,6 +56,14 @@ def al_arrancar():
         )
 
     acceso.avisar_de_contrasenas_repetidas()
+
+    if not supabase_sesion.configurado():
+        print(
+            "\n  AVISO: nadie puede entrar desde los paneles.\n"
+            "  Faltan SUPABASE_ANON_KEY, SUPABASE_PROJECT_REF o SUPABASE_DB_URL.\n"
+            "  Las contrasenas de JARVIS_PASSWORD* siguen funcionando.\n"
+        )
+
     memoria.migrar_archivos_sueltos(acceso.por_defecto().id)
 
     # Traer el esquema ahora evita que la primera pregunta sobre la base de
