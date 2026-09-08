@@ -160,16 +160,18 @@ class MensajeSuelto(BaseModel):
 
 
 @app.get("/api/estado")
-def estado():
+def estado(peticion: Request):
     clave = os.getenv("OPENAI_API_KEY", "").strip()
+    usuario = peticion.state.usuario
     return {
         "nombre": os.getenv("JARVIS_NOMBRE", "Jarvis"),
-        "usuario": os.getenv("JARVIS_USUARIO", ""),
+        "usuario": usuario.nombre,
+        "rol": usuario.rol,
         "modelo": os.getenv("OPENAI_MODEL", "gpt-5.6-terra"),
         "modelo_voz": os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1-mini"),
         "clave_configurada": bool(clave) and not clave.startswith("sk-pon-tu-clave"),
-        "hechos_recordados": len(memoria.todos_los_hechos()),
-        "historial": memoria.cargar_conversacion(),
+        "hechos_recordados": len(memoria.todos_los_hechos(usuario.id)),
+        "historial": memoria.cargar_conversacion(usuario.id),
         "conectores": conectores.resumen(),
         "esquema": esquema.info(),
         "version": version.info(),
@@ -183,8 +185,12 @@ def refrescar_esquema():
 
 
 @app.post("/api/chat")
-def chat(peticion: PeticionDeChat):
-    mensajes = memoria.cargar_conversacion()
+def chat(peticion_http: Request, peticion: PeticionDeChat):
+    # El usuario se resuelve aqui, no dentro del generador: para cuando el
+    # generador corre, la peticion ya termino y su contexto puede haberse ido.
+    usuario = peticion_http.state.usuario
+
+    mensajes = memoria.cargar_conversacion(usuario.id)
     mensajes.append({"role": "user", "content": peticion.mensaje})
 
     extra = (
@@ -195,7 +201,7 @@ def chat(peticion: PeticionDeChat):
     )
 
     def flujo():
-        for evento in cerebro.responder(mensajes, extra):
+        for evento in cerebro.responder(mensajes, usuario, extra):
             yield cerebro.evento_sse(evento)
 
     return StreamingResponse(
@@ -278,14 +284,14 @@ def config_de_voz():
 
 
 @app.get("/api/voz/sesion")
-def sesion_de_voz():
+def sesion_de_voz(peticion: Request):
     """Configuracion completa de la sesion de voz: instrucciones + herramientas.
 
     La usa el puente del reloj para levantar un modo de voz alterno (Gemini
     Live) con exactamente el mismo cerebro y las mismas herramientas que la voz
     de OpenAI. Es de solo lectura y no altera el flujo existente.
     """
-    return cerebro.configuracion_de_sesion()
+    return cerebro.configuracion_de_sesion(peticion.state.usuario)
 
 
 @app.post("/api/voz/sdp")
@@ -301,7 +307,7 @@ async def negociar_voz(peticion: Request):
         return JSONResponse(status_code=400, content={"error": "Falta el SDP."})
 
     try:
-        respuesta = cerebro.negociar_webrtc(oferta)
+        respuesta = cerebro.negociar_webrtc(oferta, peticion.state.usuario)
     except Exception as error:  # noqa: BLE001
         return JSONResponse(status_code=502, content={"error": str(error)})
 
@@ -309,22 +315,27 @@ async def negociar_voz(peticion: Request):
 
 
 @app.post("/api/herramienta")
-def ejecutar_herramienta(peticion: PeticionDeHerramienta):
+def ejecutar_herramienta(peticion_http: Request, peticion: PeticionDeHerramienta):
     """Ejecuta una funcion local que pidio la sesion de voz.
 
     En modo voz el modelo habla directo con el navegador, asi que las
     herramientas que viven en este servidor pasan por aqui. Las de Supabase no:
     esas las resuelve OpenAI contra el MCP sin tocarnos.
     """
-    return {"resultado": herramientas.ejecutar(peticion.nombre, peticion.argumentos)}
+    return {
+        "resultado": herramientas.ejecutar(
+            peticion.nombre, peticion.argumentos, peticion_http.state.usuario.id
+        )
+    }
 
 
 @app.post("/api/conversacion/agregar")
-def agregar_a_conversacion(mensaje: MensajeSuelto):
+def agregar_a_conversacion(peticion: Request, mensaje: MensajeSuelto):
     """Guarda un turno de voz para que texto y voz compartan historial."""
-    mensajes = memoria.cargar_conversacion()
+    id_usuario = peticion.state.usuario.id
+    mensajes = memoria.cargar_conversacion(id_usuario)
     mensajes.append({"role": mensaje.role, "content": mensaje.content})
-    memoria.guardar_conversacion(mensajes)
+    memoria.guardar_conversacion(id_usuario, mensajes)
     return {"ok": True}
 
 
@@ -352,18 +363,18 @@ def borrar_consumo():
 
 
 @app.get("/api/memoria")
-def ver_memoria():
-    return {"hechos": memoria.todos_los_hechos()}
+def ver_memoria(peticion: Request):
+    return {"hechos": memoria.todos_los_hechos(peticion.state.usuario.id)}
 
 
 @app.delete("/api/memoria/{id_hecho}")
-def borrar_hecho(id_hecho: str):
-    return {"borrado": memoria.olvidar(id_hecho)}
+def borrar_hecho(peticion: Request, id_hecho: str):
+    return {"borrado": memoria.olvidar(peticion.state.usuario.id, id_hecho)}
 
 
 @app.post("/api/conversacion/reiniciar")
-def reiniciar_conversacion():
-    memoria.borrar_conversacion()
+def reiniciar_conversacion(peticion: Request):
+    memoria.borrar_conversacion(peticion.state.usuario.id)
     return {"ok": True}
 
 
