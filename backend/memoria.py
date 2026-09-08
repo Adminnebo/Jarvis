@@ -15,12 +15,12 @@ from pathlib import Path
 
 from . import rutas
 
-def ARCHIVO_HECHOS() -> Path:
-    return rutas.archivo("hechos.json")
+def ARCHIVO_HECHOS(id_usuario: str) -> Path:
+    return rutas.archivo(f"hechos-{id_usuario}.json")
 
 
-def ARCHIVO_CONVERSACION() -> Path:
-    return rutas.archivo("conversacion.json")
+def ARCHIVO_CONVERSACION(id_usuario: str) -> Path:
+    return rutas.archivo(f"conversacion-{id_usuario}.json")
 
 
 def _leer(archivo: Path, por_defecto):
@@ -42,13 +42,13 @@ def _escribir(archivo: Path, datos):
 # Hechos
 # --------------------------------------------------------------------------
 
-def todos_los_hechos() -> list[dict]:
-    return _leer(ARCHIVO_HECHOS(), [])
+def todos_los_hechos(id_usuario: str) -> list[dict]:
+    return _leer(ARCHIVO_HECHOS(id_usuario), [])
 
 
-def recordar(contenido: str, categoria: str = "general") -> dict:
+def recordar(id_usuario: str, contenido: str, categoria: str = "general") -> dict:
     """Guarda un hecho nuevo. Si ya existe uno casi identico, no lo duplica."""
-    hechos = todos_los_hechos()
+    hechos = todos_los_hechos(id_usuario)
 
     normalizado = contenido.strip().lower()
     for hecho in hechos:
@@ -62,30 +62,30 @@ def recordar(contenido: str, categoria: str = "general") -> dict:
         "creado": datetime.now().isoformat(timespec="seconds"),
     }
     hechos.append(hecho)
-    _escribir(ARCHIVO_HECHOS(), hechos)
+    _escribir(ARCHIVO_HECHOS(id_usuario), hechos)
     return hecho
 
 
-def olvidar(id_hecho: str) -> bool:
-    hechos = todos_los_hechos()
+def olvidar(id_usuario: str, id_hecho: str) -> bool:
+    hechos = todos_los_hechos(id_usuario)
     quedan = [h for h in hechos if h["id"] != id_hecho]
     if len(quedan) == len(hechos):
         return False
-    _escribir(ARCHIVO_HECHOS(), quedan)
+    _escribir(ARCHIVO_HECHOS(id_usuario), quedan)
     return True
 
 
-def buscar(consulta: str, limite: int = 10) -> list[dict]:
+def buscar(id_usuario: str, consulta: str, limite: int = 10) -> list[dict]:
     """Busqueda por palabras. Suficiente para cientos de hechos.
 
     Si algun dia esto crece a miles, aqui es donde entra un embedding.
     """
     palabras = [p for p in consulta.lower().split() if len(p) > 2]
     if not palabras:
-        return todos_los_hechos()[:limite]
+        return todos_los_hechos(id_usuario)[:limite]
 
     puntuados = []
-    for hecho in todos_los_hechos():
+    for hecho in todos_los_hechos(id_usuario):
         texto = f"{hecho['contenido']} {hecho['categoria']}".lower()
         puntos = sum(1 for p in palabras if p in texto)
         if puntos:
@@ -95,9 +95,9 @@ def buscar(consulta: str, limite: int = 10) -> list[dict]:
     return [hecho for _, hecho in puntuados[:limite]]
 
 
-def resumen_para_prompt(maximo: int = 60) -> str:
+def resumen_para_prompt(id_usuario: str, maximo: int = 60) -> str:
     """Los hechos formateados para inyectarlos en el system prompt."""
-    hechos = todos_los_hechos()[-maximo:]
+    hechos = todos_los_hechos(id_usuario)[-maximo:]
     if not hechos:
         return "(Todavia no recuerdas nada sobre el usuario.)"
 
@@ -116,14 +116,14 @@ def resumen_para_prompt(maximo: int = 60) -> str:
 # Conversacion
 # --------------------------------------------------------------------------
 
-def cargar_conversacion() -> list[dict]:
-    return _leer(ARCHIVO_CONVERSACION(), [])
+def cargar_conversacion(id_usuario: str) -> list[dict]:
+    return _leer(ARCHIVO_CONVERSACION(id_usuario), [])
 
 
-def guardar_conversacion(mensajes: list[dict], maximo: int = 40) -> None:
+def guardar_conversacion(id_usuario: str, mensajes: list[dict], maximo: int = 40) -> None:
     """Guarda solo los ultimos mensajes para que el archivo no crezca sin fin."""
-    _escribir(ARCHIVO_CONVERSACION(), mensajes[-maximo:])
+    _escribir(ARCHIVO_CONVERSACION(id_usuario), mensajes[-maximo:])
 
 
-def borrar_conversacion() -> None:
-    _escribir(ARCHIVO_CONVERSACION(), [])
+def borrar_conversacion(id_usuario: str) -> None:
+    _escribir(ARCHIVO_CONVERSACION(id_usuario), [])
