@@ -150,3 +150,20 @@ def test_el_perfil_se_cachea_un_minuto(configurado, monkeypatch):
 
     # Tres consultas seguidas, una sola ida a la base.
     assert len(llamadas) == 1
+
+
+def test_el_token_solo_no_autoriza_a_nadie(configurado):
+    """usuario_de_token NO confirma el permiso de quien viene de un panel.
+
+    Su permiso vive en profiles, y quien lo confirma es revalidar(). Si esta
+    funcion devolviera un rol real, cualquier codigo futuro que la llamara sin
+    revalidar le daria acceso a alguien a quien ya se lo quitaron.
+    """
+    from backend import acceso
+
+    token = acceso.crear_token(acceso.Usuario("sb-abc", "Ana", "usuario"))
+    provisional = acceso.usuario_de_token(token)
+
+    assert provisional is not None          # la firma si es buena
+    assert provisional.rol == "sin-confirmar"
+    assert provisional.rol != "admin"

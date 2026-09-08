@@ -134,10 +134,13 @@ def usuario_de_token(valor: str | None) -> Usuario | None:
 
     if id_usuario.startswith(supabase_sesion.PREFIJO):
         # Quien viene de un panel no vive en el catalogo de variables: su
-        # nombre y su permiso los confirma la revalidacion que sigue en el
-        # middleware, contra profiles. Aqui solo importa que la firma sea
-        # valida.
-        return Usuario(id_usuario, id_usuario, "usuario")
+        # nombre y su permiso los confirma supabase_sesion.revalidar() contra
+        # profiles, en el middleware. Aqui solo consta que la firma es buena.
+        #
+        # El rol es "sin-confirmar" a proposito, y no "usuario": asi, si algun
+        # dia alguien llama a esta funcion sin revalidar despues, lo que
+        # reciba no le sirve para pasar por ningun control.
+        return Usuario(id_usuario, id_usuario, "sin-confirmar")
 
     # Que la firma sea buena no basta: si le quitaron su variable, ese token
     # ya no vale.
