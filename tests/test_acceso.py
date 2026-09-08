@@ -87,3 +87,24 @@ def test_el_token_de_alguien_que_ya_no_esta_se_rechaza(monkeypatch):
     # Le quitamos su variable: asi se echa a alguien.
     monkeypatch.delenv("JARVIS_PASSWORD_JORGE")
     assert acceso.usuario_de_token(token) is None
+
+
+def test_avisa_si_dos_personas_comparten_contrasena(monkeypatch, capsys):
+    monkeypatch.setenv("JARVIS_PASSWORD", "repetida")
+    monkeypatch.setenv("JARVIS_PASSWORD_JORGE", "repetida")
+
+    acceso.avisar_de_contrasenas_repetidas()
+
+    salida = capsys.readouterr().out
+    assert "repiten" in salida
+    # Gana el primero: el admin.
+    assert acceso.quien_entra("repetida").id == "admin"
+
+
+def test_no_avisa_si_todas_son_distintas(monkeypatch, capsys):
+    monkeypatch.setenv("JARVIS_PASSWORD", "una")
+    monkeypatch.setenv("JARVIS_PASSWORD_JORGE", "otra")
+
+    acceso.avisar_de_contrasenas_repetidas()
+
+    assert capsys.readouterr().out == ""

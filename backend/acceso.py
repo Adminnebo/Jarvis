@@ -160,6 +160,30 @@ def por_defecto() -> Usuario:
     return _catalogo()[0][0]
 
 
+def avisar_de_contrasenas_repetidas() -> None:
+    """Dos personas con la misma contrasena son indistinguibles al entrar.
+
+    Callarlo mezclaria sus memorias sin que nadie se entere, asi que se avisa
+    al arrancar. Gana el primero del catalogo.
+    """
+    vistas: dict[str, str] = {}
+    repetidas: list[str] = []
+
+    for usuario, contrasena in _catalogo():
+        if not contrasena:
+            continue
+        if contrasena in vistas:
+            repetidas.append(f"{usuario.id} y {vistas[contrasena]}")
+        else:
+            vistas[contrasena] = usuario.id
+
+    for par in repetidas:
+        print(
+            f"  AVISO: {par} se repiten la contrasena. No se pueden distinguir "
+            "al entrar y comparten memoria. Ponles contrasenas distintas."
+        )
+
+
 # --------------------------------------------------------------------------
 # Paginas
 # --------------------------------------------------------------------------
