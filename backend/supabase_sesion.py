@@ -126,3 +126,38 @@ def perfil_cacheado(uuid: str) -> dict | None:
 def limpiar_cache() -> None:
     with _candado:
         _cache.clear()
+
+
+# --------------------------------------------------------------------------
+# De perfil a usuario de Jarvis
+# --------------------------------------------------------------------------
+
+def usuario_de_perfil(datos: dict | None):
+    """El usuario de Jarvis que corresponde a ese perfil, o None si no entra.
+
+    Aqui NO se replica todo permcatalog.js. Solo importan las claves de
+    Jarvis, y ningun respaldo del catalogo las concede: un perfil sin permisos
+    explicitos no llega nunca al asistente. Con mirar el rol y la lista
+    explicita alcanza.
+    """
+    from . import acceso
+
+    if not datos:
+        return None
+
+    rol_plataforma = (datos.get("role") or "").strip()
+    permisos = datos.get("permissions") or []
+
+    if rol_plataforma in ("super_admin", "admin"):
+        rol = "admin"
+    elif "jarvis.admin" in permisos:
+        rol = "admin"
+    elif "jarvis.usar" in permisos:
+        rol = "usuario"
+    else:
+        return None
+
+    correo = (datos.get("email") or "").strip()
+    nombre = (datos.get("full_name") or "").strip() or correo.split("@")[0] or "Alguien"
+
+    return acceso.Usuario(f"{PREFIJO}{datos['id']}", nombre, rol)
