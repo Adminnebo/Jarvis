@@ -81,27 +81,59 @@ def obligatorio() -> bool:
     return rutas.hospedado() and not protegido()
 
 
-def _firma(caduca: int) -> str:
-    return hmac.new(
-        clave().encode("utf-8"), str(caduca).encode("ascii"), hashlib.sha256
-    ).hexdigest()
+def clave_de_sesion() -> bytes:
+    """La clave con la que se firman las cookies.
+
+    Antes se firmaba con la contrasena misma, pero con varias personas el token
+    tiene que decir quien es y la firma no puede depender de una sola clave.
+
+    Se deriva de JARVIS_CLAVE_SECRETA en vez de usarla tal cual, para no
+    reutilizar la clave que cifra las credenciales. Sin esa variable se deriva
+    de las contrasenas configuradas: estable entre despliegues mientras no
+    cambien. Cambiar JARVIS_CLAVE_SECRETA cierra la sesion de todos, y esa es
+    la forma de echar a alguien de inmediato.
+    """
+    secreta = os.getenv("JARVIS_CLAVE_SECRETA", "").strip()
+    if not secreta:
+        secreta = "|".join(sorted(c for _, c in _catalogo() if c))
+    return hmac.new(secreta.encode("utf-8"), b"sesiones", hashlib.sha256).digest()
 
 
-def crear_token() -> str:
+def _firma(id_usuario: str, caduca: int) -> str:
+    cuerpo = f"{id_usuario}.{caduca}".encode("utf-8")
+    return hmac.new(clave_de_sesion(), cuerpo, hashlib.sha256).hexdigest()
+
+
+def crear_token(usuario: Usuario) -> str:
     caduca = int(time.time()) + DURACION
-    return f"{caduca}.{_firma(caduca)}"
+    return f"{usuario.id}.{caduca}.{_firma(usuario.id, caduca)}"
 
 
-def token_valido(valor: str | None) -> bool:
-    if not valor or "." not in valor:
-        return False
-    caduca, _, firma = valor.partition(".")
+def usuario_de_token(valor: str | None) -> Usuario | None:
+    """El usuario que hay dentro de un token valido, o None."""
+    if not valor:
+        return None
+
+    partes = valor.split(".", 2)
+    if len(partes) != 3:
+        return None
+
+    id_usuario, caduca_texto, firma = partes
+
     try:
-        if int(caduca) < time.time():
-            return False
+        caduca = int(caduca_texto)
     except ValueError:
-        return False
-    return hmac.compare_digest(firma, _firma(int(caduca)))
+        return None
+
+    if caduca < time.time():
+        return None
+
+    if not hmac.compare_digest(firma, _firma(id_usuario, caduca)):
+        return None
+
+    # Que la firma sea buena no basta: si le quitaron su variable, ese token
+    # ya no vale.
+    return next((u for u in usuarios() if u.id == id_usuario), None)
 
 
 def quien_entra(intento: str) -> Usuario | None:

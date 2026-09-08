@@ -49,3 +49,41 @@ def test_sin_proteccion_no_entra_nadie_por_contrasena():
     # Sin JARVIS_PASSWORD no hay login: la identidad la da por_defecto().
     assert acceso.quien_entra("lo-que-sea") is None
     assert acceso.por_defecto().rol == "admin"
+
+
+import time
+
+
+def test_un_token_valido_devuelve_a_su_dueno(monkeypatch):
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    monkeypatch.setenv("JARVIS_PASSWORD_JORGE", "la-de-jorge")
+    token = acceso.crear_token(acceso.quien_entra("la-de-jorge"))
+    assert acceso.usuario_de_token(token).id == "jorge"
+
+
+def test_un_token_manipulado_se_rechaza(monkeypatch):
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    monkeypatch.setenv("JARVIS_PASSWORD_JORGE", "la-de-jorge")
+    token = acceso.crear_token(acceso.quien_entra("la-de-jorge"))
+    # Cambiarse a si mismo por el admin es justo lo que hay que impedir.
+    assert acceso.usuario_de_token(token.replace("jorge", "admin", 1)) is None
+    assert acceso.usuario_de_token("basura") is None
+    assert acceso.usuario_de_token(None) is None
+
+
+def test_un_token_vencido_se_rechaza(monkeypatch):
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    monkeypatch.setattr(acceso, "DURACION", -10)
+    token = acceso.crear_token(acceso.quien_entra("la-del-admin"))
+    assert acceso.usuario_de_token(token) is None
+
+
+def test_el_token_de_alguien_que_ya_no_esta_se_rechaza(monkeypatch):
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    monkeypatch.setenv("JARVIS_CLAVE_SECRETA", "una-clave-larga-y-estable")
+    monkeypatch.setenv("JARVIS_PASSWORD_JORGE", "la-de-jorge")
+    token = acceso.crear_token(acceso.quien_entra("la-de-jorge"))
+
+    # Le quitamos su variable: asi se echa a alguien.
+    monkeypatch.delenv("JARVIS_PASSWORD_JORGE")
+    assert acceso.usuario_de_token(token) is None
