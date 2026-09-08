@@ -12,11 +12,60 @@ import hashlib
 import hmac
 import os
 import time
+from dataclasses import dataclass
 
 from . import rutas
 
 COOKIE = "jarvis_acceso"
 DURACION = 30 * 24 * 3600   # 30 dias
+
+
+PREFIJO = "JARVIS_PASSWORD_"
+
+
+@dataclass(frozen=True)
+class Usuario:
+    id: str
+    nombre: str
+    rol: str        # "admin" | "usuario"
+
+
+def _catalogo() -> list[tuple[Usuario, str]]:
+    """Cada persona con su contrasena, leidas del entorno.
+
+    El admin es quien tiene JARVIS_PASSWORD; su nombre sigue saliendo de
+    JARVIS_USUARIO, como cuando habia un solo usuario. Los demas salen del
+    sufijo de la variable: JARVIS_PASSWORD_JORGE es jorge, y se llama Jorge.
+    """
+    entradas: list[tuple[Usuario, str]] = []
+
+    nombre_admin = os.getenv("JARVIS_USUARIO", "").strip() or "Admin"
+    principal = os.getenv("JARVIS_PASSWORD", "").strip()
+    entradas.append((Usuario("admin", nombre_admin, "admin"), principal))
+
+    for variable, valor in sorted(os.environ.items()):
+        if not variable.startswith(PREFIJO):
+            continue
+
+        sufijo = variable[len(PREFIJO):].strip()
+        contrasena = (valor or "").strip()
+
+        # Una contrasena vacia dejaria entrar a cualquiera, y un sufijo vacio
+        # no da un id con el que separar la memoria. Ninguna de las dos se
+        # ignora en silencio: se avisa al arrancar.
+        if not sufijo or not contrasena:
+            print(f"  AVISO: se ignora {variable}: sufijo o contrasena vacios.")
+            continue
+
+        entradas.append(
+            (Usuario(sufijo.lower(), sufijo.capitalize(), "usuario"), contrasena)
+        )
+
+    return entradas
+
+
+def usuarios() -> list[Usuario]:
+    return [usuario for usuario, _ in _catalogo()]
 
 
 def clave() -> str:
