@@ -256,3 +256,20 @@ LIBRES = ("/acceso", "/api/salud", "/api/version")
 
 def es_libre(ruta: str) -> bool:
     return ruta in LIBRES
+
+
+def exige_admin(ruta: str, metodo: str) -> bool:
+    """Que solo puede hacer quien administra Jarvis.
+
+    Se decide aqui y lo aplica el middleware. Esconder el boton en la web es
+    comodidad, no control de acceso.
+    """
+    if ruta.startswith("/api/fuentes"):
+        return True
+    if ruta == "/api/esquema/refrescar":
+        return True
+    # Solo el tablero de gasto. /api/consumo/voz no entra: lo escribe el
+    # navegador de cualquiera durante la sesion de voz.
+    if ruta == "/api/consumo" and metodo in ("GET", "DELETE"):
+        return True
+    return False

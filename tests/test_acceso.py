@@ -108,3 +108,35 @@ def test_no_avisa_si_todas_son_distintas(monkeypatch, capsys):
     acceso.avisar_de_contrasenas_repetidas()
 
     assert capsys.readouterr().out == ""
+
+
+import pytest
+
+
+@pytest.mark.parametrize("ruta, metodo", [
+    ("/api/fuentes", "GET"),
+    ("/api/fuentes", "POST"),
+    ("/api/fuentes/tipos", "GET"),
+    ("/api/fuentes/abc123/consultar", "POST"),
+    ("/api/fuentes/abc123", "DELETE"),
+    ("/api/esquema/refrescar", "POST"),
+    ("/api/consumo", "GET"),
+    ("/api/consumo", "DELETE"),
+])
+def test_rutas_solo_para_admin(ruta, metodo):
+    assert acceso.exige_admin(ruta, metodo) is True
+
+
+@pytest.mark.parametrize("ruta, metodo", [
+    ("/api/chat", "POST"),
+    ("/api/estado", "GET"),
+    ("/api/memoria", "GET"),
+    ("/api/herramienta", "POST"),
+    ("/api/voz/sesion", "GET"),
+    # Lo escribe el navegador durante la voz: bloquearlo dejaria sin registrar
+    # el gasto de quien no es admin.
+    ("/api/consumo/voz", "POST"),
+    ("/", "GET"),
+])
+def test_rutas_abiertas_a_todos(ruta, metodo):
+    assert acceso.exige_admin(ruta, metodo) is False
