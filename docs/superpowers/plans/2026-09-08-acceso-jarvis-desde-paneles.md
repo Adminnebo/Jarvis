@@ -1218,16 +1218,25 @@ cd C:\Users\Jorge\dashboard-ws-dinamico && node test/permcatalog.test.js
 
 Expected: todo en verde.
 
-- [ ] **Step 2: Las cinco copias del catálogo siguen idénticas**
+- [ ] **Step 2: Las seis copias del catálogo siguen idénticas**
+
+Son **seis** archivos en **cinco** repos. La copia de la app móvil
+(`nebo-inbox-mobile`) no aparecía en la primera versión de este plan: se
+descubrió al implementar, leyendo el encabezado del propio catálogo.
 
 ```bash
 cd C:\Users\Jorge
 diff -q dashboard-ws-dinamico/auth/permcatalog.js whatsapp-analytics/permcatalog.js
 diff -q dashboard-ws-dinamico/auth/permcatalog.js cobranzas-dashboard/server/permcatalog.js
 diff -q dashboard-ws-dinamico/public/js/permcatalog.js whatsapp-analytics/public/js/permcatalog.js
+diff -q dashboard-ws-dinamico/public/js/permcatalog.js nebo-inbox-mobile/www/js/permcatalog.js
 ```
 
-Expected: sin salida en los tres.
+Expected: sin salida en los cuatro.
+
+La app móvil no lleva botón de Jarvis —no se pidió— pero su copia se mantiene
+sincronizada: si se dejara atrás, la próxima replicación en sentido contrario
+borraría el grupo de los demás paneles.
 
 - [ ] **Step 3: Que nada cambió para quien ya entraba**
 
