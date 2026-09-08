@@ -104,8 +104,28 @@ def token_valido(valor: str | None) -> bool:
     return hmac.compare_digest(firma, _firma(int(caduca)))
 
 
-def clave_correcta(intento: str) -> bool:
-    return hmac.compare_digest((intento or "").strip(), clave())
+def quien_entra(intento: str) -> Usuario | None:
+    """Devuelve la persona cuya contrasena es la escrita, o None.
+
+    Recorre todas las contrasenas sin cortar en la primera coincidencia: si
+    saliera antes, el tiempo de respuesta revelaria cuantos usuarios hay y en
+    que orden estan.
+    """
+    escrita = (intento or "").strip()
+    encontrado: Usuario | None = None
+
+    for usuario, contrasena in _catalogo():
+        if not contrasena:
+            continue
+        if hmac.compare_digest(escrita, contrasena) and encontrado is None:
+            encontrado = usuario
+
+    return encontrado
+
+
+def por_defecto() -> Usuario:
+    """Quien es el usuario cuando no hay login: en local, y solo ahi."""
+    return _catalogo()[0][0]
 
 
 # --------------------------------------------------------------------------
