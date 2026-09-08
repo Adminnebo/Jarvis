@@ -51,10 +51,9 @@ def _catalogo() -> list[tuple[Usuario, str]]:
         contrasena = (valor or "").strip()
 
         # Una contrasena vacia dejaria entrar a cualquiera, y un sufijo vacio
-        # no da un id con el que separar la memoria. Ninguna de las dos se
-        # ignora en silencio: se avisa al arrancar.
+        # no da un id con el que separar la memoria. El aviso no va aqui: esto
+        # corre en cada peticion y llenaria el log. Lo hace avisar_de_*().
         if not sufijo or not contrasena:
-            print(f"  AVISO: se ignora {variable}: sufijo o contrasena vacios.")
             continue
 
         entradas.append(
@@ -160,12 +159,27 @@ def por_defecto() -> Usuario:
     return _catalogo()[0][0]
 
 
-def avisar_de_contrasenas_repetidas() -> None:
-    """Dos personas con la misma contrasena son indistinguibles al entrar.
+def _variables_ignoradas() -> list[str]:
+    """Variables con el prefijo que no llegan a ser un usuario."""
+    return [
+        variable
+        for variable, valor in sorted(os.environ.items())
+        if variable.startswith(PREFIJO)
+        and (not variable[len(PREFIJO):].strip() or not (valor or "").strip())
+    ]
 
-    Callarlo mezclaria sus memorias sin que nadie se entere, asi que se avisa
-    al arrancar. Gana el primero del catalogo.
+
+def avisar_de_contrasenas_repetidas() -> None:
+    """Revisa la configuracion de usuarios y avisa de lo que quedo mal.
+
+    Se llama una sola vez, al arrancar. Dos personas con la misma contrasena
+    son indistinguibles al entrar, y callarlo mezclaria sus memorias sin que
+    nadie se entere; gana el primero del catalogo. Una variable ignorada suele
+    ser un despiste que deja a alguien afuera sin explicacion.
     """
+    for variable in _variables_ignoradas():
+        print(f"  AVISO: se ignora {variable}: sufijo o contrasena vacios.")
+
     vistas: dict[str, str] = {}
     repetidas: list[str] = []
 

@@ -140,3 +140,25 @@ def test_rutas_solo_para_admin(ruta, metodo):
 ])
 def test_rutas_abiertas_a_todos(ruta, metodo):
     assert acceso.exige_admin(ruta, metodo) is False
+
+
+def test_el_catalogo_no_avisa_en_cada_llamada(monkeypatch, capsys):
+    # _catalogo() corre en cada peticion. Si avisara ahi, una sola variable
+    # mal puesta llenaria el log del servidor para siempre.
+    monkeypatch.setenv("JARVIS_PASSWORD", "una")
+    monkeypatch.setenv("JARVIS_PASSWORD_ANA", "   ")
+
+    acceso.usuarios()
+    acceso.quien_entra("una")
+    acceso.usuario_de_token("admin.1.abc")
+
+    assert capsys.readouterr().out == ""
+
+
+def test_las_variables_ignoradas_se_avisan_al_arrancar(monkeypatch, capsys):
+    monkeypatch.setenv("JARVIS_PASSWORD", "una")
+    monkeypatch.setenv("JARVIS_PASSWORD_ANA", "   ")
+
+    acceso.avisar_de_contrasenas_repetidas()
+
+    assert "JARVIS_PASSWORD_ANA" in capsys.readouterr().out
