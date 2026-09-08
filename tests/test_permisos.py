@@ -68,3 +68,70 @@ def test_cada_uno_ve_su_propio_estado(cliente):
     assert de_jorge["usuario"] == "Jorge"
     assert de_jorge["rol"] == "usuario"
     assert del_admin["rol"] == "admin"
+
+
+def test_la_pagina_de_entrada_es_libre(cliente):
+    # Se pide sin sesion: es justo la que la crea.
+    assert cliente.get("/entrar").status_code == 200
+
+
+def test_entrar_con_un_token_bueno_deja_cookie(cliente, monkeypatch):
+    from backend import acceso, supabase_sesion
+
+    monkeypatch.setattr(supabase_sesion, "entrar",
+                        lambda t: acceso.Usuario("sb-abc", "Ana", "usuario"))
+    cliente.cookies.clear()
+    respuesta = cliente.post("/acceso/supabase", json={"token": "loquesea"})
+    assert respuesta.status_code == 200
+    assert acceso.COOKIE in respuesta.cookies
+
+
+def test_entrar_sin_permiso_da_403(cliente, monkeypatch):
+    from backend import supabase_sesion
+
+    monkeypatch.setattr(supabase_sesion, "entrar", lambda t: None)
+    cliente.cookies.clear()
+    assert cliente.post("/acceso/supabase", json={"token": "x"}).status_code == 403
+
+
+def test_la_sesion_del_panel_sirve_para_la_api(cliente, monkeypatch):
+    from backend import acceso, supabase_sesion
+
+    ana = acceso.Usuario("sb-abc", "Ana", "usuario")
+    monkeypatch.setattr(supabase_sesion, "entrar", lambda t: ana)
+    monkeypatch.setattr(supabase_sesion, "revalidar", lambda u: ana)
+
+    cliente.cookies.clear()
+    cliente.post("/acceso/supabase", json={"token": "loquesea"})
+
+    estado = cliente.get("/api/estado").json()
+    assert estado["usuario"] == "Ana"
+    assert estado["rol"] == "usuario"
+    # Sin jarvis.admin no toca la configuracion.
+    assert cliente.get("/api/fuentes").status_code == 403
+
+
+def test_si_le_quitan_el_permiso_queda_fuera(cliente, monkeypatch):
+    from backend import acceso, supabase_sesion
+
+    ana = acceso.Usuario("sb-abc", "Ana", "usuario")
+    monkeypatch.setattr(supabase_sesion, "entrar", lambda t: ana)
+    monkeypatch.setattr(supabase_sesion, "revalidar", lambda u: ana)
+    cliente.cookies.clear()
+    cliente.post("/acceso/supabase", json={"token": "loquesea"})
+    assert cliente.get("/api/estado").status_code == 200
+
+    # El super admin le quita la casilla.
+    monkeypatch.setattr(supabase_sesion, "revalidar", lambda u: None)
+    assert cliente.get("/api/estado").status_code == 401
+
+
+def test_los_de_contrasena_no_pasan_por_supabase(cliente, monkeypatch):
+    from backend import supabase_sesion
+
+    def no_deberia(_):
+        raise AssertionError("no se revalida a quien entro por contrasena")
+
+    _entrar(cliente, "la-del-admin")
+    monkeypatch.setattr(supabase_sesion, "perfil_cacheado", no_deberia)
+    assert cliente.get("/api/estado").status_code == 200

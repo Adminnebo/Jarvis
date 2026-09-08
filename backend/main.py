@@ -32,6 +32,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     herramientas,
     memoria,
     rutas,
+    supabase_sesion,
     version,
 )
 
@@ -91,6 +92,14 @@ async def guardia(peticion: Request, siguiente):
         # En local, sin contrasena, todo se atribuye al usuario por defecto.
         usuario = acceso.por_defecto()
 
+    # Quien vino de un panel se revalida contra profiles: si le quitaron el
+    # permiso, su cookie deja de valer sin esperar a que caduque.
+    usuario = supabase_sesion.revalidar(usuario)
+    if usuario is None:
+        if ruta.startswith("/api/"):
+            return JSONResponse(status_code=401, content={"error": "No autorizado."})
+        return HTMLResponse(acceso.pagina_login(), status_code=401)
+
     if acceso.exige_admin(ruta, peticion.method) and usuario.rol != "admin":
         return JSONResponse(
             status_code=403,
@@ -137,6 +146,35 @@ async def entrar(clave: str = Form("")):
         httponly=True,
         samesite="lax",
         secure=rutas.hospedado(),   # en local va por http, ahi no aplica
+    )
+    return respuesta
+
+
+@app.get("/entrar")
+def pagina_de_entrada():
+    """Donde aterriza quien llega desde un panel."""
+    return HTMLResponse(acceso.pagina_de_entrada())
+
+
+@app.post("/acceso/supabase")
+def entrar_con_supabase(datos: dict):
+    """Cambia un token de sesion de los paneles por una cookie de Jarvis."""
+    usuario = supabase_sesion.entrar((datos.get("token") or "").strip())
+
+    if usuario is None:
+        return JSONResponse(
+            status_code=403,
+            content={"error": "No tienes acceso a Jarvis. Pideselo a quien administra."},
+        )
+
+    respuesta = JSONResponse(content={"ok": True, "usuario": usuario.nombre})
+    respuesta.set_cookie(
+        acceso.COOKIE,
+        acceso.crear_token(usuario),
+        max_age=acceso.DURACION,
+        httponly=True,
+        samesite="lax",
+        secure=rutas.hospedado(),
     )
     return respuesta
 

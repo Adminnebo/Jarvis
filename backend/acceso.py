@@ -130,6 +130,15 @@ def usuario_de_token(valor: str | None) -> Usuario | None:
     if not hmac.compare_digest(firma, _firma(id_usuario, caduca)):
         return None
 
+    from . import supabase_sesion
+
+    if id_usuario.startswith(supabase_sesion.PREFIJO):
+        # Quien viene de un panel no vive en el catalogo de variables: su
+        # nombre y su permiso los confirma la revalidacion que sigue en el
+        # middleware, contra profiles. Aqui solo importa que la firma sea
+        # valida.
+        return Usuario(id_usuario, id_usuario, "usuario")
+
     # Que la firma sea buena no basta: si le quitaron su variable, ese token
     # ya no vale.
     return next((u for u in usuarios() if u.id == id_usuario), None)
@@ -261,11 +270,58 @@ def pagina_sin_proteger() -> str:
 </div></body></html>"""
 
 
+def pagina_de_entrada() -> str:
+    """Recibe el token del panel y lo convierte en una sesion de Jarvis.
+
+    El token llega en el fragmento de la URL, no en la query: el fragmento no
+    se manda al servidor, asi que no queda en los logs de acceso ni se filtra
+    por la cabecera Referer. Se borra de la barra en cuanto se lee, para que
+    tampoco quede en el historial.
+
+    El POST es al mismo origen porque la cookie es SameSite=Lax y no se
+    guardaria en un POST venido de otro sitio.
+    """
+    guion = """
+(async () => {
+  const mensaje = document.getElementById('mensaje');
+  const token = new URLSearchParams(location.hash.slice(1)).get('t');
+  history.replaceState(null, '', location.pathname);
+
+  if (!token) {
+    mensaje.textContent = 'Falta el token. Vuelve a entrar desde el panel.';
+    return;
+  }
+
+  try {
+    const r = await fetch('/acceso/supabase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token }),
+    });
+    if (r.ok) { location.replace('/'); return; }
+    const datos = await r.json().catch(() => ({}));
+    mensaje.textContent = datos.error || 'No se pudo entrar.';
+  } catch (e) {
+    mensaje.textContent = 'No se pudo contactar con Jarvis.';
+  }
+})();
+"""
+    return f"""<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis</title><style>{_ESTILO}</style></head><body>
+<div class="caja">
+  <h1>Jarvis</h1>
+  <p id="mensaje">Entrando...</p>
+</div>
+<script>{guion}</script>
+</body></html>"""
+
+
 # --------------------------------------------------------------------------
 # Que se puede pedir sin haber entrado
 # --------------------------------------------------------------------------
 
-LIBRES = ("/acceso", "/api/salud", "/api/version")
+LIBRES = ("/acceso", "/api/salud", "/api/version", "/entrar", "/acceso/supabase")
 
 
 def es_libre(ruta: str) -> bool:
