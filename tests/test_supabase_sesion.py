@@ -167,3 +167,39 @@ def test_el_token_solo_no_autoriza_a_nadie(configurado):
     assert provisional is not None          # la firma si es buena
     assert provisional.rol == "sin-confirmar"
     assert provisional.rol != "admin"
+
+
+def test_diagnostico_dice_que_el_puente_esta_apagado():
+    # Sin las variables no se puede comprobar a nadie. Es un problema de
+    # configuracion, no de la persona: no hay que mandarla a pedir permiso.
+    assert supabase_sesion.diagnostico("un-token") == "apagado"
+
+
+def test_diagnostico_distingue_un_token_invalido(configurado, monkeypatch):
+    monkeypatch.setattr(supabase_sesion, "id_de_token", lambda t: None)
+    assert supabase_sesion.diagnostico("un-token") == "token"
+
+
+def test_diagnostico_distingue_la_falta_de_permiso(configurado, monkeypatch):
+    monkeypatch.setattr(supabase_sesion, "id_de_token",
+                        lambda t: "11111111-2222-3333-4444-555555555555")
+    monkeypatch.setattr(supabase_sesion, "perfil_cacheado",
+                        lambda u: perfil_de(permissions=["inbox.send"]))
+    assert supabase_sesion.diagnostico("un-token") == "permiso"
+
+
+def test_diagnostico_distingue_un_perfil_que_no_existe(configurado, monkeypatch):
+    monkeypatch.setattr(supabase_sesion, "id_de_token",
+                        lambda t: "11111111-2222-3333-4444-555555555555")
+    monkeypatch.setattr(supabase_sesion, "perfil_cacheado", lambda u: None)
+    assert supabase_sesion.diagnostico("un-token") == "sin-perfil"
+
+
+def test_diagnostico_distingue_un_fallo_de_la_base(configurado, monkeypatch):
+    def revienta(_):
+        raise RuntimeError("la base no responde")
+
+    monkeypatch.setattr(supabase_sesion, "id_de_token",
+                        lambda t: "11111111-2222-3333-4444-555555555555")
+    monkeypatch.setattr(supabase_sesion, "perfil_cacheado", revienta)
+    assert supabase_sesion.diagnostico("un-token") == "error"

@@ -164,15 +164,35 @@ def pagina_de_entrada():
     return HTMLResponse(acceso.pagina_de_entrada())
 
 
+# Que le decimos a la persona segun por que no entro. Cada uno lo arregla
+# alguien distinto: el primero quien administra el servidor, el segundo ella
+# misma, el tercero quien reparte permisos.
+MOTIVOS = {
+    "apagado": "Jarvis todavia no tiene configurado el acceso desde los paneles. "
+               "Avisa a quien lo administra.",
+    "token": "Tu sesion del panel no vale o caduco. Vuelve a entrar en el panel "
+             "y pulsa Jarvis otra vez.",
+    "sin-perfil": "Tu usuario no aparece en el directorio. Avisa a quien administra.",
+    "permiso": "No tienes acceso a Jarvis. Pideselo a quien administra.",
+    "error": "No se pudo comprobar tu acceso ahora mismo. Intentalo en un minuto.",
+}
+
+
 @app.post("/acceso/supabase")
 def entrar_con_supabase(datos: dict):
     """Cambia un token de sesion de los paneles por una cookie de Jarvis."""
-    usuario = supabase_sesion.entrar((datos.get("token") or "").strip())
+    token = (datos.get("token") or "").strip()
+    usuario = supabase_sesion.entrar(token)
 
     if usuario is None:
+        # Un solo mensaje para todos los casos hacia imposible saber si el
+        # arreglo era poner una variable, volver a entrar en el panel o pedir
+        # el permiso. El motivo tambien va al log del servidor.
+        motivo = supabase_sesion.diagnostico(token)
+        print(f"  Acceso desde panel rechazado: {motivo}")
         return JSONResponse(
             status_code=403,
-            content={"error": "No tienes acceso a Jarvis. Pideselo a quien administra."},
+            content={"error": MOTIVOS.get(motivo, MOTIVOS["permiso"]), "motivo": motivo},
         )
 
     respuesta = JSONResponse(content={"ok": True, "usuario": usuario.nombre})

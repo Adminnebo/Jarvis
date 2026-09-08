@@ -181,6 +181,31 @@ def entrar(token: str):
         return None
 
 
+def diagnostico(token: str) -> str:
+    """Por que no entro. Solo se llama cuando entrar() ya dijo que no.
+
+    Existe porque un unico 403 para todos los casos hace imposible saber si
+    falta una variable de entorno, si la sesion del panel caduco o si a la
+    persona de verdad no le dieron permiso. Son tres arreglos distintos y
+    los hace gente distinta.
+    """
+    if not configurado():
+        return "apagado"
+
+    try:
+        uuid = id_de_token(token)
+        if not uuid:
+            return "token"
+
+        datos = perfil_cacheado(uuid)
+        if not datos:
+            return "sin-perfil"
+
+        return "ok" if usuario_de_perfil(datos) else "permiso"
+    except Exception:  # noqa: BLE001 - el fallo es el resultado
+        return "error"
+
+
 def revalidar(usuario):
     """Comprueba que quien vino de un panel sigue teniendo permiso.
 
