@@ -219,13 +219,21 @@ def diagnostico(token: str) -> str:
     except Exception as fallo:  # noqa: BLE001 - el fallo es el resultado
         detalle = str(fallo)
         # Algunos errores de conexion repiten la cadena entera, contrasena
-        # incluida. Al log no llega nunca.
+        # incluida. Ni al log ni a la persona llega nunca.
         cadena = os.getenv("SUPABASE_DB_URL", "").strip()
         if cadena:
             detalle = detalle.replace(cadena, "<SUPABASE_DB_URL>")
-        print(f"  Fallo al comprobar acceso ({paso}): "
-              f"{type(fallo).__name__}: {detalle[:300]}")
-        return f"error-{paso}:{type(fallo).__name__}"
+        clase = type(fallo).__name__
+        print(f"  Fallo al comprobar acceso ({paso}): {clase}: {detalle[:300]}")
+
+        motivo = f"error-{paso}:{clase}"
+        # Un ProgrammingError sin subclase lo lanza psycopg por un fallo del
+        # lado del cliente, y la clase sola no dice cual. Su mensaje no lleva
+        # secretos, asi que se muestra: sin el, diagnosticar exige entrar al
+        # log del servidor, que no siempre tiene a mano quien pulsa el boton.
+        if clase == "ProgrammingError" and detalle:
+            motivo += f" | {detalle.splitlines()[0][:160]}"
+        return motivo
 
 
 def revalidar(usuario):

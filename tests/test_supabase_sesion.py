@@ -220,3 +220,38 @@ def test_diagnostico_dice_en_que_paso_fallo_supabase(configurado, monkeypatch):
     motivo = supabase_sesion.diagnostico("un-token")
     assert motivo.startswith("error-token:")
     assert "RuntimeError" in motivo
+
+
+def test_un_programmingerror_pelado_trae_su_mensaje(configurado, monkeypatch):
+    # psycopg lanza ProgrammingError sin subclase por fallos del lado del
+    # cliente, y la clase sola no distingue entre ellos. Su mensaje no lleva
+    # secretos y es lo unico que dice que arreglar.
+    class ProgrammingError(Exception):
+        pass
+
+    def revienta(_):
+        raise ProgrammingError(
+            "can't change 'read_only' now: connection in transaction status INTRANS"
+        )
+
+    monkeypatch.setattr(supabase_sesion, "id_de_token",
+                        lambda t: "11111111-2222-3333-4444-555555555555")
+    monkeypatch.setattr(supabase_sesion, "perfil_cacheado", revienta)
+    motivo = supabase_sesion.diagnostico("un-token")
+    assert motivo.startswith("error-perfil:ProgrammingError")
+    assert "read_only" in motivo
+
+
+def test_el_detalle_nunca_lleva_la_cadena_de_conexion(configurado, monkeypatch):
+    class ProgrammingError(Exception):
+        pass
+
+    cadena = "postgresql://x:y@z:5432/postgres"
+
+    def revienta(_):
+        raise ProgrammingError(f"fallo usando {cadena}")
+
+    monkeypatch.setattr(supabase_sesion, "id_de_token",
+                        lambda t: "11111111-2222-3333-4444-555555555555")
+    monkeypatch.setattr(supabase_sesion, "perfil_cacheado", revienta)
+    assert cadena not in supabase_sesion.diagnostico("un-token")
