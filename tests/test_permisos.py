@@ -135,3 +135,16 @@ def test_los_de_contrasena_no_pasan_por_supabase(cliente, monkeypatch):
     _entrar(cliente, "la-del-admin")
     monkeypatch.setattr(supabase_sesion, "perfil_cacheado", no_deberia)
     assert cliente.get("/api/estado").status_code == 200
+
+
+def test_el_rechazo_dice_el_tipo_de_fallo(cliente, monkeypatch):
+    from backend import supabase_sesion
+
+    monkeypatch.setattr(supabase_sesion, "entrar", lambda t: None)
+    monkeypatch.setattr(supabase_sesion, "diagnostico",
+                        lambda t: "error-perfil:UndefinedTable")
+    cliente.cookies.clear()
+    respuesta = cliente.post("/acceso/supabase", json={"token": "x"})
+    assert respuesta.status_code == 403
+    assert "UndefinedTable" in respuesta.json()["error"]
+    assert respuesta.json()["motivo"] == "error-perfil:UndefinedTable"

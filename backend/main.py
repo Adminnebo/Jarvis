@@ -175,7 +175,25 @@ MOTIVOS = {
     "sin-perfil": "Tu usuario no aparece en el directorio. Avisa a quien administra.",
     "permiso": "No tienes acceso a Jarvis. Pideselo a quien administra.",
     "error": "No se pudo comprobar tu acceso ahora mismo. Intentalo en un minuto.",
+    "ref-invalida": "SUPABASE_PROJECT_REF no tiene forma de referencia de proyecto: "
+                    "son 20 letras y numeros, sin https:// ni .supabase.co. "
+                    "Avisa a quien administra el servidor.",
+    "error-token": "No se pudo validar tu sesion con Supabase",
+    "error-perfil": "No se pudo leer tu perfil en la base de datos",
 }
+
+
+def mensaje_de_rechazo(motivo: str) -> str:
+    """El texto para la persona, con la clase de la excepcion si la hubo.
+
+    La clase ("UndefinedTable", "OperationalError") no lleva secretos y dice
+    exactamente que arreglar; el mensaje completo se queda en el log.
+    """
+    base, _, clase = motivo.partition(":")
+    if base.startswith("error-"):
+        texto = MOTIVOS.get(base, "No se pudo comprobar tu acceso")
+        return f"{texto} ({clase}). Avisa a quien administra: el detalle esta en el log."
+    return MOTIVOS.get(base, MOTIVOS["permiso"])
 
 
 @app.post("/acceso/supabase")
@@ -192,7 +210,7 @@ def entrar_con_supabase(datos: dict):
         print(f"  Acceso desde panel rechazado: {motivo}")
         return JSONResponse(
             status_code=403,
-            content={"error": MOTIVOS.get(motivo, MOTIVOS["permiso"]), "motivo": motivo},
+            content={"error": mensaje_de_rechazo(motivo), "motivo": motivo},
         )
 
     respuesta = JSONResponse(content={"ok": True, "usuario": usuario.nombre})

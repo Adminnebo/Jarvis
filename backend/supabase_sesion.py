@@ -181,29 +181,51 @@ def entrar(token: str):
         return None
 
 
+REFERENCIA = re.compile(r"^[a-z0-9]{20}$")
+
+
 def diagnostico(token: str) -> str:
     """Por que no entro. Solo se llama cuando entrar() ya dijo que no.
 
     Existe porque un unico 403 para todos los casos hace imposible saber si
     falta una variable de entorno, si la sesion del panel caduco o si a la
-    persona de verdad no le dieron permiso. Son tres arreglos distintos y
-    los hace gente distinta.
+    persona de verdad no le dieron permiso. Son arreglos distintos y los hace
+    gente distinta.
+
+    Cuando algo lanza, el motivo lleva el paso y la clase de la excepcion
+    ("error-perfil:UndefinedTable"): sin eso, una red caida, una tabla que no
+    existe y una cadena de conexion mala dan el mismo mensaje. El texto
+    completo de la excepcion va solo al log del servidor, porque puede llevar
+    el host de la base.
     """
     if not configurado():
         return "apagado"
 
+    if not REFERENCIA.match(os.getenv("SUPABASE_PROJECT_REF", "").strip()):
+        return "ref-invalida"
+
+    paso = "token"
     try:
         uuid = id_de_token(token)
         if not uuid:
             return "token"
 
+        paso = "perfil"
         datos = perfil_cacheado(uuid)
         if not datos:
             return "sin-perfil"
 
         return "ok" if usuario_de_perfil(datos) else "permiso"
-    except Exception:  # noqa: BLE001 - el fallo es el resultado
-        return "error"
+    except Exception as fallo:  # noqa: BLE001 - el fallo es el resultado
+        detalle = str(fallo)
+        # Algunos errores de conexion repiten la cadena entera, contrasena
+        # incluida. Al log no llega nunca.
+        cadena = os.getenv("SUPABASE_DB_URL", "").strip()
+        if cadena:
+            detalle = detalle.replace(cadena, "<SUPABASE_DB_URL>")
+        print(f"  Fallo al comprobar acceso ({paso}): "
+              f"{type(fallo).__name__}: {detalle[:300]}")
+        return f"error-{paso}:{type(fallo).__name__}"
 
 
 def revalidar(usuario):

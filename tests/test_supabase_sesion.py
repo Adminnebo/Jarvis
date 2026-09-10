@@ -202,4 +202,21 @@ def test_diagnostico_distingue_un_fallo_de_la_base(configurado, monkeypatch):
     monkeypatch.setattr(supabase_sesion, "id_de_token",
                         lambda t: "11111111-2222-3333-4444-555555555555")
     monkeypatch.setattr(supabase_sesion, "perfil_cacheado", revienta)
-    assert supabase_sesion.diagnostico("un-token") == "error"
+    assert supabase_sesion.diagnostico("un-token").startswith("error-perfil:")
+
+
+def test_diagnostico_detecta_una_referencia_con_forma_de_url(configurado, monkeypatch):
+    # Pegar la URL entera en SUPABASE_PROJECT_REF es un despiste facil, y su
+    # sintoma seria una excepcion de red indistinguible de una caida.
+    monkeypatch.setenv("SUPABASE_PROJECT_REF", "https://abcdefghijklmnopqrst.supabase.co")
+    assert supabase_sesion.diagnostico("un-token") == "ref-invalida"
+
+
+def test_diagnostico_dice_en_que_paso_fallo_supabase(configurado, monkeypatch):
+    def revienta(_):
+        raise RuntimeError("no hay red")
+
+    monkeypatch.setattr(supabase_sesion, "id_de_token", revienta)
+    motivo = supabase_sesion.diagnostico("un-token")
+    assert motivo.startswith("error-token:")
+    assert "RuntimeError" in motivo
