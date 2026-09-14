@@ -124,7 +124,8 @@ const COLUMNAS = [
   { titulo: "Audio out", saca: (f) => numero(f.salida_audio) },
   { titulo: "Texto in", saca: (f) => numero(f.entrada_texto) },
   { titulo: "Texto out", saca: (f) => numero(f.salida_texto) },
-  { titulo: "Cache", saca: (f) => numero(f.cache_texto + f.cache_audio) },
+  { titulo: "Imagen in", saca: (f) => numero(f.entrada_imagen || 0) },
+  { titulo: "Cache", saca: (f) => numero(f.cache_texto + f.cache_audio + (f.cache_imagen || 0)) },
 ];
 
 function pintarPorModelo(filas, precios) {
