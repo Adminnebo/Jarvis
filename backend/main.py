@@ -28,6 +28,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     conectores,
     consumo,
     esquema,
+    fotos,
     fuentes,
     herramientas,
     memoria,
@@ -411,6 +412,43 @@ def ejecutar_herramienta(peticion_http: Request, peticion: PeticionDeHerramienta
             peticion.nombre, peticion.argumentos, peticion_http.state.usuario.id
         )
     }
+
+
+class FotoSubida(BaseModel):
+    mime: str
+    dato: str
+    motivo: str = ""
+    origen: str = "telefono"
+
+
+@app.post("/api/fotos")
+def recibir_foto(peticion: Request, foto: FotoSubida):
+    """Lee una foto que llega del puente de los lentes y devuelve la lectura.
+
+    El puente la manda cuando la app sube una foto sin sesion de voz, y le
+    pasa a la app lo que venga en `lectura`. La foto no se guarda: en el
+    historial queda la constancia y lo que se dijo de ella, para poder
+    preguntar despues desde la PC.
+    """
+    try:
+        datos = fotos.decodificar(foto.mime, foto.dato)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+
+    usuario = peticion.state.usuario
+    motivo = foto.motivo.strip()[:200]
+
+    try:
+        lectura = cerebro.leer_foto(fotos.url_de_datos(foto.mime, datos), motivo, usuario)
+    except Exception as error:  # noqa: BLE001
+        return JSONResponse(status_code=502, content={"error": f"No pude leer la foto: {error}"})
+
+    mensajes = memoria.cargar_conversacion(usuario.id)
+    mensajes.append({"role": "user", "content": fotos.constancia(foto.origen, motivo)})
+    mensajes.append({"role": "assistant", "content": lectura})
+    memoria.guardar_conversacion(usuario.id, mensajes)
+
+    return {"lectura": lectura}
 
 
 @app.post("/api/conversacion/agregar")

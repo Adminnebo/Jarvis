@@ -134,6 +134,21 @@ saber de ella, hablando o escribiendo.
 El navegador la reduce a 1024 px de lado antes de mandarla, y más si no cabe en
 el canal de WebRTC. En el historial queda `[Imagen adjunta]`, no la foto.
 
+### Fotos de los lentes
+
+El puente de los lentes (`puente-android`, repo `jarvis-lentes`) tiene dos
+caminos:
+
+- **Dentro de la voz**: el modelo pide `tomar_foto` y el puente mete la imagen
+  en su propia sesion de Realtime. Jarvis no interviene.
+- **Sin voz** (el botón de la app que saca foto con el teléfono): el puente la
+  manda a `POST /api/fotos` con `JARVIS_FOTO_RUTA=/api/fotos`. Jarvis la lee con
+  el modelo de texto y contesta `{"lectura": "..."}`. En el historial quedan
+  `[Foto del telefono] <motivo>` y la lectura; la foto no se guarda.
+
+Acepta JPEG, PNG y WebP de hasta 2 MB, y comprueba la firma de los bytes, no
+solo el mime.
+
 Cada imagen cuesta unos cientos de tokens; el tablero de consumo los muestra en
 **Imagen in**. Si `data/precios.json` no trae `imagen_entrada` para el modelo,
 se cobran al precio del texto de entrada.

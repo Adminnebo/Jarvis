@@ -295,6 +295,40 @@ def responder(mensajes: list[dict], usuario: acceso.Usuario, extra: str = "") ->
     }
 
 
+def leer_foto(url_de_datos: str, motivo: str, usuario: acceso.Usuario) -> str:
+    """Lo que hay en una foto, en una o dos frases para decir en voz alta.
+
+    Es para la foto que sube la app sin sesion de voz: no hay un modelo
+    escuchando al que meterle la imagen, asi que la lee el de texto y el
+    puente le devuelve la lectura a la app. En la voz en vivo no pasa por
+    aqui: el puente mete la foto directo en su sesion de Realtime.
+    """
+    modelo = os.getenv("OPENAI_MODEL", "gpt-5.6-terra")
+    nombre = os.getenv("JARVIS_NOMBRE", "Jarvis")
+
+    respuesta = cliente().responses.create(
+        model=modelo,
+        reasoning={"effort": os.getenv("JARVIS_ESFUERZO_CHAT", "low")},
+        instructions=(
+            f"Eres {nombre}, el asistente de {usuario.nombre}. Te manda una foto "
+            "de lo que tiene delante, tomada con sus lentes o su telefono. "
+            "Responde en espanol, en una o dos frases que se van a leer en voz "
+            "alta: sin markdown, sin listas. Si hay texto que importa, leelo tal "
+            "cual. Si algo no se distingue, dilo; nunca inventes."
+        ),
+        input=[{
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": motivo.strip() or "Que hay en esta foto?"},
+                {"type": "input_image", "image_url": url_de_datos},
+            ],
+        }],
+    )
+    anotar_consumo(modelo, getattr(respuesta, "usage", None))
+    # El modelo a veces marca en negrita lo que lee, y el asterisco se oye.
+    return (respuesta.output_text or "").replace("*", "").strip()
+
+
 def anotar_consumo(modelo: str, uso) -> None:
     """Guarda el gasto del turno. Nunca debe tumbar la respuesta."""
     if uso is None:
