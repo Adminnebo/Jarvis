@@ -406,6 +406,34 @@ export function crearSesionDeVoz(eventos) {
     pedirRespuesta();
   }
 
+  /* Cuantos caracteres caben en un mensaje del canal de datos.
+
+     El tope lo negocian el navegador y OpenAI al conectar. 0 es "sin tope
+     conocido". Se reservan unos bytes para el sobre JSON que envuelve la
+     imagen. */
+  function espacioParaImagen() {
+    const tope = conexion?.sctp?.maxMessageSize;
+    return tope && Number.isFinite(tope) ? tope - 512 : 0;
+  }
+
+  /* Mete una imagen en la conversacion. A proposito no pide respuesta:
+     adjuntar no es preguntar, y Jarvis describiendo cada foto sin que nadie
+     se lo pida estorba. La pregunta llega despues, hablada o escrita, y el
+     modelo ya tiene la imagen delante. */
+  function adjuntarImagen(urlDeDatos) {
+    if (canal?.readyState !== "open") {
+      throw new Error("La voz en vivo todavia no esta conectada.");
+    }
+    canal.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_image", image_url: urlDeDatos }],
+      },
+    }));
+  }
+
   function silenciar(silencio) {
     if (pista) pista.enabled = !silencio;
   }
@@ -422,5 +450,5 @@ export function crearSesionDeVoz(eventos) {
     avisar("onCierre");
   }
 
-  return { conectar, cerrar, escribir, silenciar };
+  return { conectar, cerrar, escribir, silenciar, adjuntarImagen, espacioParaImagen };
 }

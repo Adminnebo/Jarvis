@@ -124,6 +124,20 @@ minuto, así que actívalo cuando quieras hablar de verdad y córtalo al termina
 
 Ambos comparten la misma memoria, el mismo historial y las mismas herramientas.
 
+### Imágenes en voz en vivo
+
+Con la voz en vivo abierta aparece un clip junto al botón rojo. La imagen que
+elijas —en el teléfono, también la cámara— entra a la conversación y Jarvis la
+tiene delante, pero **no la comenta por su cuenta**: pregúntale lo que quieras
+saber de ella, hablando o escribiendo.
+
+El navegador la reduce a 1024 px de lado antes de mandarla, y más si no cabe en
+el canal de WebRTC. En el historial queda `[Imagen adjunta]`, no la foto.
+
+Cada imagen cuesta unos cientos de tokens; el tablero de consumo los muestra en
+**Imagen in**. Si `data/precios.json` no trae `imagen_entrada` para el modelo,
+se cobran al precio del texto de entrada.
+
 Necesitas **Chrome o Edge**, y dar permiso al micrófono.
 
 ## Supabase

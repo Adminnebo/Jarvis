@@ -7,6 +7,7 @@
 import { crearSesionDeVoz } from "./voz.js";
 import { abrirPanelFuentes } from "./fuentes.js";
 import { abrirPanelConsumo } from "./consumo.js";
+import { prepararImagen } from "./imagen.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +20,8 @@ const casillaManosLibres = $("manos-libres");
 const puntoEstado = $("punto-estado");
 
 const btnVivo = $("btn-vivo");
+const btnImagen = $("btn-imagen");
+const archivoImagen = $("archivo-imagen");
 
 let ocupado = false;       // hay una respuesta en curso
 let escuchando = false;    // el microfono esta abierto
@@ -404,6 +407,7 @@ async function abrirVozEnVivo() {
   btnVivo.textContent = "Cortar";
   campo.placeholder = "Escribe y te responde hablando...";
   medidor.hidden = false;
+  btnImagen.hidden = false;
 
   sesionViva = crearSesionDeVoz({
     onEstado: (modo, texto) => {
@@ -463,6 +467,7 @@ function cerrarVozEnVivo() {
 
   burbujaViva = null;
   medidor.hidden = true;
+  btnImagen.hidden = true;
   barraMedidor.style.width = "0%";
   btnVivo.classList.remove("activo");
   btnVivo.textContent = "Voz en vivo";
@@ -477,6 +482,39 @@ function cerrarVozEnVivo() {
 btnVivo.addEventListener("click", () => {
   if (sesionViva) cerrarVozEnVivo();
   else abrirVozEnVivo();
+});
+
+// --------------------------------------------------------------------------
+// Imagenes en la voz en vivo
+// --------------------------------------------------------------------------
+
+btnImagen.addEventListener("click", () => archivoImagen.click());
+
+archivoImagen.addEventListener("change", async () => {
+  const archivo = archivoImagen.files?.[0];
+  // Vaciarlo permite elegir la misma foto dos veces seguidas.
+  archivoImagen.value = "";
+  // La sesion puede cerrarse mientras se reduce la foto; se usa la de ahora.
+  const sesion = sesionViva;
+  if (!archivo || !sesion) return;
+
+  try {
+    const { url } = await prepararImagen(archivo, sesion.espacioParaImagen());
+    sesion.adjuntarImagen(url);
+
+    const nodo = burbuja("usuario imagen");
+    const miniatura = document.createElement("img");
+    miniatura.src = url;
+    miniatura.alt = "Imagen adjunta";
+    nodo.appendChild(miniatura);
+    miniatura.onload = alFinal;
+
+    // El historial es texto: queda constancia, no la foto.
+    guardarTurno("user", "[Imagen adjunta]");
+    estadoVisual("escuchando", "Imagen adjunta. Preguntame sobre ella.");
+  } catch (error) {
+    burbuja("error", `No pude adjuntar la imagen: ${error.message}`);
+  }
 });
 
 // --------------------------------------------------------------------------
