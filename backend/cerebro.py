@@ -15,6 +15,7 @@ from . import (
     acceso,
     archivos,
     conectores,
+    cotizaciones,
     consultas,
     consumo,
     esquema,
@@ -166,6 +167,20 @@ Imagenes y fichas tecnicas de productos:
 - No ofrezcas archivos por tu cuenta.
 - Si la busqueda trae varios productos y no queda claro cual es, pregunta antes
   de mandar."""
+
+    if cotizaciones.configurado():
+        texto += f"""
+
+Cotizaciones (de Jarvis, numeradas JV-, aparte de las de JH):
+- Si {nombre_usuario} pide una cotizacion, consigue el Codigo de cada producto
+  (buscar_en_fuente), las cantidades y el cliente (nombre, RNC o codigo), y
+  llama a `preparar_cotizacion`. Los precios los pone esa herramienta segun el
+  cliente: nunca los calcules ni los inventes.
+- Si falta algo (cliente o cantidades), preguntalo antes de preparar.
+- Resume el borrador (cliente, cuantos productos y total) y pregunta si la
+  emites. Llama a `emitir_cotizacion` SOLO despues de un si claro. Si pide
+  cambios, vuelve a preparar.
+- Si el cliente no aparece, pregunta si va de contado."""
 
     texto += (
         f"\n\nEsto es lo que ya sabes de {nombre_usuario}:\n"

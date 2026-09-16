@@ -28,6 +28,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     cerebro,
     conectores,
     consumo,
+    cotizaciones,
     esquema,
     fotos,
     fuentes,
@@ -456,6 +457,22 @@ def recibir_foto(peticion: Request, foto: FotoSubida):
     memoria.guardar_conversacion(usuario.id, mensajes)
 
     return {"lectura": lectura}
+
+
+@app.get("/api/cotizaciones/{numero}.pdf")
+def pdf_de_cotizacion(numero: str):
+    """Abre el PDF de una cotizacion de Jarvis.
+
+    El bucket es privado porque lleva RNC, direccion y telefono del cliente.
+    Aqui, con la sesion de Jarvis ya comprobada, se firma un enlace de pocos
+    minutos: el del historial nunca caduca y nunca queda publico.
+    """
+    if not cotizaciones.configurado() or not cotizaciones.NUMERO.match(numero):
+        return JSONResponse(status_code=404, content={"error": "No existe."})
+    try:
+        return RedirectResponse(cotizaciones.firmar(f"{numero}.pdf", cotizaciones.FIRMA_WEB), status_code=302)
+    except Exception:  # noqa: BLE001
+        return JSONResponse(status_code=404, content={"error": "No existe."})
 
 
 @app.post("/api/conversacion/agregar")

@@ -334,6 +334,64 @@ def mandar_archivos_producto(codigos: str, tipo: str = "ambas", nombres: str = "
 
 
 # --------------------------------------------------------------------------
+# Cotizaciones
+# --------------------------------------------------------------------------
+
+def _cotizaciones_disponibles() -> bool:
+    from . import cotizaciones
+
+    return cotizaciones.configurado()
+
+
+@herramienta(
+    "Prepara el BORRADOR de una cotizacion (no la emite): busca al cliente y "
+    "pone los precios del catalogo segun su nivel. Devuelve un resumen para "
+    "que el usuario lo confirme. Nunca calcules ni inventes precios tu: salen "
+    "de aqui. Necesita el Codigo exacto de cada producto; si no lo tienes, "
+    "buscalo antes con buscar_en_fuente.",
+    disponible=_cotizaciones_disponibles,
+    productos='JSON con los productos y cantidades: [{"codigo": "9681", "cantidad": 100}]',
+    cliente="Nombre, RNC o codigo del cliente, tal como lo dijo el usuario",
+    contado="'si' solo si el cliente no esta registrado y va de contado (precio P1)",
+    ciudad="Opcional: ciudad del cliente, si la dijeron",
+    contacto="Opcional: persona de contacto, si la dijeron",
+)
+def preparar_cotizacion(productos: str, cliente: str = "", contado: str = "no",
+                        ciudad: str = "", contacto: str = "", usuario: str = "") -> str:
+    from . import cotizaciones
+
+    try:
+        return cotizaciones.preparar(
+            usuario, cliente, productos,
+            contado=(contado or "").strip().lower() in ("si", "sí", "true", "1"),
+            ciudad=ciudad, contacto=contacto,
+        )
+    except cotizaciones.ErrorCotizacion as error:
+        return str(error)
+
+
+@herramienta(
+    "Emite la cotizacion preparada con preparar_cotizacion: le da numero "
+    "(JV-...), genera el PDF y lo manda al chat. Usala SOLO despues de que el "
+    "usuario confirme el resumen del borrador con un si claro.",
+    disponible=_cotizaciones_disponibles,
+)
+def emitir_cotizacion(usuario: str = ""):
+    from . import cotizaciones
+
+    try:
+        adjunto = cotizaciones.emitir(usuario, cotizaciones.nombre_de(usuario))
+    except cotizaciones.ErrorCotizacion as error:
+        return str(error)
+    return ConAdjuntos(
+        f"Cotizacion {adjunto['numero']} emitida y enviada al chat, total RD$ "
+        f"{adjunto['total']:,.2f}. Confirmalo en una frase; no leas el numero "
+        "completo ni enlaces salvo que lo pidan.",
+        [adjunto],
+    )
+
+
+# --------------------------------------------------------------------------
 # Servicios
 # --------------------------------------------------------------------------
 

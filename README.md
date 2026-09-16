@@ -277,6 +277,55 @@ Funciona en texto, en voz en vivo y queda en el historial. `/api/herramienta`
 devuelve los archivos en `adjuntos`, así que el puente de los lentes también los
 recibe cuando se piden por voz.
 
+## Cotizaciones
+
+Jarvis arma cotizaciones con el mismo PDF que las de Camila, pero **aparte de
+JH**: numeración propia (`JV-00001`), sin tocar la Base JH, la numeración de
+Camila ni el panel. Se pueden conectar con JH más adelante: la tabla guarda
+cliente, líneas y totales completos.
+
+Siempre en dos pasos:
+
+1. **`preparar_cotizacion`** busca al cliente en `List_ClientesIA` (por nombre,
+   RNC o código) y los productos en `List_ProductosIA`, y calcula. **Los
+   precios los pone el servidor**, con el nivel del cliente (P1–P7) por su
+   factor; el modelo nunca los escribe. De contado va a P1. Devuelve un
+   resumen y Jarvis pregunta si la emite.
+2. **`emitir_cotizacion`**, solo tras un "sí": inserta la fila en
+   `jarvis_cotizaciones` (que da el número), arma el HTML
+   ([backend/cotizacion_html.py](backend/cotizacion_html.py), port del nodo de
+   n8n), lo convierte con PDF.co y lo sube al bucket privado. Llega al chat como
+   tarjeta y a los lentes como documento.
+
+El PDF lleva RNC, dirección y teléfono, así que el bucket es privado. La web lo
+abre por `/api/cotizaciones/JV-00001.pdf`, que exige sesión y firma un enlace de
+5 minutos; a la app de los lentes le llega uno de 24 horas.
+
+Si falla el PDF, la fila queda con `estado = 'fallida'` y el borrador sigue
+disponible para reintentar (con otro número).
+
+| Variable | |
+|---|---|
+| `JARVIS_FUENTE_CATALOGO` | Id de la fuente con el catálogo y los clientes (Base JH) |
+| `JARVIS_BUCKET_COTIZACIONES` | `jarvis_cotizaciones` |
+| `PDFCO_API_KEY` | La de PDF.co |
+
+Además usa `SUPABASE_SERVICE_ROLE_KEY` y `SUPABASE_PROJECT_REF`. Tabla y bucket:
+
+```sql
+create table public.jarvis_cotizaciones (
+  numero bigint generated always as identity primary key,
+  creada_at timestamptz not null default now(),
+  usuario text not null, cliente jsonb not null, productos jsonb not null,
+  subtotal numeric(14,2) not null, itbis numeric(14,2) not null,
+  total numeric(14,2) not null, pdf_ruta text,
+  estado text not null default 'emitida'
+);
+alter table public.jarvis_cotizaciones enable row level security;
+insert into storage.buckets (id, name, public)
+values ('jarvis_cotizaciones', 'jarvis_cotizaciones', false);
+```
+
 ## Fuentes de datos
 
 El botón **Fuentes** abre el panel para conectar bases de datos sin tocar

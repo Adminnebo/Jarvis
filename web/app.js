@@ -69,10 +69,13 @@ function alFinal() {
 function burbujaDeAdjuntos(adjuntos) {
   const nodo = burbuja("jarvis adjuntos");
   for (const adjunto of adjuntos) {
-    if (!/^https?:\/\//.test(adjunto.url || "")) continue;
+    // Las cotizaciones se abren por Jarvis (bucket privado): su enlace pide
+    // uno firmado cada vez, asi que no caduca en el historial.
+    const destino = /^\/api\//.test(adjunto.enlace || "") ? adjunto.enlace : adjunto.url;
+    if (!/^(https?:\/\/|\/api\/)/.test(destino || "")) continue;
 
     const enlace = document.createElement("a");
-    enlace.href = adjunto.url;
+    enlace.href = destino;
     enlace.target = "_blank";
     enlace.rel = "noopener";
     enlace.title = adjunto.archivo || adjunto.titulo;
@@ -89,7 +92,9 @@ function burbujaDeAdjuntos(adjuntos) {
       enlace.append(imagen, pie);
     } else {
       enlace.className = "adjunto-ficha";
-      enlace.textContent = `Ficha técnica · ${adjunto.titulo}`;
+      enlace.textContent = adjunto.tipo === "cotizacion"
+        ? adjunto.titulo
+        : `Ficha técnica · ${adjunto.titulo}`;
     }
     nodo.appendChild(enlace);
   }
@@ -100,7 +105,7 @@ function burbujaDeAdjuntos(adjuntos) {
 // Lo que queda en el historial como texto, para el modelo y por si falla la
 // miniatura: que se mando, no las URLs.
 function resumenDeAdjuntos(adjuntos) {
-  const nombres = { imagen: "imagen", ficha: "ficha técnica" };
+  const nombres = { imagen: "imagen", ficha: "ficha técnica", cotizacion: "cotización" };
   return `[Enviado al chat: ${adjuntos.map((a) => `${nombres[a.tipo] || a.tipo} de ${a.titulo}`).join(", ")}]`;
 }
 
