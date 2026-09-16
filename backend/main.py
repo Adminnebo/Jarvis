@@ -24,6 +24,7 @@ load_dotenv(RAIZ / ".env", override=True)
 
 from . import (  # noqa: E402 - despues de load_dotenv a proposito
     acceso,
+    archivos,
     cerebro,
     conectores,
     consumo,
@@ -70,6 +71,9 @@ def al_arrancar():
     # Traer el esquema ahora evita que la primera pregunta sobre la base de
     # datos pague el costo de descubrirlo.
     esquema.refrescar_en_segundo_plano()
+
+    # Listar los buckets tarda: que no lo pague la primera ficha que pidan.
+    archivos.refrescar_en_segundo_plano()
 
     # Y mantener las conexiones calientes evita que la pague en reconectar.
     fuentes.vigilar_conexiones()
@@ -242,6 +246,7 @@ class PeticionDeHerramienta(BaseModel):
 class MensajeSuelto(BaseModel):
     role: str
     content: str
+    adjuntos: list[dict] | None = None
 
 
 @app.get("/api/estado")
@@ -406,12 +411,14 @@ def ejecutar_herramienta(peticion_http: Request, peticion: PeticionDeHerramienta
     En modo voz el modelo habla directo con el navegador, asi que las
     herramientas que viven en este servidor pasan por aqui. Las de Supabase no:
     esas las resuelve OpenAI contra el MCP sin tocarnos.
+
+    `adjuntos` son los archivos que la herramienta manda al chat. Los usa el
+    navegador y el puente de los lentes; al modelo solo le llega `resultado`.
     """
-    return {
-        "resultado": herramientas.ejecutar(
-            peticion.nombre, peticion.argumentos, peticion_http.state.usuario.id
-        )
-    }
+    resultado, adjuntos = herramientas.ejecutar_completo(
+        peticion.nombre, peticion.argumentos, peticion_http.state.usuario.id
+    )
+    return {"resultado": resultado, "adjuntos": adjuntos}
 
 
 class FotoSubida(BaseModel):
@@ -456,7 +463,10 @@ def agregar_a_conversacion(peticion: Request, mensaje: MensajeSuelto):
     """Guarda un turno de voz para que texto y voz compartan historial."""
     id_usuario = peticion.state.usuario.id
     mensajes = memoria.cargar_conversacion(id_usuario)
-    mensajes.append({"role": mensaje.role, "content": mensaje.content})
+    turno = {"role": mensaje.role, "content": mensaje.content}
+    if mensaje.adjuntos:
+        turno["adjuntos"] = mensaje.adjuntos
+    mensajes.append(turno)
     memoria.guardar_conversacion(id_usuario, mensajes)
     return {"ok": True}
 

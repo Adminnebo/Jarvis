@@ -370,7 +370,10 @@ export function crearSesionDeVoz(eventos) {
         body: JSON.stringify({ nombre: item.name, argumentos: item.arguments || "{}" }),
         signal: corte,
       });
-      resultado = (await respuesta.json()).resultado;
+      const datos = await respuesta.json();
+      resultado = datos.resultado;
+      // Lo que la herramienta manda al chat va a la pantalla, no al modelo.
+      if (datos.adjuntos?.length) avisar("onAdjuntos", datos.adjuntos);
     } catch (error) {
       resultado = error.name === "TimeoutError"
         ? `La consulta ${item.name} tardo demasiado. Dilo y ofrece reintentar.`

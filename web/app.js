@@ -64,6 +64,46 @@ function alFinal() {
   conversacion.scrollTop = conversacion.scrollHeight;
 }
 
+/* Imagenes y fichas tecnicas que manda Jarvis. Cada una abre el archivo
+   original en otra pestana: la miniatura es para reconocerla, no para leerla. */
+function burbujaDeAdjuntos(adjuntos) {
+  const nodo = burbuja("jarvis adjuntos");
+  for (const adjunto of adjuntos) {
+    if (!/^https?:\/\//.test(adjunto.url || "")) continue;
+
+    const enlace = document.createElement("a");
+    enlace.href = adjunto.url;
+    enlace.target = "_blank";
+    enlace.rel = "noopener";
+    enlace.title = adjunto.archivo || adjunto.titulo;
+
+    if (adjunto.tipo === "imagen") {
+      enlace.className = "adjunto-imagen";
+      const imagen = document.createElement("img");
+      imagen.src = adjunto.url;
+      imagen.alt = adjunto.titulo;
+      imagen.loading = "lazy";
+      imagen.onload = alFinal;
+      const pie = document.createElement("span");
+      pie.textContent = adjunto.titulo;
+      enlace.append(imagen, pie);
+    } else {
+      enlace.className = "adjunto-ficha";
+      enlace.textContent = `Ficha técnica · ${adjunto.titulo}`;
+    }
+    nodo.appendChild(enlace);
+  }
+  alFinal();
+  return nodo;
+}
+
+// Lo que queda en el historial como texto, para el modelo y por si falla la
+// miniatura: que se mando, no las URLs.
+function resumenDeAdjuntos(adjuntos) {
+  const nombres = { imagen: "imagen", ficha: "ficha técnica" };
+  return `[Enviado al chat: ${adjuntos.map((a) => `${nombres[a.tipo] || a.tipo} de ${a.titulo}`).join(", ")}]`;
+}
+
 // --------------------------------------------------------------------------
 // Voz de salida
 // --------------------------------------------------------------------------
@@ -344,6 +384,8 @@ async function enviar(mensaje) {
           }
         } else if (evento.tipo === "herramienta") {
           estadoVisual("pensando", `Consultando ${evento.dato}...`);
+        } else if (evento.tipo === "adjuntos") {
+          burbujaDeAdjuntos(evento.dato);
         } else if (evento.tipo === "aviso") {
           // Algo degradado, pero la respuesta sigue en camino.
           burbuja("error", evento.dato);
@@ -382,12 +424,12 @@ const medidor = $("medidor");
 const barraMedidor = $("medidor-barra");
 const umbralMedidor = $("medidor-umbral");
 
-async function guardarTurno(role, content) {
+async function guardarTurno(role, content, adjuntos = null) {
   try {
     await fetch("/api/conversacion/agregar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, content }),
+      body: JSON.stringify(adjuntos ? { role, content, adjuntos } : { role, content }),
     });
   } catch {
     // Que falle el guardado no debe cortar la conversacion.
@@ -443,6 +485,11 @@ async function abrirVozEnVivo() {
     },
 
     onHerramienta: (nombre) => estadoVisual("pensando", `Consultando ${nombre}...`),
+
+    onAdjuntos: (adjuntos) => {
+      burbujaDeAdjuntos(adjuntos);
+      guardarTurno("assistant", resumenDeAdjuntos(adjuntos), adjuntos);
+    },
 
     onError: (mensaje) => burbuja("error", mensaje),
 
@@ -737,6 +784,14 @@ async function cargarEstado() {
   }
 
   for (const mensaje of estado?.historial || []) {
+    if (mensaje.adjuntos?.length) {
+      // En voz el mensaje es solo el resumen; en texto trae la respuesta.
+      if (!mensaje.content.startsWith("[Enviado al chat")) {
+        burbuja("jarvis", mensaje.content);
+      }
+      burbujaDeAdjuntos(mensaje.adjuntos);
+      continue;
+    }
     burbuja(mensaje.role === "user" ? "usuario" : "jarvis", mensaje.content || "");
   }
 

@@ -13,6 +13,7 @@ from openai import OpenAI
 
 from . import (
     acceso,
+    archivos,
     conectores,
     consultas,
     consumo,
@@ -153,6 +154,19 @@ Como consultar estas fuentes:
 - Nunca leas en voz alta el nombre tecnico de una columna. Di "cuesta 164.44",
   no "el P1 es 164.44"."""
 
+    if archivos.configurado():
+        texto += f"""
+
+Imagenes y fichas tecnicas de productos:
+- Si {nombre_usuario} pide la foto, imagen o ficha tecnica de un producto,
+  consigue su Codigo en el catalogo y llama a `mandar_archivos_producto`. Llega
+  al chat.
+- Manda solo lo que pidio y solo de ese producto. Si el archivo no existe, di
+  que ese producto no tiene imagen o ficha; nunca mandes la de uno parecido.
+- No ofrezcas archivos por tu cuenta.
+- Si la busqueda trae varios productos y no queda claro cual es, pregunta antes
+  de mandar."""
+
     texto += (
         f"\n\nEsto es lo que ya sabes de {nombre_usuario}:\n"
         f"{memoria.resumen_para_prompt(usuario.id)}"
@@ -190,6 +204,7 @@ def responder(mensajes: list[dict], usuario: acceso.Usuario, extra: str = "") ->
     Eventos posibles:
       {"tipo": "texto",       "dato": fragmento de texto}
       {"tipo": "herramienta", "dato": nombre de la herramienta en curso}
+      {"tipo": "adjuntos",    "dato": archivos para mostrar en el chat}
       {"tipo": "error",       "dato": mensaje para mostrar}
       {"tipo": "fin",         "dato": historial completo actualizado}
     """
@@ -211,6 +226,9 @@ def responder(mensajes: list[dict], usuario: acceso.Usuario, extra: str = "") ->
     ]
 
     con_conectores = bool(conectores.activos())
+    # Los archivos que mandaron las herramientas en este turno. Quedan en el
+    # mensaje de Jarvis para que la pantalla los vuelva a mostrar al recargar.
+    adjuntos_del_turno: list[dict] = []
 
     for _ in range(MAX_RONDAS_DE_HERRAMIENTAS):
         texto = ""
@@ -270,7 +288,10 @@ def responder(mensajes: list[dict], usuario: acceso.Usuario, extra: str = "") ->
         # Sin funciones locales pendientes, la respuesta ya esta completa.
         # Las llamadas MCP las resuelve OpenAI antes de llegar aqui.
         if not llamadas:
-            mensajes.append({"role": "assistant", "content": texto})
+            respuesta = {"role": "assistant", "content": texto}
+            if adjuntos_del_turno:
+                respuesta["adjuntos"] = adjuntos_del_turno
+            mensajes.append(respuesta)
             memoria.guardar_conversacion(usuario.id, mensajes)
             yield {"tipo": "fin", "dato": mensajes}
             return
@@ -278,9 +299,12 @@ def responder(mensajes: list[dict], usuario: acceso.Usuario, extra: str = "") ->
         entrada.extend(para_reenviar(item) for item in salida)
 
         for llamada in llamadas:
-            resultado = herramientas.ejecutar(
+            resultado, adjuntos = herramientas.ejecutar_completo(
                 llamada.name, llamada.arguments, usuario.id
             )
+            if adjuntos:
+                adjuntos_del_turno.extend(adjuntos)
+                yield {"tipo": "adjuntos", "dato": adjuntos}
             entrada.append(
                 {
                     "type": "function_call_output",

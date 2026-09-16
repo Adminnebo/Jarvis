@@ -249,6 +249,34 @@ Si cambias la estructura de la base y Jarvis sigue viendo la vieja:
 curl -X POST http://127.0.0.1:8123/api/esquema/refrescar
 ```
 
+## Imágenes y fichas técnicas
+
+Si le pides la foto o la ficha técnica de un producto, Jarvis la busca y la
+manda al chat: la imagen con su miniatura y la ficha como tarjeta que abre el
+PDF. Solo manda lo que pediste; si el producto no tiene ese archivo lo dice, y
+nunca manda el de uno parecido.
+
+Los archivos viven en Supabase Storage y **se llaman como el `Codigo` del
+catálogo** (`305400.png`, `305400.pdf`). No hay tabla que los una: al arrancar
+Jarvis lista los buckets y arma un índice código → archivo, que guarda en
+`data/archivos.json` y renueva cada 6 horas. Si piden un código que no está,
+vuelve a listar en segundo plano (como mucho cada 10 minutos), por si se subió
+hace poco. Las copias sueltas (`0774 - copia.png`, `11815 (2).png`) cuentan
+como el mismo código, y gana el original.
+
+| Variable | |
+|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | Solo para listar los buckets. No sale del servidor |
+| `JARVIS_BUCKET_IMAGENES` | p. ej. `Lucas_imagenes` |
+| `JARVIS_BUCKET_FICHAS` | p. ej. `Lucas_fichas_tecnicas` |
+
+Si el bucket es público se usa la URL pública; si es privado, un enlace firmado
+que dura una hora.
+
+Funciona en texto, en voz en vivo y queda en el historial. `/api/herramienta`
+devuelve los archivos en `adjuntos`, así que el puente de los lentes también los
+recibe cuando se piden por voz.
+
 ## Fuentes de datos
 
 El botón **Fuentes** abre el panel para conectar bases de datos sin tocar

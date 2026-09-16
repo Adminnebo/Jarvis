@@ -7,6 +7,7 @@ firma y del docstring, asi que no hay que mantener JSON a mano.
 
 import inspect
 import json
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable
 
@@ -17,8 +18,26 @@ from . import memoria
 REGISTRO: dict[str, dict] = {}
 
 
-def herramienta(descripcion: str, **descripciones_de_parametros: str):
-    """Registra una funcion como herramienta disponible para el modelo."""
+@dataclass
+class ConAdjuntos:
+    """Resultado de una herramienta que, ademas del texto para el modelo, trae
+    archivos para mostrar en el chat (imagenes, fichas en PDF).
+
+    El modelo solo recibe `texto`: los adjuntos van a la pantalla por su lado,
+    y asi una URL larga no termina leida en voz alta.
+    """
+
+    texto: str
+    adjuntos: list[dict] = field(default_factory=list)
+
+
+def herramienta(descripcion: str, disponible: Callable[[], bool] | None = None,
+                **descripciones_de_parametros: str):
+    """Registra una funcion como herramienta disponible para el modelo.
+
+    `disponible` la esconde del catalogo mientras devuelva False: una
+    herramienta sin configurar solo le daria al modelo algo que falla.
+    """
 
     def decorador(funcion: Callable):
         firma = inspect.signature(funcion)
@@ -41,6 +60,7 @@ def herramienta(descripcion: str, **descripciones_de_parametros: str):
         REGISTRO[funcion.__name__] = {
             "funcion": funcion,
             "necesita_usuario": "usuario" in firma.parameters,
+            "disponible": disponible,
             "esquema": {
                 "type": "function",
                 "name": funcion.__name__,
@@ -58,29 +78,41 @@ def herramienta(descripcion: str, **descripciones_de_parametros: str):
 
 
 def esquemas() -> list[dict]:
-    return [entrada["esquema"] for entrada in REGISTRO.values()]
+    return [
+        entrada["esquema"]
+        for entrada in REGISTRO.values()
+        if entrada["disponible"] is None or entrada["disponible"]()
+    ]
 
 
-def ejecutar(nombre: str, argumentos_json: str, usuario: str) -> str:
-    """Corre una herramienta y devuelve siempre texto, incluso si falla.
+def ejecutar_completo(nombre: str, argumentos_json: str, usuario: str) -> tuple[str, list[dict]]:
+    """Corre una herramienta: el texto para el modelo y los adjuntos, si trae.
 
-    Un error aqui no debe tumbar la conversacion: se lo devolvemos al modelo
-    como resultado para que lo explique o intente otra cosa.
+    Devuelve siempre texto, incluso si falla. Un error aqui no debe tumbar la
+    conversacion: se lo devolvemos al modelo para que lo explique o intente
+    otra cosa.
     """
     entrada = REGISTRO.get(nombre)
     if entrada is None:
-        return f"Error: no existe la herramienta '{nombre}'."
+        return f"Error: no existe la herramienta '{nombre}'.", []
 
     try:
         argumentos = json.loads(argumentos_json or "{}")
         if entrada["necesita_usuario"]:
             argumentos["usuario"] = usuario
         resultado = entrada["funcion"](**argumentos)
+        if isinstance(resultado, ConAdjuntos):
+            return resultado.texto, resultado.adjuntos
         if isinstance(resultado, str):
-            return resultado
-        return json.dumps(resultado, ensure_ascii=False)
+            return resultado, []
+        return json.dumps(resultado, ensure_ascii=False), []
     except Exception as error:  # noqa: BLE001 - se lo pasamos al modelo a proposito
-        return f"Error al ejecutar {nombre}: {error}"
+        return f"Error al ejecutar {nombre}: {error}", []
+
+
+def ejecutar(nombre: str, argumentos_json: str, usuario: str) -> str:
+    """Como ejecutar_completo, para quien solo necesita el texto."""
+    return ejecutar_completo(nombre, argumentos_json, usuario)[0]
 
 
 # --------------------------------------------------------------------------
@@ -227,6 +259,78 @@ def ver_esquema_fuente(fuente: str) -> str:
     if not datos["tablas"]:
         return "Esa fuente no tiene tablas visibles."
     return "\n".join(f"{t['tabla']}: {t['columnas']}" for t in datos["tablas"])[:6000]
+
+
+# --------------------------------------------------------------------------
+# Imagenes y fichas tecnicas
+# --------------------------------------------------------------------------
+
+MAX_CODIGOS = 5
+NOMBRE_DE_TIPO = {"imagen": "imagen", "ficha": "ficha tecnica"}
+
+
+def _archivos_disponibles() -> bool:
+    from . import archivos
+
+    return archivos.configurado()
+
+
+@herramienta(
+    "Manda al chat la imagen y/o la ficha tecnica en PDF de productos del "
+    "catalogo, para que el usuario las vea o las abra. Usala SOLO cuando te "
+    "pidan ver, mandar, pasar o ensenar la foto, imagen o ficha tecnica de un "
+    "producto. Necesita el Codigo exacto del catalogo: si no lo tienes, "
+    "buscalo antes con buscar_en_fuente. Si un producto no tiene ese archivo, "
+    "dilo tal cual y no mandes el de un producto parecido.",
+    disponible=_archivos_disponibles,
+    codigos="Codigo o codigos del catalogo separados por coma, maximo 5. Ej: '305400, 305388'",
+    tipo="'imagen', 'ficha' o 'ambas'. Manda solo lo que te pidieron; 'ambas' si no lo dijeron",
+    nombres="Opcional: la descripcion de cada producto, en el mismo orden y separadas por '|'",
+)
+def mandar_archivos_producto(codigos: str, tipo: str = "ambas", nombres: str = ""):
+    from . import archivos
+
+    if not archivos.configurado():
+        return "Las imagenes y fichas tecnicas no estan configuradas en este servidor."
+
+    tipos = {"imagen": ["imagen"], "ficha": ["ficha"], "ambas": ["imagen", "ficha"]}.get(
+        (tipo or "ambas").strip().lower()
+    )
+    if tipos is None:
+        return "Error: 'tipo' tiene que ser 'imagen', 'ficha' o 'ambas'."
+
+    lista: list[str] = []
+    for crudo in (codigos or "").split(","):
+        codigo = archivos.normalizar(crudo)
+        if codigo and codigo not in lista:
+            lista.append(codigo)
+    if not lista:
+        return "Error: falta el Codigo del producto. Buscalo antes con buscar_en_fuente."
+    if len(lista) > MAX_CODIGOS:
+        return f"Error: son {len(lista)} productos; manda como mucho {MAX_CODIGOS} a la vez."
+
+    titulos = [n.strip() for n in (nombres or "").split("|")]
+    titulo_de = {c: (titulos[i] if i < len(titulos) and titulos[i] else c)
+                 for i, c in enumerate(lista)}
+
+    encontrados, faltan = archivos.buscar(lista, tipos)
+    for adjunto in encontrados:
+        adjunto["titulo"] = titulo_de[adjunto["codigo"]]
+
+    partes = []
+    if encontrados:
+        enviados = ", ".join(
+            f"{NOMBRE_DE_TIPO[a['tipo']]} de {a['titulo']}" for a in encontrados
+        )
+        partes.append(f"Enviado al chat: {enviados}.")
+    if faltan:
+        no_hay = ", ".join(f"{NOMBRE_DE_TIPO[t]} de {titulo_de[c]}" for c, t in faltan)
+        partes.append(
+            f"No existe {no_hay}: dilo asi y no ofrezcas el archivo de otro producto."
+        )
+    partes.append("No leas codigos ni enlaces en voz alta.")
+
+    return ConAdjuntos(" ".join(partes), encontrados)
 
 
 # --------------------------------------------------------------------------
