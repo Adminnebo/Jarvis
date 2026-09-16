@@ -15,13 +15,14 @@ from . import (
     acceso,
     archivos,
     conectores,
-    cotizaciones,
     consultas,
     consumo,
+    cotizaciones,
     esquema,
     fuentes,
     herramientas,
     memoria,
+    whatsapp,
 )
 
 MAX_RONDAS_DE_HERRAMIENTAS = 6
@@ -181,6 +182,18 @@ Cotizaciones (de Jarvis, numeradas JV-, aparte de las de JH):
   emites. Llama a `emitir_cotizacion` SOLO despues de un si claro. Si pide
   cambios, vuelve a preparar.
 - Si el cliente no aparece, pregunta si va de contado."""
+
+    if whatsapp.configurado():
+        texto += f"""
+
+Enviar por WhatsApp:
+- Si {nombre_usuario} pide mandar a un numero la foto o ficha de un producto, o una
+  cotizacion JV, llama a `preparar_envio_whatsapp`. Si falta el numero,
+  preguntalo.
+- Lee el numero cifra por cifra y lo que se va a mandar, y pregunta si lo
+  envias. Llama a `confirmar_envio_whatsapp` SOLO despues de un si claro. Si
+  corrige el numero, vuelve a preparar.
+- Manda solo lo que pidio. Si un archivo no existe, dilo; no mandes otro."""
 
     texto += (
         f"\n\nEsto es lo que ya sabes de {nombre_usuario}:\n"

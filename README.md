@@ -326,6 +326,32 @@ insert into storage.buckets (id, name, public)
 values ('jarvis_cotizaciones', 'jarvis_cotizaciones', false);
 ```
 
+## Enviar por WhatsApp
+
+Jarvis puede mandar la foto o la ficha técnica de un producto, o una cotización
+JV, a un número de WhatsApp: "mándale la cotización JV-00002 al 809…".
+
+Va por Evolution API (`/message/sendMedia`) desde el número conectado a la
+instancia de `EVOLUTION_INSTANCIA`. Siempre en dos pasos: `preparar_envio_whatsapp`
+arma el envío y Jarvis lee el número y lo que va; `confirmar_envio_whatsapp` lo
+manda solo tras un "sí". Un mensaje enviado no se deshace, y por voz un número
+mal oído le llegaría a otra persona.
+
+- Los números de RD de diez dígitos (809, 829, 849) reciben el 1 delante; los
+  demás tienen que venir con código de país.
+- Tope de 20 envíos por hora: Evolution maneja el número como WhatsApp Web, y
+  WhatsApp bloquea a quien manda mucho a gente que no le escribió.
+- Las cotizaciones salen con un enlace firmado de 10 minutos que Evolution
+  descarga en el momento; el bucket sigue privado.
+- Cada envío queda en `data/envios_whatsapp.jsonl`: quién, a qué número, qué y
+  si salió.
+
+| Variable | |
+|---|---|
+| `EVOLUTION_URL` | URL del servidor de Evolution |
+| `EVOLUTION_API_KEY` | Su API key |
+| `EVOLUTION_INSTANCIA` | La instancia (el número) que envía |
+
 ## Fuentes de datos
 
 El botón **Fuentes** abre el panel para conectar bases de datos sin tocar

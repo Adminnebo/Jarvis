@@ -392,6 +392,53 @@ def emitir_cotizacion(usuario: str = ""):
 
 
 # --------------------------------------------------------------------------
+# WhatsApp
+# --------------------------------------------------------------------------
+
+def _whatsapp_disponible() -> bool:
+    from . import whatsapp
+
+    return whatsapp.configurado()
+
+
+@herramienta(
+    "Prepara el envio por WhatsApp (no lo manda) de la imagen o ficha tecnica "
+    "de productos y/o de una cotizacion de Jarvis a un numero. Devuelve el "
+    "resumen para confirmarlo. Usala solo cuando pidan mandar algo a un numero "
+    "de WhatsApp. Los productos van por su Codigo del catalogo.",
+    disponible=_whatsapp_disponible,
+    numero="El numero de WhatsApp tal como lo dijo el usuario",
+    codigos="Opcional: codigos de productos separados por coma",
+    tipo="Para productos: 'imagen', 'ficha' o 'ambas'. Solo lo que pidieron",
+    nombres="Opcional: descripcion de cada producto, en el mismo orden y separadas por '|'",
+    cotizacion="Opcional: numero de la cotizacion de Jarvis, por ejemplo JV-00002",
+)
+def preparar_envio_whatsapp(numero: str, codigos: str = "", tipo: str = "ambas",
+                            nombres: str = "", cotizacion: str = "", usuario: str = "") -> str:
+    from . import whatsapp
+
+    try:
+        return whatsapp.preparar(usuario, numero, codigos, tipo, nombres, cotizacion)
+    except whatsapp.ErrorEnvio as error:
+        return str(error)
+
+
+@herramienta(
+    "Manda por WhatsApp el envio preparado con preparar_envio_whatsapp. Usala "
+    "SOLO despues de que el usuario confirme el numero y lo que se manda con "
+    "un si claro.",
+    disponible=_whatsapp_disponible,
+)
+def confirmar_envio_whatsapp(usuario: str = "") -> str:
+    from . import cotizaciones, whatsapp
+
+    try:
+        return whatsapp.confirmar(usuario, cotizaciones.nombre_de(usuario))
+    except whatsapp.ErrorEnvio as error:
+        return str(error)
+
+
+# --------------------------------------------------------------------------
 # Servicios
 # --------------------------------------------------------------------------
 

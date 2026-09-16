@@ -465,6 +465,24 @@ def emitir(id_usuario: str, nombre_usuario: str) -> dict:
     }
 
 
+def buscar_emitida(texto_numero: str) -> dict | None:
+    """La cotizacion ya emitida con ese numero, o None."""
+    if not NUMERO.match(texto_numero):
+        return None
+    respuesta = httpx.get(
+        f"{_supabase()}/rest/v1/jarvis_cotizaciones",
+        headers=_cabeceras(),
+        params={"numero": f"eq.{int(texto_numero[len(PREFIJO):])}", "estado": "eq.emitida",
+                "select": "numero,pdf_ruta,cliente->>nombre"},
+        timeout=20,
+    )
+    respuesta.raise_for_status()
+    filas = respuesta.json()
+    if not filas or not filas[0].get("pdf_ruta"):
+        return None
+    return {"pdf_ruta": filas[0]["pdf_ruta"], "cliente": filas[0].get("nombre") or ""}
+
+
 # Como toLocaleDateString('en-GB') en n8n: septiembre es "Sept".
 _MESES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec")
 
