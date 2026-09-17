@@ -1,4 +1,4 @@
-from backend import consumo
+from backend import consumo, cuentas
 
 # Uso real de gpt-realtime-2.1 con una imagen adjunta (2026-09-14).
 USO_CON_IMAGEN = {
@@ -76,3 +76,35 @@ def test_los_registros_de_antes_de_las_imagenes_siguen_sumando():
 
     assert fila["entrada_imagen"] == 0
     assert fila["tokens"] == 10
+
+
+def test_registrar_con_usuario_de_organizacion_guarda_a_quien_cobrarle():
+    org = cuentas.crear_organizacion("Acme", "Lucas", "lucas@acme.com", "una-clave-larga")
+    usuario = cuentas.entrar("lucas@acme.com", "una-clave-larga")
+
+    registro = consumo.registrar("texto", "gpt-5.6-terra", {}, usuario=usuario, dispositivo="reloj")
+
+    assert registro["usuario_id"] == usuario.id
+    assert registro["organizacion_id"] == org.organizacion_id
+    assert registro["dispositivo"] == "reloj"
+
+
+def test_registrar_sin_usuario_no_rompe_nada():
+    registro = consumo.registrar("texto", "gpt-5.6-terra", {})
+    assert registro["usuario_id"] is None
+    assert registro["organizacion_id"] is None
+    assert registro["dispositivo"] == "navegador"
+
+
+def test_agrupar_por_organizacion_separa_el_gasto():
+    org = cuentas.crear_organizacion("Acme", "Lucas", "lucas@acme.com", "una-clave-larga")
+    usuario = cuentas.entrar("lucas@acme.com", "una-clave-larga")
+
+    registros = [
+        consumo.registrar("texto", "gpt-5.6-terra", USO_CON_IMAGEN, usuario=usuario),
+        consumo.registrar("texto", "gpt-5.6-terra", USO_CON_IMAGEN),
+    ]
+
+    filas = {f["organizacion"]: f for f in consumo.agrupar_por_organizacion(registros)}
+    assert filas["Acme"]["consultas"] == 1
+    assert filas["(sin organizacion)"]["consultas"] == 1

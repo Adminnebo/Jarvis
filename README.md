@@ -76,6 +76,50 @@ Necesita `SUPABASE_ANON_KEY` y `SUPABASE_DB_URL`. Si falta alguna, este acceso
 queda apagado —se avisa al arrancar— y las contraseñas por variable siguen
 funcionando.
 
+### Organizaciones
+
+Además de las contraseñas por variable, cualquiera puede crear una cuenta
+propia en `/registro`: una organización con correo y contraseña. Quien la crea
+la administra (puede sumar gente desde **Organización** en la barra), pero una
+cuenta de organización nunca toca Fuentes, Esquema o Consumo —eso sigue siendo
+de quien tiene `JARVIS_PASSWORD`—. Vive en `data/jarvis.db` (SQLite, sin
+dependencias nuevas), no en variables de entorno.
+
+Sirve para atribuir el consumo: cada registro guarda qué organización lo
+generó, así el tablero de **Consumo** muestra cuánto gastó cada una.
+
+### Cuánto consumió cada una
+
+El tablero de **Consumo** tiene una tabla por organización: consultas, costo
+real, markup, lo cobrado en el periodo y lo consumido en total. La
+organización ve lo suyo en **Organización**.
+
+`markup` es lo que se le cobra sobre el costo real: `1.0` es al costo, `2.5`
+es dos veces y media. Por eso el tablero muestra **Costo** y **Cobrado** como
+dos columnas distintas. Se cambia por organización, en la columna `markup` de
+la tabla `organizaciones`.
+
+**No hay corte por consumo**: esto mide y deja el número listo para facturar,
+pero nadie se queda sin servicio. Quien entra por `JARVIS_PASSWORD` o desde un
+panel no tiene organización, así que no se le mide nada: es de la casa, no un
+cliente.
+
+**Lo que esto no resuelve**: el consumo de la voz en vivo lo reporta el
+navegador (`POST /api/consumo/voz`), no el servidor. Sirve para medir, pero
+alguien que modifique su cliente podría no reportarlo. Para cobrar voz sin
+confiar en el cliente habría que reconciliar contra la API de uso de OpenAI,
+o cobrar por minuto de sesión, que sí lo mide el servidor. El modo texto no
+tiene ese problema: el costo se calcula acá.
+
+### Vincular un reloj
+
+Desde **Dispositivos**, cualquiera ya logueado —por contraseña, por panel o
+por una cuenta de organización— genera un código de 6 caracteres. Se escribe
+en el reloj, vale 10 minutos y sirve una sola vez: a cambio, el reloj recibe
+un token propio que manda como `Authorization: Bearer <token>` en cada pedido,
+sin volver a pedir nada. Cada reloj queda con su propia identidad —su
+conversación, su memoria, su gasto— en vez de compartir la sesión del admin.
+
 ### Variables a configurar
 
 | Variable | |

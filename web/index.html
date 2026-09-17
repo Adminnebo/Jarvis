@@ -23,6 +23,8 @@
       <span class="meta" id="meta"></span>
       <button id="btn-consumo" class="boton-texto">Consumo</button>
       <button id="btn-fuentes" class="boton-texto">Fuentes</button>
+      <button id="btn-organizacion" class="boton-texto" hidden>Organización</button>
+      <button id="btn-dispositivos" class="boton-texto">Dispositivos</button>
       <button id="btn-memoria" class="boton-texto">Memoria</button>
       <button id="btn-reiniciar" class="boton-texto">Reiniciar</button>
     </div>
@@ -174,7 +176,62 @@
 
     <div id="resumen-consumo"></div>
     <div id="tabla-consumo"></div>
+    <div id="organizaciones-consumo"></div>
     <div id="detalle-consumo"></div>
+  </aside>
+
+  <aside class="panel panel-ancho" id="panel-dispositivos" hidden>
+    <div class="panel-barra">
+      <h2>Dispositivos</h2>
+      <button id="btn-cerrar-dispositivos" class="boton-cerrar"
+              title="Cerrar (Esc)" aria-label="Cerrar">&times;</button>
+    </div>
+
+    <p class="ayuda-tipo">
+      Vinculá tu reloj: generá un código acá y escribilo en el reloj. Vale 10
+      minutos y sirve una sola vez.
+    </p>
+
+    <div id="lista-dispositivos"></div>
+
+    <button id="btn-vincular-reloj" class="boton-secundario">Vincular reloj nuevo</button>
+
+    <div id="codigo-vinculo" class="codigo-vinculo" hidden>
+      <div id="codigo-vinculo-texto" class="codigo-vinculo-texto"></div>
+      <p id="codigo-vinculo-vence" class="ayuda-tipo"></p>
+    </div>
+  </aside>
+
+  <aside class="panel panel-ancho" id="panel-organizacion" hidden>
+    <div class="panel-barra">
+      <h2 id="titulo-organizacion">Organización</h2>
+      <button id="btn-cerrar-organizacion" class="boton-cerrar"
+              title="Cerrar (Esc)" aria-label="Cerrar">&times;</button>
+    </div>
+
+    <div id="cuenta-organizacion" hidden></div>
+
+    <div id="lista-organizacion"></div>
+
+    <form id="form-miembro" class="formulario">
+      <h3>Agregar a alguien</h3>
+      <div class="campo">
+        <label for="nombre-miembro">Nombre *</label>
+        <input id="nombre-miembro" type="text" required>
+      </div>
+      <div class="campo">
+        <label for="email-miembro">Correo *</label>
+        <input id="email-miembro" type="email" required>
+      </div>
+      <div class="campo">
+        <label for="password-miembro">Contraseña *</label>
+        <input id="password-miembro" type="password" required minlength="8">
+      </div>
+      <div class="formulario-acciones">
+        <button type="submit" class="boton-primario">Agregar</button>
+      </div>
+      <p id="resultado-miembro" class="resultado-prueba"></p>
+    </form>
   </aside>
 
   <div class="modal" id="consola-sql" hidden>

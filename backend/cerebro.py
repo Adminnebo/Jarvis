@@ -226,7 +226,10 @@ def es_fallo_de_conector(error: Exception) -> bool:
     return "MCP server" in str(error)
 
 
-def responder(mensajes: list[dict], usuario: acceso.Usuario, extra: str = "") -> Iterator[dict]:
+def responder(
+    mensajes: list[dict], usuario: acceso.Usuario, extra: str = "",
+    dispositivo: str = "navegador",
+) -> Iterator[dict]:
     """Genera la respuesta como un flujo de eventos.
 
     Eventos posibles:
@@ -290,7 +293,9 @@ def responder(mensajes: list[dict], usuario: acceso.Usuario, extra: str = "") ->
 
                 elif tipo == "response.completed":
                     salida = list(evento.response.output)
-                    anotar_consumo(modelo, getattr(evento.response, "usage", None))
+                    anotar_consumo(
+                        modelo, getattr(evento.response, "usage", None), usuario, dispositivo
+                    )
 
                 elif tipo == "error":
                     yield {"tipo": "error", "dato": str(getattr(evento, "message", evento))}
@@ -347,7 +352,10 @@ def responder(mensajes: list[dict], usuario: acceso.Usuario, extra: str = "") ->
     }
 
 
-def leer_foto(url_de_datos: str, motivo: str, usuario: acceso.Usuario) -> str:
+def leer_foto(
+    url_de_datos: str, motivo: str, usuario: acceso.Usuario,
+    dispositivo: str = "navegador",
+) -> str:
     """Lo que hay en una foto, en una o dos frases para decir en voz alta.
 
     Es para la foto que sube la app sin sesion de voz: no hay un modelo
@@ -376,18 +384,21 @@ def leer_foto(url_de_datos: str, motivo: str, usuario: acceso.Usuario) -> str:
             ],
         }],
     )
-    anotar_consumo(modelo, getattr(respuesta, "usage", None))
+    anotar_consumo(modelo, getattr(respuesta, "usage", None), usuario, dispositivo)
     # El modelo a veces marca en negrita lo que lee, y el asterisco se oye.
     return (respuesta.output_text or "").replace("*", "").strip()
 
 
-def anotar_consumo(modelo: str, uso) -> None:
+def anotar_consumo(
+    modelo: str, uso, usuario: acceso.Usuario | None = None,
+    dispositivo: str = "navegador",
+) -> None:
     """Guarda el gasto del turno. Nunca debe tumbar la respuesta."""
     if uso is None:
         return
     try:
         datos = uso.model_dump() if hasattr(uso, "model_dump") else dict(uso)
-        consumo.registrar("texto", modelo, datos)
+        consumo.registrar("texto", modelo, datos, usuario=usuario, dispositivo=dispositivo)
     except Exception:  # noqa: BLE001 - contabilizar no es critico
         pass
 

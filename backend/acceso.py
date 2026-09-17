@@ -28,6 +28,9 @@ class Usuario:
     id: str
     nombre: str
     rol: str        # "admin" | "usuario"
+    # Solo lo llevan las cuentas de organizacion (cuentas.py). None para las
+    # de JARVIS_PASSWORD_<NOMBRE> y las de los paneles de Supabase.
+    organizacion_id: str | None = None
 
 
 def _catalogo() -> list[tuple[Usuario, str]]:
@@ -142,8 +145,20 @@ def usuario_de_token(valor: str | None) -> Usuario | None:
         # reciba no le sirve para pasar por ningun control.
         return Usuario(id_usuario, id_usuario, "sin-confirmar")
 
+    from . import cuentas
+
+    if id_usuario.startswith(cuentas.PREFIJO):
+        # Vive en jarvis.db, no en el entorno: si borraron la cuenta, esto
+        # devuelve None y el token deja de valer, igual que con una variable.
+        return cuentas.usuario_de_id(id_usuario[len(cuentas.PREFIJO):])
+
     # Que la firma sea buena no basta: si le quitaron su variable, ese token
     # ya no vale.
+    return usuario_de_id(id_usuario)
+
+
+def usuario_de_id(id_usuario: str) -> Usuario | None:
+    """Busca en el catalogo de variables de entorno. No sirve para 'sb-' ni 'u-'."""
     return next((u for u in usuarios() if u.id == id_usuario), None)
 
 
@@ -252,6 +267,52 @@ def pagina_login(error: str = "") -> str:
     <button type="submit">Entrar</button>
   </form>
   {aviso}
+  <p style="margin-top:18px;">
+    <a href="/acceso/cuenta">Entrar con tu correo</a> &middot;
+    <a href="/registro">Crear cuenta de organizacion</a>
+  </p>
+</div></body></html>"""
+
+
+def pagina_registro(error: str = "") -> str:
+    aviso = f'<p class="mal">{error}</p>' if error else ""
+    return f"""<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis - Crear cuenta</title><style>{_ESTILO}</style></head><body>
+<div class="caja">
+  <h1>Crear cuenta</h1>
+  <p>Una organizacion nueva, con la primera cuenta que la administra.</p>
+  <form method="post" action="/registro">
+    <input type="text" name="organizacion" placeholder="Nombre de la organizacion"
+           autofocus required>
+    <input type="text" name="nombre" placeholder="Tu nombre" required>
+    <input type="email" name="email" placeholder="Tu correo" required
+           autocomplete="email">
+    <input type="password" name="password" placeholder="Contrasena (minimo 8 caracteres)"
+           required autocomplete="new-password">
+    <button type="submit">Crear</button>
+  </form>
+  {aviso}
+  <p style="margin-top:18px;"><a href="/acceso/cuenta">Ya tengo cuenta</a></p>
+</div></body></html>"""
+
+
+def pagina_entrar_cuenta(error: str = "") -> str:
+    aviso = f'<p class="mal">{error}</p>' if error else ""
+    return f"""<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis - Entrar</title><style>{_ESTILO}</style></head><body>
+<div class="caja">
+  <h1>Entrar</h1>
+  <form method="post" action="/acceso/cuenta">
+    <input type="email" name="email" placeholder="Correo" required
+           autofocus autocomplete="email">
+    <input type="password" name="password" placeholder="Contrasena" required
+           autocomplete="current-password">
+    <button type="submit">Entrar</button>
+  </form>
+  {aviso}
+  <p style="margin-top:18px;"><a href="/registro">Crear una organizacion</a></p>
 </div></body></html>"""
 
 
@@ -324,7 +385,10 @@ def pagina_de_entrada() -> str:
 # Que se puede pedir sin haber entrado
 # --------------------------------------------------------------------------
 
-LIBRES = ("/acceso", "/api/salud", "/api/version", "/entrar", "/acceso/supabase")
+LIBRES = (
+    "/acceso", "/api/salud", "/api/version", "/entrar", "/acceso/supabase",
+    "/registro", "/acceso/cuenta", "/api/dispositivos/vincular",
+)
 
 
 def es_libre(ruta: str) -> bool:
@@ -344,5 +408,8 @@ def exige_admin(ruta: str, metodo: str) -> bool:
     # Solo el tablero de gasto. /api/consumo/voz no entra: lo escribe el
     # navegador de cualquiera durante la sesion de voz.
     if ruta == "/api/consumo" and metodo in ("GET", "DELETE"):
+        return True
+    # Lo que consumio cada organizacion es del negocio, no de cada cliente.
+    if ruta.startswith("/api/organizaciones"):
         return True
     return False

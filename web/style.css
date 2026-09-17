@@ -633,6 +633,23 @@ body {
 .fuente-estado details { margin-top: 4px; }
 .fuente-estado summary { cursor: pointer; color: var(--acento); }
 
+.codigo-vinculo {
+  margin-top: 14px;
+  padding: 18px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  text-align: center;
+  background: rgba(77, 163, 255, 0.06);
+}
+
+.codigo-vinculo-texto {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--acento);
+}
+
 .esquema-ayuda {
   margin: 8px 0 4px;
   font-size: 12px;

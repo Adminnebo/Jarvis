@@ -25,10 +25,13 @@ load_dotenv(RAIZ / ".env", override=True)
 from . import (  # noqa: E402 - despues de load_dotenv a proposito
     acceso,
     archivos,
+    basedatos,
     cerebro,
     conectores,
     consumo,
     cotizaciones,
+    cuentas,
+    dispositivos,
     esquema,
     fotos,
     fuentes,
@@ -46,8 +49,12 @@ app = FastAPI(title="Jarvis")
 
 @app.on_event("startup")
 def al_arrancar():
-    # Antes que nada: en un servidor el disco viene vacio y las fuentes hay
-    # que recrearlas, o no habria acceso a la base de productos.
+    # Antes que nada: crea las tablas de cuentas/dispositivos si no existen.
+    basedatos.crear_tablas()
+    consumo.migrar_jsonl()
+
+    # En un servidor el disco viene vacio y las fuentes hay que recrearlas, o
+    # no habria acceso a la base de productos.
     creadas = fuentes.sembrar_desde_entorno()
     if creadas:
         print(f"  Fuentes recreadas desde JARVIS_FUENTES: {', '.join(creadas)}")
@@ -96,19 +103,29 @@ async def guardia(peticion: Request, siguiente):
     if acceso.obligatorio():
         return HTMLResponse(acceso.pagina_sin_proteger(), status_code=503)
 
-    if acceso.protegido():
+    # Un reloj vinculado manda su propio token por header, sin cookie. Se
+    # revisa antes que la cookie porque un dispositivo no tiene una.
+    dispositivo = "navegador"
+    autorizacion = peticion.headers.get("authorization", "")
+
+    if autorizacion.lower().startswith("bearer "):
+        usuario = dispositivos.usuario_de_token(autorizacion[7:].strip())
+        dispositivo = "reloj"
+    elif acceso.protegido():
         usuario = acceso.usuario_de_token(peticion.cookies.get(acceso.COOKIE))
-        if usuario is None:
-            # A la interfaz le mostramos el formulario; a la API, un 401 limpio.
-            if ruta.startswith("/api/"):
-                return JSONResponse(status_code=401, content={"error": "No autorizado."})
-            return HTMLResponse(acceso.pagina_login(), status_code=401)
     else:
         # En local, sin contrasena, todo se atribuye al usuario por defecto.
         usuario = acceso.por_defecto()
 
+    if usuario is None:
+        # A la interfaz le mostramos el formulario; a la API, un 401 limpio.
+        if ruta.startswith("/api/"):
+            return JSONResponse(status_code=401, content={"error": "No autorizado."})
+        return HTMLResponse(acceso.pagina_login(), status_code=401)
+
     # Quien vino de un panel se revalida contra profiles: si le quitaron el
-    # permiso, su cookie deja de valer sin esperar a que caduque.
+    # permiso, su cookie deja de valer sin esperar a que caduque. A quien no
+    # vino de un panel esto lo deja pasar sin tocarlo.
     usuario = supabase_sesion.revalidar(usuario)
     if usuario is None:
         if ruta.startswith("/api/"):
@@ -122,6 +139,7 @@ async def guardia(peticion: Request, siguiente):
         )
 
     peticion.state.usuario = usuario
+    peticion.state.dispositivo = dispositivo
     return await siguiente(peticion)
 
 
@@ -232,6 +250,70 @@ def entrar_con_supabase(datos: dict):
     return respuesta
 
 
+@app.get("/registro")
+def formulario_de_registro():
+    if acceso.obligatorio():
+        return HTMLResponse(acceso.pagina_sin_proteger(), status_code=503)
+    return HTMLResponse(acceso.pagina_registro())
+
+
+@app.post("/registro")
+async def registro(
+    organizacion: str = Form(""),
+    nombre: str = Form(""),
+    email: str = Form(""),
+    password: str = Form(""),
+):
+    # /registro esta en LIBRES para poder mostrarse antes de tener sesion, asi
+    # que aqui se repite a mano la comprobacion que el middleware le hace a
+    # todo lo demas: un servidor hospedado sin proteger no debe dejar crear
+    # cuentas nuevas.
+    if acceso.obligatorio():
+        return HTMLResponse(acceso.pagina_sin_proteger(), status_code=503)
+
+    try:
+        usuario = cuentas.crear_organizacion(organizacion, nombre, email, password)
+    except cuentas.ErrorDeCuenta as error:
+        return HTMLResponse(acceso.pagina_registro(str(error)), status_code=400)
+
+    respuesta = RedirectResponse("/", status_code=303)
+    respuesta.set_cookie(
+        acceso.COOKIE,
+        acceso.crear_token(usuario),
+        max_age=acceso.DURACION,
+        httponly=True,
+        samesite="lax",
+        secure=rutas.hospedado(),
+    )
+    return respuesta
+
+
+@app.get("/acceso/cuenta")
+def formulario_de_entrar_con_cuenta():
+    return HTMLResponse(acceso.pagina_entrar_cuenta())
+
+
+@app.post("/acceso/cuenta")
+async def entrar_con_cuenta(email: str = Form(""), password: str = Form("")):
+    usuario = cuentas.entrar(email, password)
+    if usuario is None:
+        return HTMLResponse(
+            acceso.pagina_entrar_cuenta("Correo o contrasena incorrectos."),
+            status_code=401,
+        )
+
+    respuesta = RedirectResponse("/", status_code=303)
+    respuesta.set_cookie(
+        acceso.COOKIE,
+        acceso.crear_token(usuario),
+        max_age=acceso.DURACION,
+        httponly=True,
+        samesite="lax",
+        secure=rutas.hospedado(),
+    )
+    return respuesta
+
+
 class PeticionDeChat(BaseModel):
     mensaje: str
     # El cliente puede pedir respuestas cortas para su pantalla. Va aparte del
@@ -259,6 +341,8 @@ def estado(peticion: Request):
         "nombre": os.getenv("JARVIS_NOMBRE", "Jarvis"),
         "usuario": usuario.nombre,
         "rol": usuario.rol,
+        "organizacion": cuentas.nombre_organizacion(usuario.organizacion_id),
+        "es_admin_org": cuentas.es_admin_org(usuario.id),
         "modelo": os.getenv("OPENAI_MODEL", "gpt-5.6-terra"),
         "modelo_voz": os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1-mini"),
         "clave_configurada": bool(clave) and not clave.startswith("sk-pon-tu-clave"),
@@ -292,8 +376,10 @@ def chat(peticion_http: Request, peticion: PeticionDeChat):
         else ""
     )
 
+    dispositivo = peticion_http.state.dispositivo
+
     def flujo():
-        for evento in cerebro.responder(mensajes, usuario, extra):
+        for evento in cerebro.responder(mensajes, usuario, extra, dispositivo):
             yield cerebro.evento_sse(evento)
 
     return StreamingResponse(
@@ -448,7 +534,10 @@ def recibir_foto(peticion: Request, foto: FotoSubida):
     motivo = foto.motivo.strip()[:200]
 
     try:
-        lectura = cerebro.leer_foto(fotos.url_de_datos(foto.mime, datos), motivo, usuario)
+        lectura = cerebro.leer_foto(
+            fotos.url_de_datos(foto.mime, datos), motivo, usuario,
+            peticion.state.dispositivo,
+        )
     except Exception as error:  # noqa: BLE001
         return JSONResponse(status_code=502, content={"error": f"No pude leer la foto: {error}"})
 
@@ -490,20 +579,29 @@ def agregar_a_conversacion(peticion: Request, mensaje: MensajeSuelto):
 
 
 @app.get("/api/consumo")
-def ver_consumo(periodo: str = "7d", modo: str = "todos", modelo: str = "todos"):
+def ver_consumo(
+    periodo: str = "7d", modo: str = "todos", modelo: str = "todos",
+    organizacion: str = "todas",
+):
     """Tokens y dolares, con los filtros del tablero."""
-    return consumo.consultar(periodo=periodo, modo=modo, modelo=modelo)
+    return consumo.consultar(periodo=periodo, modo=modo, modelo=modelo, organizacion=organizacion)
 
 
 @app.post("/api/consumo/voz")
-def anotar_consumo_de_voz(datos: dict):
+def anotar_consumo_de_voz(peticion: Request, datos: dict):
     """Lo manda el navegador: en voz el uso llega por el canal de datos."""
     modelo = datos.get("modelo") or os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1")
 
     if datos.get("segundos_sesion"):
-        return consumo.registrar_sesion(modelo, float(datos["segundos_sesion"]))
+        return consumo.registrar_sesion(
+            modelo, float(datos["segundos_sesion"]),
+            usuario=peticion.state.usuario, dispositivo=peticion.state.dispositivo,
+        )
 
-    return consumo.registrar("voz", modelo, datos.get("uso") or {})
+    return consumo.registrar(
+        "voz", modelo, datos.get("uso") or {},
+        usuario=peticion.state.usuario, dispositivo=peticion.state.dispositivo,
+    )
 
 
 @app.delete("/api/consumo")
@@ -526,6 +624,78 @@ def borrar_hecho(peticion: Request, id_hecho: str):
 def reiniciar_conversacion(peticion: Request):
     memoria.borrar_conversacion(peticion.state.usuario.id)
     return {"ok": True}
+
+
+@app.post("/api/dispositivos/codigo")
+def crear_codigo_de_vinculo(peticion: Request):
+    """Lo pide el navegador de alguien ya logueado, para escribirlo en el reloj."""
+    return dispositivos.generar_codigo(peticion.state.usuario.id)
+
+
+class PeticionDeVinculo(BaseModel):
+    codigo: str
+    nombre: str = ""
+
+
+@app.post("/api/dispositivos/vincular")
+def vincular_dispositivo(peticion: PeticionDeVinculo):
+    """La pide el reloj, sin sesion: esta ruta esta en acceso.LIBRES."""
+    resultado = dispositivos.vincular(peticion.codigo, peticion.nombre)
+    if resultado is None:
+        return JSONResponse(status_code=400, content={"error": "Codigo invalido o vencido."})
+    _, token = resultado
+    # El token no se vuelve a mostrar despues de esto: el reloj lo guarda solo.
+    return {"token": token}
+
+
+@app.get("/api/dispositivos")
+def listar_dispositivos(peticion: Request):
+    return {"dispositivos": dispositivos.dispositivos_de(peticion.state.usuario.id)}
+
+
+@app.delete("/api/dispositivos/{id_dispositivo}")
+def borrar_dispositivo(id_dispositivo: str, peticion: Request):
+    return {"borrado": dispositivos.revocar(peticion.state.usuario.id, id_dispositivo)}
+
+
+@app.get("/api/organizacion")
+def ver_organizacion(peticion: Request):
+    usuario = peticion.state.usuario
+    if not usuario.organizacion_id:
+        return {"organizacion": None}
+    return {
+        "organizacion": cuentas.nombre_organizacion(usuario.organizacion_id),
+        "es_admin_org": cuentas.es_admin_org(usuario.id),
+        "miembros": cuentas.miembros(usuario.organizacion_id),
+        "consumido": cuentas.consumido(usuario.organizacion_id),
+    }
+
+
+class PeticionDeMiembro(BaseModel):
+    nombre: str
+    email: str
+    password: str
+
+
+@app.post("/api/organizacion/usuarios")
+def agregar_miembro(datos: PeticionDeMiembro, peticion: Request):
+    usuario = peticion.state.usuario
+    if not usuario.organizacion_id or not cuentas.es_admin_org(usuario.id):
+        return JSONResponse(
+            status_code=403,
+            content={"error": "Solo quien administra la organizacion puede agregar gente."},
+        )
+    try:
+        cuentas.agregar_usuario(usuario.organizacion_id, datos.nombre, datos.email, datos.password)
+    except cuentas.ErrorDeCuenta as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    return {"ok": True}
+
+
+@app.get("/api/organizaciones")
+def listar_organizaciones():
+    """Cuanto lleva consumido cada organizacion. Para quien administra Jarvis."""
+    return {"organizaciones": cuentas.organizaciones()}
 
 
 @app.get("/")

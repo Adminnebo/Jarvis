@@ -1,7 +1,12 @@
 # Dispositivos por persona, y costos separados
 
 Fecha: 2026-09-16
-Estado: propuesto, pendiente de aprobación
+Estado: **reemplazado** por
+[cuentas y dispositivos](2026-09-16-cuentas-y-dispositivos-design.md). La
+decisión abierta al final de este documento (APK por persona vs. reloj que
+pregunta y guarda) se resolvió a favor de la segunda opción, implementada
+como vinculación por código. Se deja el documento como registro de las
+alternativas consideradas.
 
 Extiende [multiusuario](2026-09-08-multiusuario-design.md), que ya resolvió el
 acceso desde el navegador. Aquí se cierra lo que quedó fuera: los dispositivos

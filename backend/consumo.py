@@ -8,10 +8,11 @@ OpenAI los cambia, se editan ahi sin tocar codigo.
 """
 
 import json
+import sqlite3
 import threading
 from datetime import datetime, timedelta
 
-from . import rutas
+from . import basedatos, rutas
 
 _candado = threading.Lock()
 
@@ -185,66 +186,119 @@ def calcular_costo(modelo: str, casillas: dict) -> float:
 # Registro
 # --------------------------------------------------------------------------
 
+CAMPOS = (
+    "cuando", "modo", "modelo", "usuario_id", "organizacion_id", "dispositivo",
+    *casillas_vacias(), "tokens", "segundos", "costo",
+)
+
+
+# Columnas que no admiten NULL. Un registro viejo puede no traerlas -las
+# casillas de imagen, por ejemplo, no existian- y pasar NULL a mano no dispara
+# el DEFAULT de la tabla: hay que poner el cero aqui.
+_OBLIGATORIOS = {*casillas_vacias(), "tokens", "costo"}
+
+
+def _guardar(registro: dict) -> dict:
+    columnas = ", ".join(CAMPOS)
+    huecos = ", ".join("?" for _ in CAMPOS)
+    valores = tuple(
+        registro.get(campo) if registro.get(campo) is not None
+        else (0 if campo in _OBLIGATORIOS else None)
+        for campo in CAMPOS
+    )
+    with _candado:
+        with basedatos.conexion() as con:
+            con.execute(f"INSERT INTO consumo ({columnas}) VALUES ({huecos})", valores)
+    return registro
+
+
 def registrar(modo: str, modelo: str, uso: dict,
-              segundos: float | None = None) -> dict:
-    """Anota una respuesta. `modo` es 'voz' o 'texto'."""
+              segundos: float | None = None, usuario=None,
+              dispositivo: str = "navegador") -> dict:
+    """Anota una respuesta. `modo` es 'voz' o 'texto'.
+
+    `usuario` es un acceso.Usuario (o None: quien llamaba antes de que esto
+    existiera). Sin el no hay a quien atribuirle el gasto; con el, se guarda
+    tambien su organizacion si tiene una, para poder cobrarle a ella.
+    """
     casillas = desglosar(uso)
-    registro = {
+    return _guardar({
         "cuando": datetime.now().isoformat(timespec="seconds"),
         "modo": modo,
         "modelo": modelo,
+        "usuario_id": usuario.id if usuario else None,
+        "organizacion_id": getattr(usuario, "organizacion_id", None),
+        "dispositivo": dispositivo,
         **casillas,
         "tokens": sum(casillas.values()),
         "segundos": round(segundos, 2) if segundos else None,
         "costo": round(calcular_costo(modelo, casillas), 6),
-    }
-
-    with _candado:
-        with archivo().open("a", encoding="utf-8") as salida:
-            salida.write(json.dumps(registro, ensure_ascii=False) + "\n")
-
-    return registro
+    })
 
 
-def registrar_sesion(modelo: str, segundos: float) -> dict:
+def registrar_sesion(modelo: str, segundos: float, usuario=None,
+                     dispositivo: str = "navegador") -> dict:
     """Anota cuanto duro una sesion de voz, para el costo por minuto."""
-    registro = {
+    return _guardar({
         "cuando": datetime.now().isoformat(timespec="seconds"),
         "modo": "sesion",
         "modelo": modelo,
+        "usuario_id": usuario.id if usuario else None,
+        "organizacion_id": getattr(usuario, "organizacion_id", None),
+        "dispositivo": dispositivo,
         "segundos": round(segundos, 2),
         "tokens": 0,
         "costo": 0.0,
         **casillas_vacias(),
-    }
-    with _candado:
-        with archivo().open("a", encoding="utf-8") as salida:
-            salida.write(json.dumps(registro, ensure_ascii=False) + "\n")
-    return registro
+    })
 
 
 def todos() -> list[dict]:
+    """Los registros mas recientes, del mas viejo al mas nuevo."""
+    with basedatos.conexion() as con:
+        filas = con.execute(
+            f"SELECT {', '.join(CAMPOS)} FROM consumo ORDER BY id DESC LIMIT ?",
+            (MAXIMO_REGISTROS,),
+        ).fetchall()
+    return [dict(fila) for fila in reversed(filas)]
+
+
+def borrar() -> None:
+    with _candado:
+        with basedatos.conexion() as con:
+            con.execute("DELETE FROM consumo")
+
+
+def migrar_jsonl() -> None:
+    """Sube a la base el consumo.jsonl de cuando esto era un archivo plano.
+
+    Se ejecuta al arrancar. Es idempotente: si ya hay registros en la tabla no
+    toca nada. El archivo viejo no se borra, se renombra: queda como respaldo
+    frio por si algo salio mal.
+    """
     ruta = archivo()
     if not ruta.exists():
-        return []
-    registros = []
+        return
+
+    with basedatos.conexion() as con:
+        if con.execute("SELECT 1 FROM consumo LIMIT 1").fetchone():
+            return
+
+    migrados = 0
     with ruta.open(encoding="utf-8") as entrada:
         for linea in entrada:
             linea = linea.strip()
             if not linea:
                 continue
             try:
-                registros.append(json.loads(linea))
-            except json.JSONDecodeError:
+                _guardar(json.loads(linea))
+                migrados += 1
+            except (json.JSONDecodeError, sqlite3.DatabaseError):
+                # Una linea rota del archivo viejo no puede impedir arrancar.
                 continue
-    return registros[-MAXIMO_REGISTROS:]
 
-
-def borrar() -> None:
-    with _candado:
-        ruta = archivo()
-        if ruta.exists():
-            ruta.unlink()
+    ruta.rename(ruta.with_suffix(".jsonl.migrado"))
+    print(f"  Consumo migrado a la base de datos: {migrados} registros.")
 
 
 # --------------------------------------------------------------------------
@@ -261,7 +315,7 @@ PERIODOS = {
 
 
 def consultar(periodo: str = "7d", modo: str = "todos",
-              modelo: str = "todos") -> dict:
+              modelo: str = "todos", organizacion: str = "todas") -> dict:
     """Resumen y detalle, con los filtros que pida la interfaz."""
     desde = PERIODOS.get(periodo, PERIODOS["7d"])()
 
@@ -277,12 +331,15 @@ def consultar(periodo: str = "7d", modo: str = "todos",
             continue
         if modelo != "todos" and registro.get("modelo") != modelo:
             continue
+        if organizacion != "todas" and registro.get("organizacion_id") != organizacion:
+            continue
         registros.append(registro)
 
     return {
         "periodo": periodo,
         "registros": list(reversed(registros[-200:])),
         "por_modelo": agrupar(registros),
+        "por_organizacion": agrupar_por_organizacion(registros),
         "totales": totalizar(registros),
         "modelos": sorted({r.get("modelo", "?") for r in todos()}),
         "precios": precios(),
@@ -331,6 +388,39 @@ def agrupar(registros: list[dict]) -> list[dict]:
         fila["minutos"] = round(minutos, 2)
         filas.append(fila)
 
+    return sorted(filas, key=lambda f: f["costo"], reverse=True)
+
+
+def agrupar_por_organizacion(registros: list[dict]) -> list[dict]:
+    """Una fila por organizacion, para saber a quien cobrarle.
+
+    Los registros sin organizacion -de antes de que esto existiera, o de
+    gente sin organizacion- se agrupan aparte, sin inventarles una.
+    """
+    from . import cuentas
+
+    grupos: dict[str | None, dict] = {}
+
+    for registro in registros:
+        if registro.get("modo") == "sesion":
+            continue
+        clave = registro.get("organizacion_id")
+        fila = grupos.setdefault(clave, {
+            "organizacion_id": clave,
+            "organizacion": cuentas.nombre_organizacion(clave) or "(sin organizacion)",
+            "markup": cuentas.markup(clave),
+            "consultas": 0, "tokens": 0, "costo": 0.0,
+        })
+        fila["consultas"] += 1
+        fila["tokens"] += registro.get("tokens", 0)
+        fila["costo"] += registro.get("costo", 0.0)
+
+    filas = list(grupos.values())
+    for fila in filas:
+        # Lo que cuesta y lo que se cobra son dos numeros distintos: el segundo
+        # es el primero por el markup de esa organizacion.
+        fila["cobrado"] = round(fila["costo"] * fila["markup"], 6)
+        fila["costo"] = round(fila["costo"], 6)
     return sorted(filas, key=lambda f: f["costo"], reverse=True)
 
 

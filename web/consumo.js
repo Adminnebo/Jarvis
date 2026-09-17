@@ -46,8 +46,66 @@ async function cargarConsumo() {
   llenarModelos(datos.modelos);
   pintarResumen(datos.totales);
   pintarPorModelo(datos.por_modelo, datos.precios);
+  await pintarPorOrganizacion(datos.por_organizacion);
   pintarDetalle(datos.registros);
 }
+
+// --------------------------------------------------------------------------
+// Por organizacion: lo que gasto en el periodo y lo que lleva consumido
+// --------------------------------------------------------------------------
+
+async function pintarPorOrganizacion(porOrganizacion) {
+  const destino = $c("organizaciones-consumo");
+  destino.innerHTML = "<h3>Por organización</h3>";
+
+  let organizaciones = [];
+  try {
+    organizaciones = (await (await fetch("/api/organizaciones")).json()).organizaciones;
+  } catch {
+    // Sin esto igual se muestra el gasto del periodo, solo que sin el total.
+  }
+
+  // Dos cifras distintas por organizacion: lo del periodo que se este
+  // mirando, y lo que lleva consumido desde siempre. Se juntan por id.
+  const delPeriodo = Object.fromEntries(
+    (porOrganizacion || []).map((fila) => [fila.organizacion_id, fila]),
+  );
+  const filas = organizaciones.map((organizacion) => ({
+    nombre: organizacion.nombre,
+    markup: organizacion.markup,
+    historico: organizacion,
+    periodo: delPeriodo[organizacion.id] || { consultas: 0, costo: 0, cobrado: 0 },
+  }));
+
+  const sinOrganizacion = delPeriodo[null] || delPeriodo["null"];
+  if (sinOrganizacion) {
+    filas.push({
+      nombre: sinOrganizacion.organizacion,
+      markup: null,
+      historico: null,
+      periodo: sinOrganizacion,
+    });
+  }
+
+  if (!filas.length) {
+    destino.innerHTML += '<p class="vacio">Todavia no hay organizaciones.</p>';
+    return;
+  }
+
+  destino.appendChild(tablaDe(COLUMNAS_ORGANIZACION, filas));
+}
+
+const COLUMNAS_ORGANIZACION = [
+  { titulo: "Organización", saca: (f) => f.nombre || "—" },
+  { titulo: "Consultas", saca: (f) => numero(f.periodo.consultas) },
+  { titulo: "Costo", saca: (f) => dinero(f.periodo.costo, 4) },
+  { titulo: "Markup", saca: (f) => (f.markup ? `${f.markup}×` : "—") },
+  { titulo: "Cobrado", saca: (f) => dinero(f.periodo.cobrado, 4) },
+  {
+    titulo: "Consumido en total",
+    saca: (f) => (f.historico ? dinero(f.historico.cobrado, 2) : "—"),
+  },
+];
 
 function llenarModelos(modelos) {
   const selector = $c("filtro-modelo");

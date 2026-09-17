@@ -8,6 +8,8 @@ import { crearSesionDeVoz } from "./voz.js";
 import { abrirPanelFuentes } from "./fuentes.js";
 import { abrirPanelConsumo } from "./consumo.js";
 import { prepararImagen } from "./imagen.js";
+import { abrirPanelDispositivos } from "./dispositivos.js";
+import { abrirPanelOrganizacion } from "./organizacion.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -355,7 +357,11 @@ async function enviar(mensaje) {
       body: JSON.stringify({ mensaje }),
     });
 
-    if (!respuesta.ok) throw new Error(`El servidor respondio ${respuesta.status}`);
+    if (!respuesta.ok) {
+      // Si el servidor explico que paso, eso vale mas que el numero del estado.
+      const motivo = await respuesta.json().then((d) => d.error).catch(() => null);
+      throw new Error(motivo || `El servidor respondio ${respuesta.status}`);
+    }
 
     const lector = respuesta.body.getReader();
     const decodificador = new TextDecoder();
@@ -622,6 +628,8 @@ $("btn-cerrar-panel").addEventListener("click", () => {
 
 $("btn-fuentes").addEventListener("click", abrirPanelFuentes);
 $("btn-consumo").addEventListener("click", abrirPanelConsumo);
+$("btn-dispositivos").addEventListener("click", abrirPanelDispositivos);
+$("btn-organizacion").addEventListener("click", abrirPanelOrganizacion);
 
 // --------------------------------------------------------------------------
 // Cerrar paneles: Escape y clic en el fondo
@@ -750,6 +758,7 @@ async function cargarEstado() {
     const esAdmin = estado.rol === "admin";
     $("btn-fuentes").hidden = !esAdmin;
     $("btn-consumo").hidden = !esAdmin;
+    $("btn-organizacion").hidden = !estado.es_admin_org;
     if (!sesionViva) {
       $("meta").textContent =
         `${estado.modelo} · ${estado.hechos_recordados} recuerdos`;

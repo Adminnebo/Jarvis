@@ -54,7 +54,7 @@ def test_sin_sesion_no_se_puede_mandar_una_foto(entorno_limpio, monkeypatch):
 def test_la_foto_se_lee_y_queda_constancia_en_el_historial(cliente, monkeypatch):
     vistas = []
 
-    def leer_falso(url, motivo, usuario):
+    def leer_falso(url, motivo, usuario, dispositivo="navegador"):
         vistas.append((url, motivo, usuario.id))
         return "Es una taza azul."
 
