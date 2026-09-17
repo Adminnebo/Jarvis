@@ -41,6 +41,11 @@ FIRMA_WEB = 300
 URL_PDFCO = "https://api.pdf.co/v1/pdf/convert/from/html"
 ZONA = ZoneInfo("America/Santo_Domingo")
 
+# Lo que dice "Usuario:" en el PDF. Es fijo, igual que en las de Camila: el
+# cliente ve siempre a la misma vendedora. Quien la pidio en Jarvis queda en la
+# columna `usuario` de la tabla.
+USUARIO_DOCUMENTO = "Camila Reyes"
+
 CODIGO = re.compile(r"^[A-Za-z0-9-]{1,20}$")
 NUMERO = re.compile(r"^JV-\d{5,}$")
 
@@ -74,6 +79,18 @@ def configurado() -> bool:
 
 def formato(numero: int) -> str:
     return f"{PREFIJO}{int(numero):05d}"
+
+
+def nombre_de_archivo(cliente: str, texto_numero: str) -> str:
+    """Como los de Camila: "CLIENTE - numero.pdf".
+
+    El nombre del cliente es lo que se ve en el chat de WhatsApp: sin el, todas
+    las cotizaciones se llaman igual. Se quitan los caracteres que no valen en
+    un nombre de archivo.
+    """
+    limpio = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", cliente or "")
+    limpio = re.sub(r"\s+", " ", limpio).strip(" .")[:80]
+    return f"{limpio} - {texto_numero}.pdf" if limpio else f"Cotizacion {texto_numero}.pdf"
 
 
 # --------------------------------------------------------------------------
@@ -437,10 +454,10 @@ def emitir(id_usuario: str, nombre_usuario: str) -> dict:
         fecha = fecha_de_documento(datetime.now(ZONA))
         html = cotizacion_html.generar(
             texto_numero, fecha, borrador.cliente, borrador.lineas, borrador.totales,
-            nombre_usuario, _imagenes([l["codigo"] for l in borrador.lineas]),
+            USUARIO_DOCUMENTO, _imagenes([l["codigo"] for l in borrador.lineas]),
         )
         ruta = f"{texto_numero}.pdf"
-        _subir(ruta, _pdf(html, f"Cotizacion {texto_numero} - {borrador.cliente['nombre']}"))
+        _subir(ruta, _pdf(html, nombre_de_archivo(borrador.cliente["nombre"], texto_numero)))
         _actualizar(numero, {"pdf_ruta": ruta, "estado": "emitida"})
         url = firmar(ruta, FIRMA_APP)
     except Exception as error:  # noqa: BLE001

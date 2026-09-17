@@ -206,7 +206,7 @@ def _cuerpo(archivo: dict, destino: str) -> dict:
     return {
         "number": destino, "mediatype": "document", "mimetype": "application/pdf",
         "media": cotizaciones.firmar(archivo["ruta"], FIRMA_ENVIO),
-        "fileName": f"Cotizacion {archivo['referencia']}.pdf",
+        "fileName": cotizaciones.nombre_de_archivo(archivo["titulo"], archivo["referencia"]),
         "caption": f"{MARCA} · Cotización {archivo['referencia']}",
     }
 

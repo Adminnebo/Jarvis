@@ -81,6 +81,7 @@ def test_preparar_no_manda_nada_y_confirmar_si(configurado):
     assert ficha["fileName"] == "Ficha tecnica 306714.pdf"
     assert cotizacion["media"] == "https://firmado/JV-00002.pdf?t=600"
     assert cotizacion["caption"] == "JH Electroalambres · Cotización JV-00002"
+    assert cotizacion["fileName"] == "PRUEBA - JV-00002.pdf"
 
     # Un segundo "si" no vuelve a mandar.
     assert "No hay un envio pendiente" in _confirmar()

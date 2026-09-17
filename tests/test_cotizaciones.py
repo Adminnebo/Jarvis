@@ -189,13 +189,25 @@ def test_si_falla_el_pdf_queda_marcada_y_el_borrador_vuelve(servicios, monkeypat
     assert cotizaciones.borrador_de("admin") is not None
 
 
-def test_el_usuario_del_pdf_es_quien_la_pide(servicios, monkeypatch):
+def test_el_pdf_siempre_dice_camila_y_la_tabla_quien_la_pidio(servicios, monkeypatch):
     monkeypatch.setenv("JARVIS_PASSWORD", "x")
     monkeypatch.setenv("JARVIS_PASSWORD_JORGE", "y")
     _preparar(usuario="jorge", cliente="6177")
     herramientas.ejecutar("emitir_cotizacion", "{}", "jorge")
     assert servicios["insertar"][0]["usuario"] == "Jorge"
-    assert 'Usuario: <span class="usuario-value">Jorge</span>' in servicios["pdf"][0][0]
+    html, nombre = servicios["pdf"][0]
+    assert 'Usuario: <span class="usuario-value">Camila Reyes</span>' in html
+    assert "Jorge" not in html
+    assert nombre == "FERRETERIA ELIAM MAX EIRL - JV-00007.pdf"
+
+
+@pytest.mark.parametrize("cliente, esperado", [
+    ("LM AA CONSULTING GROUP LAMA ARMANDO SRL", "LM AA CONSULTING GROUP LAMA ARMANDO SRL - JV-00007.pdf"),
+    ('FERRETERIA "EL/SOL": S.R.L.', "FERRETERIA EL SOL S.R.L - JV-00007.pdf"),
+    ("", "Cotizacion JV-00007.pdf"),
+])
+def test_el_nombre_del_archivo_lleva_el_cliente(cliente, esperado):
+    assert cotizaciones.nombre_de_archivo(cliente, "JV-00007") == esperado
 
 
 def test_sin_configurar_no_se_ofrecen(entorno_limpio, monkeypatch):
