@@ -40,6 +40,14 @@ FIRMA_ENVIO = 600
 
 PREFIJOS_RD = ("809", "829", "849")
 
+# Evolution acepta el mensaje al instante (PENDING) y WhatsApp lo rechaza uno o
+# dos segundos despues: el 17/09 nebo-wa devolvia un id para cada archivo y
+# todos terminaban en ERROR, sin que llegara nada ni se probara el respaldo.
+# Por eso un envio solo cuenta cuando WhatsApp lo confirma.
+ESPERA_CONFIRMACION = 8.0
+CADA = 0.7
+ACEPTADO = {"SERVER_ACK", "DELIVERY_ACK", "READ", "PLAYED"}
+
 
 class ErrorEnvio(Exception):
     """Un problema que el modelo puede explicar o corregir."""
@@ -241,7 +249,46 @@ def _enviar_media(cuerpo: dict, instancia: str) -> str:
         except ValueError:
             detalle = respuesta.text[:300]
         raise RuntimeError(f"Evolution respondio {respuesta.status_code}: {detalle}")
-    return str((respuesta.json().get("key") or {}).get("id") or "")
+    identificador = str((respuesta.json().get("key") or {}).get("id") or "")
+    _esperar_confirmacion(instancia, identificador)
+    return identificador
+
+
+def _estados(instancia: str, identificador: str) -> list[str]:
+    respuesta = httpx.post(
+        f"{_env('EVOLUTION_URL').rstrip('/')}/chat/findMessages/{quote(instancia, safe='')}",
+        headers={"apikey": _env("EVOLUTION_API_KEY")},
+        json={"where": {"key": {"id": identificador}}, "limit": 1},
+        timeout=15,
+    )
+    respuesta.raise_for_status()
+    datos = respuesta.json()
+    registros = datos.get("messages", {}).get("records", []) if isinstance(datos, dict) else datos
+    if not registros:
+        return []
+    return [str(u.get("status")) for u in registros[0].get("MessageUpdate") or []]
+
+
+def _esperar_confirmacion(instancia: str, identificador: str) -> None:
+    """Espera a que WhatsApp acepte o rechace el mensaje.
+
+    Si lo rechaza (ERROR), lanza y se prueba la siguiente instancia. Si pasado
+    el tope sigue pendiente —un archivo grande puede tardar en subir— se da por
+    enviado: no hay forma de saber mas, y reintentar podria duplicarlo.
+    """
+    if not identificador:
+        return
+    limite = time.monotonic() + ESPERA_CONFIRMACION
+    while time.monotonic() < limite:
+        time.sleep(CADA)
+        try:
+            estados = _estados(instancia, identificador)
+        except Exception:  # noqa: BLE001 - sin poder mirar, no se castiga el envio
+            return
+        if "ERROR" in estados:
+            raise RuntimeError("WhatsApp rechazo el mensaje (estado ERROR)")
+        if ACEPTADO & set(estados):
+            return
 
 
 def explicar(error: Exception) -> str:
@@ -251,6 +298,8 @@ def explicar(error: Exception) -> str:
     if isinstance(error, httpx.RequestError):
         return "no se pudo contactar el servidor de WhatsApp"
     texto = str(error).lower()
+    if "estado error" in texto:
+        return "WhatsApp rechazo el envio desde ese numero"
     if "connection closed" in texto or "precondition required" in texto:
         return "ese WhatsApp esta desconectado y hay que volver a vincularlo"
     if '"exists": false' in texto or '"exists":false' in texto:

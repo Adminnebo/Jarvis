@@ -222,8 +222,78 @@ def test_el_nombre_de_la_instancia_va_codificado_en_la_url(configurado, monkeypa
         status_code = 201
 
         def json(self):
-            return {"key": {"id": "ABC"}}
+            return {"key": {"id": "ABC"}, "messages": {"records": [{"MessageUpdate": [{"status": "SERVER_ACK"}]}]}}
 
+        def raise_for_status(self):
+            return self
+
+    monkeypatch.setattr(whatsapp, "CADA", 0)
     monkeypatch.setattr(httpx, "post", lambda url, **kw: llamadas.append(url) or Respuesta())
     assert ENVIAR_REAL({"number": "1"}, "nebo-wa (Respaldo)") == "ABC"
-    assert llamadas == ["https://evo.test/message/sendMedia/nebo-wa%20%28Respaldo%29"]
+    assert llamadas == ["https://evo.test/message/sendMedia/nebo-wa%20%28Respaldo%29",
+                        "https://evo.test/chat/findMessages/nebo-wa%20%28Respaldo%29"]
+
+
+def test_si_whatsapp_lo_rechaza_despues_cuenta_como_fallo_y_va_al_respaldo(configurado, monkeypatch):
+    import httpx
+
+    monkeypatch.setattr(whatsapp, "CADA", 0)
+    enviados = []
+
+    class Respuesta:
+        status_code = 201
+
+        def __init__(self, datos):
+            self.datos = datos
+
+        def json(self):
+            return self.datos
+
+        def raise_for_status(self):
+            return self
+
+    def post(url, **kw):
+        instancia = "respaldo" if "Respaldo" in url else "principal"
+        if "/message/sendMedia/" in url:
+            enviados.append(instancia)
+            return Respuesta({"key": {"id": f"id-{instancia}"}, "status": "PENDING"})
+        # findMessages: la principal termina en ERROR, el respaldo se entrega.
+        estado = "ERROR" if instancia == "principal" else "DELIVERY_ACK"
+        return Respuesta({"messages": {"records": [{"MessageUpdate": [{"status": estado}]}]}})
+
+    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(whatsapp, "_enviar_media", ENVIAR_REAL)
+    _preparar(numero="8095551234", codigos="306714", tipo="imagen")
+    resultado = _confirmar()
+
+    assert enviados == ["principal", "respaldo"]
+    assert "Enviado por WhatsApp" in resultado
+    assert "Salio por el numero de respaldo" in resultado
+    assert "WhatsApp rechazo el envio desde ese numero" in resultado
+
+
+def test_si_sigue_pendiente_al_tope_se_da_por_enviado(configurado, monkeypatch):
+    import httpx
+
+    monkeypatch.setattr(whatsapp, "CADA", 0)
+    monkeypatch.setattr(whatsapp, "ESPERA_CONFIRMACION", 0.05)
+
+    class Respuesta:
+        status_code = 201
+
+        def __init__(self, datos):
+            self.datos = datos
+
+        def json(self):
+            return self.datos
+
+        def raise_for_status(self):
+            return self
+
+    def post(url, **kw):
+        if "/message/sendMedia/" in url:
+            return Respuesta({"key": {"id": "id-1"}, "status": "PENDING"})
+        return Respuesta({"messages": {"records": [{"MessageUpdate": []}]}})
+
+    monkeypatch.setattr(httpx, "post", post)
+    assert ENVIAR_REAL({"number": "1"}, "nebo-wa") == "id-1"
