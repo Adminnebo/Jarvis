@@ -105,24 +105,41 @@ function crearPuerta(flujo, pista, ajustes, alMedir) {
 }
 
 
-/* Espera a que el navegador termine de juntar candidatos ICE.
+/* Espera a tener los candidatos ICE que OpenAI necesita.
 
-   Con tope de tiempo: en algunas redes el gathering nunca se declara completo
-   y quedarse esperando seria peor que enviar lo que ya se tiene. */
-function esperarCandidatos(conexion, tope = 3000) {
+   OpenAI contesta en ice-lite y solo le sirve un candidato alcanzable desde
+   fuera: el srflx que da el STUN. Llega a las pocas decenas de milisegundos,
+   pero Chrome no declara el gathering "complete" hasta que la conexion ya esta
+   hecha, asi que esperar a eso agotaba siempre el tope: tres segundos de
+   silencio en cada arranque. Ahora se sigue en cuanto hay uno, con un margen
+   corto para que entre el de la otra interfaz si la hay.
+
+   Hay que crearla ANTES de setLocalDescription: los candidatos empiezan a
+   llegar ahi y uno perdido volveria a costar el tope entero. */
+function esperarCandidatos(conexion, tope = 3000, margen = 150) {
   if (conexion.iceGatheringState === "complete") return Promise.resolve();
 
   return new Promise((listo) => {
-    const terminar = () => {
+    let reloj = setTimeout(terminar, tope);
+
+    function terminar() {
       conexion.removeEventListener("icegatheringstatechange", alCambiar);
+      conexion.removeEventListener("icecandidate", alCandidato);
       clearTimeout(reloj);
       listo();
-    };
-    const alCambiar = () => {
+    }
+    function alCambiar() {
       if (conexion.iceGatheringState === "complete") terminar();
-    };
-    const reloj = setTimeout(terminar, tope);
+    }
+    function alCandidato(evento) {
+      if (!evento.candidate) return terminar();   // fin de candidatos
+      if (evento.candidate.type === "srflx" || evento.candidate.type === "relay") {
+        clearTimeout(reloj);
+        reloj = setTimeout(terminar, margen);
+      }
+    }
     conexion.addEventListener("icegatheringstatechange", alCambiar);
+    conexion.addEventListener("icecandidate", alCandidato);
   });
 }
 
@@ -232,12 +249,12 @@ export function crearSesionDeVoz(eventos) {
     };
 
     const oferta = await conexion.createOffer();
-    await conexion.setLocalDescription(oferta);
-
     // Hay que esperar a tener los candidatos: `oferta.sdp` es la version de
     // antes de recolectarlos, y OpenAI necesita que vengan dentro. Enviando
     // esa version la negociacion respondia bien pero nunca conectaba.
-    await esperarCandidatos(conexion);
+    const candidatos = esperarCandidatos(conexion);
+    await conexion.setLocalDescription(oferta);
+    await candidatos;
 
     // El intercambio va por nuestro servidor: llamar a api.openai.com desde
     // aqui lo bloquea CORS salvo en localhost, y ademas expondria la clave.

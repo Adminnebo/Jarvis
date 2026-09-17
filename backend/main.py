@@ -77,6 +77,7 @@ def al_arrancar():
     archivos.refrescar_en_segundo_plano()
 
     # Y mantener las conexiones calientes evita que la pague en reconectar.
+    fuentes.calentar()
     fuentes.vigilar_conexiones()
 
 

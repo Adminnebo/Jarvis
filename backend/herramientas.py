@@ -98,6 +98,15 @@ def ejecutar_completo(nombre: str, argumentos_json: str, usuario: str) -> tuple[
 
     try:
         argumentos = json.loads(argumentos_json or "{}")
+    except json.JSONDecodeError:
+        # Pasa cuando la respuesta del modelo se corta a mitad de la llamada
+        # (por ejemplo, alguien habla encima): los argumentos llegan truncados.
+        return (
+            f"Los argumentos de {nombre} llegaron cortados o mal formados. "
+            "Vuelve a llamar a la herramienta con los argumentos completos."
+        ), []
+
+    try:
         if entrada["necesita_usuario"]:
             argumentos["usuario"] = usuario
         resultado = entrada["funcion"](**argumentos)

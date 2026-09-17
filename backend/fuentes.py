@@ -332,48 +332,87 @@ def url_postgres(config: dict) -> str:
 
 # Abrir una conexion a SQL Server cuesta ~0.9s y ejecutar la consulta ~0.1s:
 # reconectar en cada pregunta era casi todo el tiempo de respuesta. Aqui se
-# guarda una conexion viva por fuente. Si se cae, se reabre y se reintenta.
-_conexiones: dict[str, object] = {}
+# guardan conexiones vivas por fuente. Si se cae, se reabre y se reintenta.
+#
+# Cada consulta TOMA una conexion para ella sola y la devuelve al terminar.
+# Antes habia una sola por fuente compartida entre hilos: dos herramientas a la
+# vez, o el hilo que las mantiene vivas, usaban la misma, y si una fallaba la
+# cerraba mientras la otra seguia leyendo. FreeTDS no lo aguanta y aborta el
+# proceso entero (tds_free_connection: in_net_tds == NULL): Jarvis se reiniciaba
+# en plena conversacion y respondia 502 a los lentes.
+MAX_LIBRES = 4
+
+_libres: dict[str, list] = {}
+# Sube al editar o borrar la fuente: una conexion tomada antes, con las
+# credenciales viejas, se cierra al devolverse en vez de volver al pool.
+_generacion: dict[str, int] = {}
 _candado_conexiones = threading.Lock()
 
 
-def soltar_conexion(id_fuente: str) -> None:
-    """Cierra y olvida la conexion guardada. Al editar una fuente hay que
-    llamarlo, si no seguiriamos usando las credenciales viejas."""
+def _cerrar(conexion) -> None:
+    try:
+        conexion.close()
+    except Exception:  # noqa: BLE001 - ya la estabamos descartando
+        pass
+
+
+def _tomar(id_fuente: str):
     with _candado_conexiones:
-        conexion = _conexiones.pop(id_fuente, None)
-    if conexion is not None:
-        try:
-            conexion.close()
-        except Exception:  # noqa: BLE001 - ya la estabamos descartando
-            pass
+        libres = _libres.get(id_fuente)
+        conexion = libres.pop() if libres else None
+        return conexion, _generacion.get(id_fuente, 0)
+
+
+def _devolver(id_fuente: str, conexion, generacion: int) -> None:
+    with _candado_conexiones:
+        libres = _libres.setdefault(id_fuente, [])
+        if generacion == _generacion.get(id_fuente, 0) and len(libres) < MAX_LIBRES:
+            libres.append(conexion)
+            return
+    _cerrar(conexion)
+
+
+def soltar_conexion(id_fuente: str) -> None:
+    """Cierra las conexiones libres y retira las que estan en uso.
+
+    Al editar una fuente hay que llamarlo, si no seguiriamos usando las
+    credenciales viejas. Nunca cierra una conexion que otro hilo esta usando:
+    esas se cierran cuando la devuelven.
+    """
+    with _candado_conexiones:
+        libres = _libres.pop(id_fuente, [])
+        _generacion[id_fuente] = _generacion.get(id_fuente, 0) + 1
+    for conexion in libres:
+        _cerrar(conexion)
 
 
 def _con_reintento(id_fuente: str | None, abrir, ejecutar):
-    """Ejecuta reusando la conexion; si esta muerta, reabre y reintenta una vez."""
+    """Ejecuta con una conexion propia; si estaba muerta, reabre y reintenta una vez."""
     if id_fuente is None:
         conexion = abrir()
         try:
             return ejecutar(conexion)
         finally:
-            try:
-                conexion.close()
-            except Exception:  # noqa: BLE001
-                pass
+            _cerrar(conexion)
 
-    with _candado_conexiones:
-        conexion = _conexiones.get(id_fuente)
-
+    conexion, generacion = _tomar(id_fuente)
     if conexion is not None:
         try:
-            return ejecutar(conexion)
+            resultado = ejecutar(conexion)
         except Exception:  # noqa: BLE001 - puede ser solo la conexion caida
-            soltar_conexion(id_fuente)
+            _cerrar(conexion)   # es nuestra: nadie mas la esta usando
+        else:
+            _devolver(id_fuente, conexion, generacion)
+            return resultado
 
     conexion = abrir()
-    with _candado_conexiones:
-        _conexiones[id_fuente] = conexion
-    return ejecutar(conexion)
+    try:
+        resultado = ejecutar(conexion)
+    except Exception:
+        _cerrar(conexion)
+        raise
+    _devolver(id_fuente, conexion, generacion)
+    return resultado
 
 
 def consultar_postgres(config: dict, sql: str, limite: int,
@@ -801,7 +840,27 @@ def mantener_vivas() -> None:
         try:
             consultar(fuente["id"], "select 1 as vivo", limite=1)
         except Exception:  # noqa: BLE001 - si falla, la proxima reconecta
+            # La que fallo ya se cerro en _con_reintento; solo quedan libres
+            # que probablemente tambien murieron.
             soltar_conexion(fuente["id"])
+
+
+def calentar() -> None:
+    """Abre las conexiones y arma el resumen de fuentes para el prompt.
+
+    Ese resumen pide el esquema de cada fuente y cuenta las filas de cada
+    tabla: decenas de consultas que despues quedan en memoria. Sin esto las
+    pagaba la primera persona que abria la voz tras un despliegue: el prompt
+    tardaba mas de cuatro segundos en armarse, con el microfono ya abierto.
+    """
+    def trabajo():
+        try:
+            mantener_vivas()
+            resumen_para_prompt()
+        except Exception as error:  # noqa: BLE001 - calentar no es critico
+            print(f"  AVISO: no pude precalentar las fuentes: {error}")
+
+    threading.Thread(target=trabajo, daemon=True).start()
 
 
 def vigilar_conexiones(cada_segundos: int = 120) -> None:
