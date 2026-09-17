@@ -351,6 +351,7 @@ mal oído le llegaría a otra persona.
 | `EVOLUTION_URL` | URL del servidor de Evolution |
 | `EVOLUTION_API_KEY` | Su API key |
 | `EVOLUTION_INSTANCIA` | La instancia (el número) que envía |
+| `EVOLUTION_INSTANCIA_RESPALDO` | Opcional: otra instancia. Si la principal da cualquier error, cada archivo se reintenta por esta; si las dos fallan, Jarvis explica el motivo y el envío queda preparado para reintentar |
 
 ## Fuentes de datos
 

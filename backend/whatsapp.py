@@ -7,6 +7,11 @@ solo despues del "si". Con voz esto importa: un numero mal oido le llega a otro.
 
 WhatsApp bloquea numeros que mandan mucho a gente que no les escribio, asi que
 hay un tope por hora. Cada envio queda anotado en data/envios_whatsapp.jsonl.
+
+Hay una instancia principal y una de respaldo (otro numero). Cada archivo sale
+por la principal; si da cualquier error, se reintenta por el respaldo. WhatsApp
+cierra sesiones vinculadas sin avisar (paso el 17/09: LOGOUT 401 a media
+manana) y con un solo numero todo envio fallaba hasta volver a escanear el QR.
 """
 
 import json
@@ -17,6 +22,8 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
+
+from urllib.parse import quote
 
 import httpx
 
@@ -44,6 +51,15 @@ def _env(nombre: str) -> str:
 
 def configurado() -> bool:
     return all(_env(v) for v in ("EVOLUTION_URL", "EVOLUTION_API_KEY", "EVOLUTION_INSTANCIA"))
+
+
+def instancias() -> list[str]:
+    """Primero la principal y despues, si la hay, la de respaldo."""
+    lista: list[str] = []
+    for nombre in (_env("EVOLUTION_INSTANCIA"), _env("EVOLUTION_INSTANCIA_RESPALDO")):
+        if nombre and nombre not in lista:
+            lista.append(nombre)
+    return lista
 
 
 # --------------------------------------------------------------------------
@@ -211,10 +227,11 @@ def _cuerpo(archivo: dict, destino: str) -> dict:
     }
 
 
-def _enviar_media(cuerpo: dict) -> str:
-    """Manda un archivo y devuelve el id del mensaje."""
+def _enviar_media(cuerpo: dict, instancia: str) -> str:
+    """Manda un archivo por esa instancia y devuelve el id del mensaje."""
+    # El nombre puede llevar espacios y parentesis: "nebo-wa (Respaldo)".
     respuesta = httpx.post(
-        f"{_env('EVOLUTION_URL').rstrip('/')}/message/sendMedia/{_env('EVOLUTION_INSTANCIA')}",
+        f"{_env('EVOLUTION_URL').rstrip('/')}/message/sendMedia/{quote(instancia, safe='')}",
         headers={"apikey": _env("EVOLUTION_API_KEY")},
         json=cuerpo, timeout=90,
     )
@@ -225,6 +242,26 @@ def _enviar_media(cuerpo: dict) -> str:
             detalle = respuesta.text[:300]
         raise RuntimeError(f"Evolution respondio {respuesta.status_code}: {detalle}")
     return str((respuesta.json().get("key") or {}).get("id") or "")
+
+
+def explicar(error: Exception) -> str:
+    """El motivo en palabras, para que Jarvis lo diga sin leer un JSON."""
+    if isinstance(error, httpx.TimeoutException):
+        return "WhatsApp no respondio a tiempo"
+    if isinstance(error, httpx.RequestError):
+        return "no se pudo contactar el servidor de WhatsApp"
+    texto = str(error).lower()
+    if "connection closed" in texto or "precondition required" in texto:
+        return "ese WhatsApp esta desconectado y hay que volver a vincularlo"
+    if '"exists": false' in texto or '"exists":false' in texto:
+        return "ese numero no tiene WhatsApp"
+    if "respondio 404" in texto:
+        return "esa instancia no existe en el servidor de WhatsApp"
+    if "respondio 401" in texto or "respondio 403" in texto:
+        return "el servidor de WhatsApp rechazo la clave de acceso"
+    if "respondio 400" in texto:
+        return "WhatsApp rechazo el mensaje"
+    return "fallo el servidor de WhatsApp"
 
 
 def _anotar(registro: dict) -> None:
@@ -261,25 +298,72 @@ def confirmar(id_usuario: str, nombre_usuario: str) -> str:
 
     _cupo(len(pendiente.archivos))
 
+    orden = instancias()
+    principal = orden[0]
     enviados, fallidos = [], []
+    motivos_principal: list[str] = []
+
     for archivo in pendiente.archivos:
         registro = {
             "cuando": datetime.now().isoformat(timespec="seconds"),
             "usuario": nombre_usuario, "numero": pendiente.numero,
             "tipo": archivo["tipo"], "referencia": archivo["referencia"],
         }
+        errores: list[tuple[str, Exception]] = []
         try:
-            registro["id"] = _enviar_media(_cuerpo(archivo, pendiente.numero))
-            registro["ok"] = True
+            cuerpo = _cuerpo(archivo, pendiente.numero)
+        except Exception as error:  # noqa: BLE001 - p. ej. no se pudo firmar la cotizacion
+            errores.append(("", error))
+            cuerpo = None
+
+        for instancia in (list(orden) if cuerpo else []):
+            try:
+                registro["id"] = _enviar_media(cuerpo, instancia)
+            except Exception as error:  # noqa: BLE001 - se prueba con la siguiente
+                errores.append((instancia, error))
+                continue
+            registro.update(ok=True, instancia=instancia)
             enviados.append(_descripcion(archivo))
-        except Exception as error:  # noqa: BLE001
-            registro.update(ok=False, error=str(error)[:300])
-            fallidos.append(f"{_descripcion(archivo)} ({str(error)[:120]})")
+            if instancia != orden[0]:
+                # La principal esta fallando: el resto del envio va primero por
+                # la que si funciono, sin esperar otro error.
+                orden.remove(instancia)
+                orden.insert(0, instancia)
+            break
+        else:
+            registro["ok"] = False
+
+        for instancia, error in errores:
+            if instancia == principal:
+                motivos_principal.append(explicar(error))
+        if errores:
+            registro["errores"] = [f"{i or 'preparar'}: {str(e)[:200]}" for i, e in errores]
+        if not registro["ok"]:
+            motivos = "; ".join(
+                f"por {'el numero principal' if i == principal else 'el de respaldo' if i else 'preparacion'}, {explicar(e)}"
+                for i, e in errores
+            )
+            fallidos.append(f"{_descripcion(archivo)} ({motivos})")
         _anotar(registro)
+
+    if not enviados:
+        # Nada salio: se deja preparado para que "intentalo de nuevo" funcione.
+        with _candado:
+            _pendientes.setdefault(id_usuario, Pendiente(pendiente.numero, pendiente.archivos))
 
     partes = []
     if enviados:
         partes.append(f"Enviado por WhatsApp a {legible(pendiente.numero)}: {', '.join(enviados)}.")
+        if motivos_principal and len(orden) > 1:
+            partes.append(
+                f"Salio por el numero de respaldo porque el principal fallo "
+                f"({motivos_principal[0]}); mencionalo en una frase."
+            )
     if fallidos:
-        partes.append(f"No se pudo enviar: {'; '.join(fallidos)}. Dilo tal cual.")
+        partes.append(
+            f"No se pudo enviar: {'; '.join(fallidos)}. Dilo con calma en una o dos "
+            "frases, con el motivo, sin leer codigos de error."
+        )
+        if not enviados:
+            partes.append("El envio sigue preparado: si lo pide, se puede reintentar con confirmar_envio_whatsapp.")
     return " ".join(partes)
