@@ -219,7 +219,8 @@ def consultar_fuente(fuente: str, sql: str) -> str:
     except ValueError as error:
         return f"Error: {error}"
     except Exception as error:  # noqa: BLE001
-        return f"Error al consultar: {fuentes.explicar(error)}"
+        pista = fuentes.pista_de_error(fuente, sql, error)
+        return f"Error al consultar: {fuentes.explicar(error)}" + (f"\nPista: {pista}" if pista else "")
 
     if not filas:
         return "La consulta no devolvio resultados."

@@ -876,6 +876,62 @@ def vigilar_conexiones(cada_segundos: int = 120) -> None:
     threading.Thread(target=bucle, daemon=True).start()
 
 
+# Junto a cada fuente en el prompt: con varias fuentes de motores distintos, el
+# modelo arrastra el dialecto de la que mas usa (los TOP de SQL Server acababan
+# en consultas a PostgreSQL).
+DIALECTO = {
+    "postgres": "SQL de PostgreSQL: LIMIT, no TOP",
+    "supabase": "SQL de PostgreSQL: LIMIT, no TOP",
+    "mssql": "SQL de SQL Server: TOP, no LIMIT",
+}
+
+_TABLAS_EN_SQL = re.compile(r'\b(?:from|join)\s+("?[\w.]+"?)', re.IGNORECASE)
+
+
+def pista_de_error(id_fuente: str, sql: str, error: Exception) -> str:
+    """Lo que el modelo necesita para corregir una consulta que fallo.
+
+    Se suma al error crudo: con el dialecto correcto o las columnas reales en
+    la mano, el reintento sale bien en vez de volver a adivinar.
+    """
+    fuente = obtener(id_fuente)
+    if fuente is None:
+        return ""
+    tipo = fuente["tipo"]
+    postgres = tipo in ("postgres", "supabase")
+    bajo = str(error).lower()
+    pistas = []
+
+    if postgres and re.search(r"\btop\s+\d", sql, re.IGNORECASE):
+        pistas.append("Esta fuente es PostgreSQL: usa LIMIT N al final, no TOP N.")
+    if tipo == "mssql" and re.search(r"\blimit\s+\d", sql, re.IGNORECASE):
+        pistas.append("Esta fuente es SQL Server: usa SELECT TOP N, no LIMIT.")
+    if "group by" in bajo:
+        pistas.append(
+            "Toda columna del SELECT que no este dentro de sum/count/max/min/avg "
+            "tiene que ir tambien en el GROUP BY."
+        )
+
+    columna_mala = ("column" in bajo and "does not exist" in bajo) or "invalid column name" in bajo
+    tabla_mala = ("relation" in bajo and "does not exist" in bajo) or "invalid object name" in bajo
+    if columna_mala or tabla_mala:
+        try:
+            esquema_fuente = esquema_de(id_fuente)
+        except Exception:  # noqa: BLE001 - sin esquema, sin pista
+            esquema_fuente = {"tablas": []}
+        por_nombre = {t["tabla"].lower(): t for t in esquema_fuente["tablas"]}
+        if columna_mala:
+            for crudo in dict.fromkeys(_TABLAS_EN_SQL.findall(sql)):
+                entrada = por_nombre.get(crudo.strip('"').lower())
+                if entrada:
+                    nombres = ", ".join(c.rsplit(" ", 1)[0] for c in entrada["columnas"].split(", "))
+                    pistas.append(f"Columnas reales de {entrada['tabla']}: {nombres}.")
+        if tabla_mala and por_nombre:
+            pistas.append("Tablas que existen: " + ", ".join(t["tabla"] for t in esquema_fuente["tablas"]) + ".")
+
+    return " ".join(pistas)[:1500]
+
+
 def explicar(error: Exception) -> str:
     """Traduce los fallos tipicos a algo accionable."""
     crudo = str(error)
@@ -1117,7 +1173,9 @@ def resumen_para_prompt() -> str:
         etiqueta = CATALOGO_TIPOS[fuente["tipo"]]["etiqueta"]
         permiso = "solo lectura" if fuente.get("solo_lectura", True) else "lectura y escritura"
         nota = f" — {fuente['notas']}" if fuente.get("notas") else ""
-        cabecera = f'- id "{fuente["id"]}": {fuente["nombre"]} ({etiqueta}, {permiso}){nota}'
+        dialecto = DIALECTO.get(fuente["tipo"], "")
+        dialecto = f"; {dialecto}" if dialecto else ""
+        cabecera = f'- id "{fuente["id"]}": {fuente["nombre"]} ({etiqueta}, {permiso}{dialecto}){nota}'
 
         # La base principal ya va documentada aparte, con su catalogo.
         if fuente["tipo"] == "supabase" and not fuente.get("notas", "").strip():
