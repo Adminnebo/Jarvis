@@ -6,7 +6,7 @@ ESQUEMA_CRM = {
     "fuente": "Mensajes",
     "tipo": "postgres",
     "tablas": [
-        {"tabla": "messages", "columnas": "id bigint, conversation_id bigint, direction text, text text, created_at timestamp"},
+        {"tabla": "messages", "columnas": "id bigint, conversation_id bigint, direction text, text text, created_at timestamp with time zone"},
         {"tabla": "contacts", "columnas": "id bigint, phone text, name text"},
     ],
 }

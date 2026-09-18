@@ -924,7 +924,7 @@ def pista_de_error(id_fuente: str, sql: str, error: Exception) -> str:
             for crudo in dict.fromkeys(_TABLAS_EN_SQL.findall(sql)):
                 entrada = por_nombre.get(crudo.strip('"').lower())
                 if entrada:
-                    nombres = ", ".join(c.rsplit(" ", 1)[0] for c in entrada["columnas"].split(", "))
+                    nombres = ", ".join(c.split(" ", 1)[0] for c in entrada["columnas"].split(", "))
                     pistas.append(f"Columnas reales de {entrada['tabla']}: {nombres}.")
         if tabla_mala and por_nombre:
             pistas.append("Tablas que existen: " + ", ".join(t["tabla"] for t in esquema_fuente["tablas"]) + ".")
