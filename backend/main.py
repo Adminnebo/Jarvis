@@ -254,8 +254,7 @@ def entrar_con_supabase(datos: dict):
 
 @app.get("/registro")
 def formulario_de_registro():
-    if acceso.obligatorio():
-        return HTMLResponse(acceso.pagina_sin_proteger(), status_code=503)
+    """Solo para quien administra Jarvis: lo controla acceso.exige_admin."""
     return HTMLResponse(acceso.pagina_registro())
 
 
@@ -266,28 +265,17 @@ async def registro(
     email: str = Form(""),
     password: str = Form(""),
 ):
-    # /registro esta en LIBRES para poder mostrarse antes de tener sesion, asi
-    # que aqui se repite a mano la comprobacion que el middleware le hace a
-    # todo lo demas: un servidor hospedado sin proteger no debe dejar crear
-    # cuentas nuevas.
-    if acceso.obligatorio():
-        return HTMLResponse(acceso.pagina_sin_proteger(), status_code=503)
-
     try:
         usuario = cuentas.crear_organizacion(organizacion, nombre, email, password)
     except cuentas.ErrorDeCuenta as error:
-        return HTMLResponse(acceso.pagina_registro(str(error)), status_code=400)
+        return HTMLResponse(acceso.pagina_registro(error=str(error)), status_code=400)
 
-    respuesta = RedirectResponse("/", status_code=303)
-    respuesta.set_cookie(
-        acceso.COOKIE,
-        acceso.crear_token(usuario),
-        max_age=acceso.DURACION,
-        httponly=True,
-        samesite="lax",
-        secure=rutas.hospedado(),
-    )
-    return respuesta
+    # Quien la crea es el admin, no la persona nueva: no se le cambia la
+    # sesion. La cuenta nueva entra despues con su correo.
+    return HTMLResponse(acceso.pagina_registro(
+        hecho=f"Listo: {organizacion.strip()} creada. {usuario.nombre} ya puede "
+              f"entrar con {email.strip().lower()} en /acceso/cuenta.",
+    ))
 
 
 @app.get("/acceso/cuenta")

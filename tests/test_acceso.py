@@ -122,6 +122,8 @@ import pytest
     ("/api/esquema/refrescar", "POST"),
     ("/api/consumo", "GET"),
     ("/api/consumo", "DELETE"),
+    ("/registro", "GET"),
+    ("/registro", "POST"),
 ])
 def test_rutas_solo_para_admin(ruta, metodo):
     assert acceso.exige_admin(ruta, metodo) is True

@@ -156,19 +156,70 @@ def test_el_rechazo_dice_el_tipo_de_fallo(cliente, monkeypatch):
 
 def _registrar(cliente, organizacion="Acme", nombre="Lucas",
                email="lucas@acme.com", password="una-clave-larga"):
-    cliente.cookies.clear()
-    return cliente.post("/registro", data={
+    """El admin crea la organizacion y la sesion queda como la cuenta nueva.
+
+    Crearla ya no deja logueado a nadie: la cuenta nueva entra despues con su
+    correo, como lo haria de verdad.
+    """
+    _entrar(cliente, "la-del-admin")
+    respuesta = cliente.post("/registro", data={
         "organizacion": organizacion, "nombre": nombre,
         "email": email, "password": password,
-    }, follow_redirects=False)
+    })
+    if respuesta.status_code == 200:
+        cliente.cookies.clear()
+        cliente.post("/acceso/cuenta", data={"email": email, "password": password})
+    return respuesta
 
 
-def test_registrar_una_organizacion_deja_cookie(cliente):
-    from backend import acceso
+def _crear_como_admin(cliente, organizacion="Acme", email="lucas@acme.com"):
+    return cliente.post("/registro", data={
+        "organizacion": organizacion, "nombre": "Lucas",
+        "email": email, "password": "una-clave-larga",
+    })
 
-    respuesta = _registrar(cliente)
-    assert respuesta.status_code == 303
-    assert acceso.COOKIE in respuesta.cookies
+
+def test_sin_sesion_no_se_puede_crear_una_organizacion(cliente):
+    # Estuvo abierto, y como las fuentes son comunes cualquiera que tuviera la
+    # URL se registraba y consultaba los datos del negocio.
+    cliente.cookies.clear()
+    assert cliente.get("/registro").status_code == 401
+    assert _crear_como_admin(cliente).status_code == 401
+
+
+def test_quien_no_administra_jarvis_no_crea_organizaciones(cliente):
+    _entrar(cliente, "la-de-jorge")
+    assert cliente.get("/registro").status_code == 403
+    assert _crear_como_admin(cliente).status_code == 403
+
+
+def test_una_cuenta_de_organizacion_no_crea_otras(cliente):
+    _registrar(cliente)
+    assert _crear_como_admin(cliente, "Otra", "otro@x.com").status_code == 403
+
+
+def test_el_admin_crea_una_organizacion_sin_perder_su_sesion(cliente):
+    _entrar(cliente, "la-del-admin")
+
+    respuesta = _crear_como_admin(cliente)
+    assert respuesta.status_code == 200
+    assert "Acme creada" in respuesta.text
+
+    # Sigue siendo el admin: crearla no lo cambio por la cuenta nueva.
+    assert cliente.get("/api/estado").json()["rol"] == "admin"
+
+
+def test_el_nombre_de_la_organizacion_se_escapa(cliente):
+    _entrar(cliente, "la-del-admin")
+    respuesta = _crear_como_admin(cliente, "<script>alert(1)</script>")
+    assert "<script>alert(1)</script>" not in respuesta.text
+    assert "&lt;script&gt;" in respuesta.text
+
+
+def test_la_pantalla_de_acceso_ya_no_ofrece_registrarse(cliente):
+    cliente.cookies.clear()
+    assert "/registro" not in cliente.get("/acceso").text
+    assert "/registro" not in cliente.get("/acceso/cuenta").text
 
 
 def test_despues_de_registrarse_la_sesion_ya_es_de_organizacion(cliente):

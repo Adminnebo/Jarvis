@@ -10,6 +10,7 @@ sirve. Es preferible un despliegue que no arranca a uno abierto de par en par.
 
 import hashlib
 import hmac
+import html
 import os
 import time
 from dataclasses import dataclass
@@ -248,6 +249,7 @@ _ESTILO = """
   code { background:#07090e; padding:2px 7px; border-radius:6px;
          color:#9ecbff; font-size:13px; }
   .mal { color:#ffc9c9; font-size:13px; margin-top:14px; }
+  .bien { color:#9be9a8; font-size:13px; margin-top:14px; }
   ol { color:#7c8798; font-size:13.5px; padding-left:20px; }
   li { margin-bottom:8px; }
 """
@@ -268,32 +270,41 @@ def pagina_login(error: str = "") -> str:
   </form>
   {aviso}
   <p style="margin-top:18px;">
-    <a href="/acceso/cuenta">Entrar con tu correo</a> &middot;
-    <a href="/registro">Crear cuenta de organizacion</a>
+    <a href="/acceso/cuenta">Entrar con tu correo</a>
   </p>
 </div></body></html>"""
 
 
-def pagina_registro(error: str = "") -> str:
-    aviso = f'<p class="mal">{error}</p>' if error else ""
+def pagina_registro(error: str = "", hecho: str = "") -> str:
+    """Alta de organizaciones. Solo la ve quien administra Jarvis.
+
+    Los dos mensajes se escapan: `hecho` lleva el nombre de la organizacion
+    tal como se escribio, y esto se arma con un f-string.
+    """
+    aviso = (
+        f'<p class="mal">{html.escape(error)}</p>' if error
+        else f'<p class="bien">{html.escape(hecho)}</p>' if hecho
+        else ""
+    )
     return f"""<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Jarvis - Crear cuenta</title><style>{_ESTILO}</style></head><body>
+<title>Jarvis - Nueva organizacion</title><style>{_ESTILO}</style></head><body>
 <div class="caja">
-  <h1>Crear cuenta</h1>
-  <p>Una organizacion nueva, con la primera cuenta que la administra.</p>
+  <h1>Nueva organizacion</h1>
+  <p>Con la primera persona que la administra. Esa persona entra despues con
+     su correo y puede sumar al resto de su gente.</p>
   <form method="post" action="/registro">
     <input type="text" name="organizacion" placeholder="Nombre de la organizacion"
            autofocus required>
-    <input type="text" name="nombre" placeholder="Tu nombre" required>
-    <input type="email" name="email" placeholder="Tu correo" required
-           autocomplete="email">
-    <input type="password" name="password" placeholder="Contrasena (minimo 8 caracteres)"
+    <input type="text" name="nombre" placeholder="Nombre de quien la administra" required>
+    <input type="email" name="email" placeholder="Su correo" required
+           autocomplete="off">
+    <input type="password" name="password" placeholder="Su contrasena (minimo 8 caracteres)"
            required autocomplete="new-password">
     <button type="submit">Crear</button>
   </form>
   {aviso}
-  <p style="margin-top:18px;"><a href="/acceso/cuenta">Ya tengo cuenta</a></p>
+  <p style="margin-top:18px;"><a href="/">Volver a Jarvis</a></p>
 </div></body></html>"""
 
 
@@ -312,7 +323,6 @@ def pagina_entrar_cuenta(error: str = "") -> str:
     <button type="submit">Entrar</button>
   </form>
   {aviso}
-  <p style="margin-top:18px;"><a href="/registro">Crear una organizacion</a></p>
 </div></body></html>"""
 
 
@@ -387,7 +397,7 @@ def pagina_de_entrada() -> str:
 
 LIBRES = (
     "/acceso", "/api/salud", "/api/version", "/entrar", "/acceso/supabase",
-    "/registro", "/acceso/cuenta", "/api/dispositivos/vincular",
+    "/acceso/cuenta", "/api/dispositivos/vincular",
 )
 
 
@@ -411,5 +421,10 @@ def exige_admin(ruta: str, metodo: str) -> bool:
         return True
     # Lo que consumio cada organizacion es del negocio, no de cada cliente.
     if ruta.startswith("/api/organizaciones"):
+        return True
+    # Crear organizaciones. Estuvo abierto a cualquiera, y como las fuentes de
+    # datos son comunes, cualquiera que tuviera la URL podia registrarse y
+    # consultarlas.
+    if ruta == "/registro":
         return True
     return False

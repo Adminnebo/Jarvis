@@ -31,6 +31,13 @@ la misma cookie de sesión que ya usaban los otros dos caminos de acceso
 dueño de `JARVIS_PASSWORD`. Administrar la propia organización (agregar
 gente) es un permiso aparte, `es_admin_org`.
 
+**`/registro` es solo del admin** (2026-09-21). Nació abierto a cualquiera, y
+fue un error: las herramientas de datos no distinguen quién pregunta y las
+fuentes son comunes, así que cualquiera con la URL se registraba y consultaba
+clientes, deudores y precios, o mandaba WhatsApp desde el número del negocio.
+Ahora pasa por `acceso.exige_admin`, y crear una organización no cambia la
+sesión de quien la crea: la cuenta nueva entra después con su correo.
+
 **Vinculación de reloj por código**, no por token compilado: cualquier
 persona ya logueada en Jarvis —por cualquiera de los tres caminos— genera un
 código de 6 caracteres desde `POST /api/dispositivos/codigo`, vence en 10

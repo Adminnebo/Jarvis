@@ -56,7 +56,9 @@ async function cargarConsumo() {
 
 async function pintarPorOrganizacion(porOrganizacion) {
   const destino = $c("organizaciones-consumo");
-  destino.innerHTML = "<h3>Por organización</h3>";
+  destino.innerHTML =
+    '<h3>Por organización</h3>' +
+    '<p><a class="boton-mini" href="/registro">Nueva organización</a></p>';
 
   let organizaciones = [];
   try {

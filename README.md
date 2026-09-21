@@ -94,11 +94,19 @@ casilla **Usar Jarvis**), no el botón **Organización** de Jarvis.
 
 ### Organizaciones
 
-Además de las contraseñas por variable, cualquiera puede crear una cuenta
-propia en `/registro`: una organización con correo y contraseña. Quien la crea
-la administra (puede sumar gente desde **Organización** en la barra), pero una
-cuenta de organización nunca toca Fuentes, Esquema o Consumo —eso sigue siendo
-de quien tiene `JARVIS_PASSWORD`—. Vive en `data/jarvis.db` (SQLite, sin
+Además de las contraseñas por variable, hay cuentas con correo y contraseña
+agrupadas en organizaciones. **Solo quien administra Jarvis las crea**, desde
+*Nueva organización* en el tablero de **Consumo** (o en `/registro`): se carga
+la organización con la primera persona que la administra, y esa persona entra
+después con su correo en `/acceso/cuenta` y suma al resto desde
+**Organización** en la barra.
+
+El registro no es abierto a propósito. Las fuentes de datos son comunes a
+todo el que entra, así que un registro abierto dejaba que cualquiera con la
+URL se creara una cuenta y consultara los datos del negocio.
+
+Una cuenta de organización nunca toca Fuentes, Esquema o Consumo —eso sigue
+siendo de quien administra Jarvis—. Vive en `data/jarvis.db` (SQLite, sin
 dependencias nuevas), no en variables de entorno.
 
 Sirve para atribuir el consumo: cada registro guarda qué organización lo
