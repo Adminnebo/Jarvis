@@ -47,7 +47,26 @@ async function cargarConsumo() {
   pintarResumen(datos.totales);
   pintarPorModelo(datos.por_modelo, datos.precios);
   await pintarPorOrganizacion(datos.por_organizacion);
+  pintarCreditos(datos.creditos);
   pintarDetalle(datos.registros);
+}
+
+// Si el cobro en agentia esta saliendo o se esta acumulando sin llegar: una
+// API key mal puesta no rompe nada a la vista, solo deja de cobrar.
+function pintarCreditos(creditos) {
+  if (!creditos || (!creditos.activo && !creditos.enviados && !creditos.pendientes)) return;
+
+  const linea = document.createElement("p");
+  const partes = [
+    creditos.activo ? "Cobro en agentia: encendido" : "Cobro en agentia: apagado",
+    `${creditos.enviados} envíos, ${dinero(creditos.cobrado, 2)} descontados`,
+  ];
+  if (creditos.pendientes) partes.push(`${creditos.pendientes} sin mandar`);
+  linea.textContent = partes.join(" · ");
+  linea.className = creditos.pendientes ? "resultado-prueba mal" : "ayuda-tipo";
+  if (creditos.ultimo_error) linea.title = `Último error: ${creditos.ultimo_error}`;
+
+  $c("organizaciones-consumo").appendChild(linea);
 }
 
 // --------------------------------------------------------------------------

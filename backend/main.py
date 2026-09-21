@@ -30,6 +30,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     conectores,
     consumo,
     cotizaciones,
+    creditos,
     cuentas,
     dispositivos,
     esquema,
@@ -68,6 +69,7 @@ def al_arrancar():
 
     acceso.avisar_de_contrasenas_repetidas()
     cuentas.avisar_de_margenes_invalidos()
+    creditos.arrancar()
 
     if not supabase_sesion.configurado():
         print(
@@ -574,7 +576,9 @@ def ver_consumo(
     organizacion: str = "todas",
 ):
     """Tokens y dolares, con los filtros del tablero."""
-    return consumo.consultar(periodo=periodo, modo=modo, modelo=modelo, organizacion=organizacion)
+    datos = consumo.consultar(periodo=periodo, modo=modo, modelo=modelo, organizacion=organizacion)
+    datos["creditos"] = creditos.resumen()
+    return datos
 
 
 @app.post("/api/consumo/voz")

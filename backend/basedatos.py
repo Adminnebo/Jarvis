@@ -80,6 +80,34 @@ _ESQUEMA = """
 
     CREATE INDEX IF NOT EXISTS idx_consumo_organizacion
         ON consumo (organizacion_id, cuando);
+
+    -- Cobro en agentia (creditos.py). Hasta donde ya se miro el consumo, lo
+    -- que cada persona debe y todavia no llega a un centavo, y cada envio con
+    -- su referencia: se anota antes de mandarlo, asi un reintento no cobra
+    -- dos veces.
+    CREATE TABLE IF NOT EXISTS creditos_estado (
+        clave TEXT PRIMARY KEY,
+        valor TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS creditos_pendientes (
+        organizacion_id TEXT NOT NULL,
+        usuario_id TEXT NOT NULL,
+        pendiente REAL NOT NULL DEFAULT 0,
+        PRIMARY KEY (organizacion_id, usuario_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS creditos_envios (
+        referencia TEXT PRIMARY KEY,
+        cliente_id INTEGER NOT NULL,
+        organizacion_id TEXT NOT NULL,
+        usuario_id TEXT NOT NULL,
+        monto REAL NOT NULL,
+        nota TEXT,
+        creado TEXT NOT NULL,
+        enviado TEXT,
+        ultimo_error TEXT
+    );
 """
 
 

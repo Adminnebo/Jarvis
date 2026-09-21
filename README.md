@@ -168,6 +168,35 @@ confiar en el cliente habría que reconciliar contra la API de uso de OpenAI,
 o cobrar por minuto de sesión, que sí lo mide el servidor. El modo texto no
 tiene ese problema: el costo se calcula acá.
 
+### Descontarlo del saldo en agentia
+
+Lo que consume cada organización, con el margen, se descuenta de su saldo en
+agentia (`POST /api/credits/adjust`), con concepto `Jarvis` y el nombre de la
+persona en la nota:
+
+```
+JARVIS_CREDITOS_URL=https://app.swordaisolutions.com/api/credits/adjust
+JARVIS_CREDITOS_CALLER_ID=14
+JARVIS_CREDITOS_API_KEY=...                 # secreto: solo en el servidor
+JARVIS_CREDITOS_CLIENTE_PANELES=<clientId>  # una por organización
+```
+
+agentia redondea el monto a centavos, y una respuesta de Jarvis cuesta décimas
+de centavo: mandada sola, descontaría $0.00. Por eso lo cobrado **se junta por
+persona y sale en centavos enteros**; lo que no llega a un centavo espera al
+próximo envío. Un hilo de fondo manda lo juntado cada 5 minutos
+(`JARVIS_CREDITOS_CADA_MINUTOS`).
+
+Cada envío se anota antes de mandarse, con una referencia única que agentia no
+aplica dos veces: si la red se cae o el servidor se reinicia a mitad de camino,
+se reintenta sin cobrar doble. Se cobra **desde que se configura**, no hacia
+atrás.
+
+No cobrar por un error de configuración no rompe nada a la vista, así que se
+avisa: al arrancar, si falta una de las tres variables o un
+`JARVIS_CREDITOS_CLIENTE_<id>` no corresponde a ninguna organización; y en el
+tablero de **Consumo**, una línea con lo enviado y lo que quedó sin mandar.
+
 ### Vincular un reloj
 
 Desde **Dispositivos**, cualquiera ya logueado —por contraseña, por panel o
@@ -189,6 +218,8 @@ conversación, su memoria, su gasto— en vez de compartir la sesión del admin.
 | `JARVIS_MARGEN` | Porcentaje sobre OpenAI que se cobra a las organizaciones |
 | `JARVIS_MARGEN_<id>` | El de una organización en particular. Pisa al general |
 | `JARVIS_ORGANIZACION_PANELES` | Organización de quienes entran desde los paneles |
+| `JARVIS_CREDITOS_URL` / `_CALLER_ID` / `_API_KEY` | Descontar el consumo del saldo en agentia |
+| `JARVIS_CREDITOS_CLIENTE_<id>` | El clientId de agentia de cada organización |
 | `SUPABASE_ANON_KEY` | Clave pública. Habilita entrar desde los paneles |
 | `SUPABASE_*` | Las mismas de la sección de Supabase |
 
