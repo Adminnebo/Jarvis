@@ -142,7 +142,7 @@ def usuario_de_perfil(datos: dict | None):
     explicitos no llega nunca al asistente. Con mirar el rol y la lista
     explicita alcanza.
     """
-    from . import acceso
+    from . import acceso, cuentas
 
     if not datos:
         return None
@@ -162,7 +162,12 @@ def usuario_de_perfil(datos: dict | None):
     correo = (datos.get("email") or "").strip()
     nombre = (datos.get("full_name") or "").strip() or correo.split("@")[0] or "Alguien"
 
-    return acceso.Usuario(f"{PREFIJO}{datos['id']}", nombre, rol)
+    # Por aqui pasan el login, la revalidacion de cada minuto y los relojes
+    # vinculados, asi que la organizacion queda puesta en los tres.
+    return acceso.Usuario(
+        f"{PREFIJO}{datos['id']}", nombre, rol,
+        organizacion_id=cuentas.organizacion_de_paneles(),
+    )
 
 
 def entrar(token: str):

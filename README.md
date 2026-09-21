@@ -76,6 +76,22 @@ Necesita `SUPABASE_ANON_KEY` y `SUPABASE_DB_URL`. Si falta alguna, este acceso
 queda apagado —se avisa al arrancar— y las contraseñas por variable siguen
 funcionando.
 
+Para cobrarle a la empresa dueña de los paneles lo que consume su gente:
+
+```
+JARVIS_ORGANIZACION_PANELES=JH Electroalambres
+```
+
+Al arrancar se crea esa organización, y todo el que entra desde un panel queda
+adentro con el login que ya tiene: no hace falta crearle otra cuenta. Su id
+es fijo, `paneles`, así que se puede renombrar sin partirle el historial y
+nadie que se registre con el mismo nombre se queda con ella. Su margen propio,
+si lo necesita, va en `JARVIS_MARGEN_PANELES`. Sin la variable, quien entra
+desde los paneles es de la casa, como hasta ahora.
+
+Quién es miembro lo sigue decidiendo el panel de usuarios de Supabase (la
+casilla **Usar Jarvis**), no el botón **Organización** de Jarvis.
+
 ### Organizaciones
 
 Además de las contraseñas por variable, cualquiera puede crear una cuenta
@@ -143,6 +159,7 @@ conversación, su memoria, su gasto— en vez de compartir la sesión del admin.
 | `JARVIS_CLAVE_SECRETA` | Cifra las credenciales y firma las sesiones |
 | `JARVIS_MARGEN` | Porcentaje sobre OpenAI que se cobra a las organizaciones |
 | `JARVIS_MARGEN_<id>` | El de una organización en particular. Pisa al general |
+| `JARVIS_ORGANIZACION_PANELES` | Organización de quienes entran desde los paneles |
 | `SUPABASE_ANON_KEY` | Clave pública. Habilita entrar desde los paneles |
 | `SUPABASE_*` | Las mismas de la sección de Supabase |
 

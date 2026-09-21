@@ -52,6 +52,7 @@ def al_arrancar():
     # Antes que nada: crea las tablas de cuentas/dispositivos si no existen.
     basedatos.crear_tablas()
     consumo.migrar_jsonl()
+    cuentas.asegurar_organizacion_de_paneles()
 
     # En un servidor el disco viene vacio y las fuentes hay que recrearlas, o
     # no habria acceso a la base de productos.

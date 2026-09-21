@@ -176,6 +176,49 @@ def miembros(organizacion_id: str) -> list[dict]:
     return [dict(fila) for fila in filas]
 
 
+# --------------------------------------------------------------------------
+# La organizacion de quienes entran desde los paneles de Supabase
+# --------------------------------------------------------------------------
+
+ORGANIZACION_PANELES = "JARVIS_ORGANIZACION_PANELES"
+
+# Id fijo, no sale de token_hex como las de /registro: asi nadie que se
+# registre con el mismo nombre puede quedarse con esta organizacion, y el id
+# sobrevive si cambia el nombre en la variable.
+ID_PANELES = "paneles"
+
+
+def organizacion_de_paneles() -> str | None:
+    """A que organizacion pertenece quien entra desde un panel, o None.
+
+    Los paneles comparten un solo directorio de Supabase, el de una sola
+    empresa, asi que todos sus usuarios son de la misma organizacion.
+    """
+    return ID_PANELES if os.getenv(ORGANIZACION_PANELES, "").strip() else None
+
+
+def asegurar_organizacion_de_paneles() -> None:
+    """Se llama al arrancar: crea la organizacion, o le actualiza el nombre."""
+    nombre = os.getenv(ORGANIZACION_PANELES, "").strip()
+    if not nombre:
+        return
+
+    with basedatos.conexion() as con:
+        fila = con.execute(
+            "SELECT nombre FROM organizaciones WHERE id = ?", (ID_PANELES,)
+        ).fetchone()
+        if fila is None:
+            con.execute(
+                "INSERT INTO organizaciones (id, nombre, creada) VALUES (?, ?, ?)",
+                (ID_PANELES, nombre, _ahora()),
+            )
+            print(f"  Organizacion de los paneles creada: {nombre}")
+        elif fila["nombre"] != nombre:
+            con.execute(
+                "UPDATE organizaciones SET nombre = ? WHERE id = ?", (nombre, ID_PANELES)
+            )
+
+
 def nombre_organizacion(organizacion_id: str | None) -> str | None:
     if not organizacion_id:
         return None
