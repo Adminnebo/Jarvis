@@ -312,6 +312,23 @@ def test_lo_consumido_viaja_en_la_vista_de_la_organizacion(cliente):
     assert consumido["cobrado"] == 2.0
 
 
+def test_el_cliente_no_ve_el_costo_real_ni_el_margen(cliente, monkeypatch):
+    from backend import consumo, cuentas
+
+    monkeypatch.setenv("JARVIS_MARGEN", "30")
+    _registrar(cliente)
+    usuario = cuentas.entrar("lucas@acme.com", "una-clave-larga")
+    consumo.registrar("texto", "gpt-5.6-terra", {"input_tokens": 1_000_000}, usuario=usuario)
+
+    consumido = cliente.get("/api/organizacion").json()["consumido"]
+    # Ve lo que paga, con el margen ya adentro...
+    assert consumido["cobrado"] == 2.6
+    # ...pero no de donde sale: con esos dos sacaria cuanto se le gana.
+    assert "costo" not in consumido
+    assert "margen" not in consumido
+    assert "markup" not in consumido
+
+
 def test_el_tablero_del_admin_lista_lo_de_cada_organizacion(cliente):
     from backend import consumo, cuentas
 

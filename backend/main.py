@@ -66,6 +66,7 @@ def al_arrancar():
         )
 
     acceso.avisar_de_contrasenas_repetidas()
+    cuentas.avisar_de_margenes_invalidos()
 
     if not supabase_sesion.configurado():
         print(
@@ -658,6 +659,16 @@ def borrar_dispositivo(id_dispositivo: str, peticion: Request):
     return {"borrado": dispositivos.revocar(peticion.state.usuario.id, id_dispositivo)}
 
 
+def _consumido_para_el_cliente(organizacion_id: str) -> dict:
+    """Lo que le toca pagar, sin el costo real ni el margen.
+
+    Con esos dos cualquiera saca en las devtools cuanto se le gana. El
+    desglose completo esta en /api/organizaciones, que es solo del admin.
+    """
+    completo = cuentas.consumido(organizacion_id)
+    return {clave: completo[clave] for clave in ("consultas", "tokens", "cobrado")}
+
+
 @app.get("/api/organizacion")
 def ver_organizacion(peticion: Request):
     usuario = peticion.state.usuario
@@ -667,7 +678,7 @@ def ver_organizacion(peticion: Request):
         "organizacion": cuentas.nombre_organizacion(usuario.organizacion_id),
         "es_admin_org": cuentas.es_admin_org(usuario.id),
         "miembros": cuentas.miembros(usuario.organizacion_id),
-        "consumido": cuentas.consumido(usuario.organizacion_id),
+        "consumido": _consumido_para_el_cliente(usuario.organizacion_id),
     }
 
 

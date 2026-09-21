@@ -24,9 +24,7 @@ _ESQUEMA = """
     CREATE TABLE IF NOT EXISTS organizaciones (
         id TEXT PRIMARY KEY,
         nombre TEXT NOT NULL,
-        creada TEXT NOT NULL,
-        -- Lo que se le cobra sobre el costo real de OpenAI. 1.0 es al costo.
-        markup REAL NOT NULL DEFAULT 1.0
+        creada TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS usuarios (

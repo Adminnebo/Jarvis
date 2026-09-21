@@ -408,6 +408,7 @@ def agrupar_por_organizacion(registros: list[dict]) -> list[dict]:
         fila = grupos.setdefault(clave, {
             "organizacion_id": clave,
             "organizacion": cuentas.nombre_organizacion(clave) or "(sin organizacion)",
+            "margen": cuentas.margen(clave),
             "markup": cuentas.markup(clave),
             "consultas": 0, "tokens": 0, "costo": 0.0,
         })
@@ -418,7 +419,7 @@ def agrupar_por_organizacion(registros: list[dict]) -> list[dict]:
     filas = list(grupos.values())
     for fila in filas:
         # Lo que cuesta y lo que se cobra son dos numeros distintos: el segundo
-        # es el primero por el markup de esa organizacion.
+        # es el primero con el margen de esa organizacion encima.
         fila["cobrado"] = round(fila["costo"] * fila["markup"], 6)
         fila["costo"] = round(fila["costo"], 6)
     return sorted(filas, key=lambda f: f["costo"], reverse=True)

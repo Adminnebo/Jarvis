@@ -91,13 +91,25 @@ generó, así el tablero de **Consumo** muestra cuánto gastó cada una.
 ### Cuánto consumió cada una
 
 El tablero de **Consumo** tiene una tabla por organización: consultas, costo
-real, markup, lo cobrado en el periodo y lo consumido en total. La
+real, margen, lo cobrado en el periodo y lo consumido en total. La
 organización ve lo suyo en **Organización**.
 
-`markup` es lo que se le cobra sobre el costo real: `1.0` es al costo, `2.5`
-es dos veces y media. Por eso el tablero muestra **Costo** y **Cobrado** como
-dos columnas distintas. Se cambia por organización, en la columna `markup` de
-la tabla `organizaciones`.
+El margen es un porcentaje sobre lo que cobra OpenAI, por variable de entorno:
+
+```
+JARVIS_MARGEN=30                      # a todas: costo mas un 30%
+JARVIS_MARGEN_51512a3363c7f591=50     # a esta, 50%. El id sale en el tablero
+```
+
+Sin variable, se cobra al costo. Acepta `30`, `30%` o `12,5`; un valor que no
+sea un porcentaje de 0 en adelante se ignora y **se avisa al arrancar**, igual
+que un `JARVIS_MARGEN_<id>` que no corresponda a ninguna organización. Mejor
+enterarse en el log que descubrir a fin de mes que alguien se facturó al
+costo.
+
+El cliente ve solo lo que paga, con el margen ya adentro. El costo real y el
+porcentaje no salen en su respuesta: con esos dos sacaría cuánto se le gana.
+Esas cifras están solo en el tablero de **Consumo**, que es del admin.
 
 **No hay corte por consumo**: esto mide y deja el número listo para facturar,
 pero nadie se queda sin servicio. Quien entra por `JARVIS_PASSWORD` o desde un
@@ -129,6 +141,8 @@ conversación, su memoria, su gasto— en vez de compartir la sesión del admin.
 | `JARVIS_PASSWORD_<NOMBRE>` | Una por cada persona más que pueda entrar |
 | `JARVIS_DATA_DIR` | Ruta del volumen persistente |
 | `JARVIS_CLAVE_SECRETA` | Cifra las credenciales y firma las sesiones |
+| `JARVIS_MARGEN` | Porcentaje sobre OpenAI que se cobra a las organizaciones |
+| `JARVIS_MARGEN_<id>` | El de una organización en particular. Pisa al general |
 | `SUPABASE_ANON_KEY` | Clave pública. Habilita entrar desde los paneles |
 | `SUPABASE_*` | Las mismas de la sección de Supabase |
 

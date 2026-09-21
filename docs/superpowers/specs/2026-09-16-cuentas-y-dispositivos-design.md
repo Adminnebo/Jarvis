@@ -52,10 +52,20 @@ base: de esto sale la factura, y un archivo plano en un disco efímero no es
 base para cobrar. `consumo.migrar_jsonl()` sube el archivo viejo al arrancar,
 una sola vez, y lo renombra en vez de borrarlo.
 
-`cuentas.consumido(organizacion_id)` suma lo que lleva gastado cada una, y
-`markup` (por organización, default `1.0`) separa lo que cuesta de lo que se
-cobra. El tablero muestra ambas cifras; `/api/organizaciones` las lista todas
-y es solo para quien administra Jarvis.
+`cuentas.consumido(organizacion_id)` suma lo que lleva gastado cada una, y el
+margen separa lo que cuesta de lo que se cobra. El tablero muestra ambas
+cifras; `/api/organizaciones` las lista todas y es solo para quien administra
+Jarvis.
+
+**El margen es un porcentaje por variable de entorno** (2026-09-21):
+`JARVIS_MARGEN` para todas y `JARVIS_MARGEN_<id>` para una en particular. Al
+principio era una columna `markup` en la tabla `organizaciones`, pero sin
+interfaz solo se podía cambiar con SQL a mano; pasó a variable de entorno
+porque es como se configura todo lo demás en Jarvis. La columna ya no se lee
+(en las bases viejas queda, inerte). Un valor inválido se avisa al arrancar.
+
+`/api/organizacion`, la vista del cliente, devuelve solo lo que paga: costo
+real y margen quedan afuera, porque con esos dos se calcula cuánto se le gana.
 
 **Sin corte por consumo, por ahora.** Se evaluó un crédito prepago que
 devolviera 402 en las rutas que llaman al modelo y se descartó: primero hay

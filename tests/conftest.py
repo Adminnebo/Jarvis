@@ -15,7 +15,7 @@ import pytest
 def entorno_limpio(tmp_path, monkeypatch):
     monkeypatch.setenv("JARVIS_DATA_DIR", str(tmp_path))
     for nombre in list(os.environ):
-        if nombre.startswith("JARVIS_PASSWORD"):
+        if nombre.startswith(("JARVIS_PASSWORD", "JARVIS_MARGEN")):
             monkeypatch.delenv(nombre, raising=False)
     for nombre in ("JARVIS_CLAVE_SECRETA", "JARVIS_USUARIO"):
         monkeypatch.delenv(nombre, raising=False)

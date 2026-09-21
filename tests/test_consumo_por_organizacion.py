@@ -15,7 +15,8 @@ def organizacion():
 
 def test_una_organizacion_nueva_no_consumio_nada(organizacion):
     assert cuentas.consumido(organizacion.organizacion_id) == {
-        "consultas": 0, "tokens": 0, "costo": 0.0, "cobrado": 0.0, "markup": 1.0,
+        "consultas": 0, "tokens": 0, "costo": 0.0, "cobrado": 0.0,
+        "margen": 0.0, "markup": 1.0,
     }
 
 
@@ -30,19 +31,84 @@ def test_lo_consumido_se_suma(organizacion):
     assert resultado["tokens"] == 2_000_000
 
 
-def test_el_markup_separa_lo_que_cuesta_de_lo_que_se_cobra(organizacion):
-    from backend import basedatos
-
-    with basedatos.conexion() as con:
-        con.execute("UPDATE organizaciones SET markup = 2.5 WHERE id = ?",
-                    (organizacion.organizacion_id,))
+def test_el_margen_separa_lo_que_cuesta_de_lo_que_se_cobra(organizacion, monkeypatch):
+    monkeypatch.setenv("JARVIS_MARGEN", "30")
 
     usuario = cuentas.entrar("lucas@acme.com", "una-clave-larga")
     consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON, usuario=usuario)
 
     resultado = cuentas.consumido(organizacion.organizacion_id)
     assert resultado["costo"] == 2.0      # lo que cuesta en OpenAI
-    assert resultado["cobrado"] == 5.0    # lo que se le factura
+    assert resultado["cobrado"] == 2.6    # 2 dolares mas un 30%
+    assert resultado["margen"] == 30.0
+
+
+def test_sin_variable_se_cobra_al_costo(organizacion):
+    assert cuentas.margen(organizacion.organizacion_id) == 0.0
+    assert cuentas.markup(organizacion.organizacion_id) == 1.0
+
+
+def test_el_margen_de_una_organizacion_pisa_al_general(organizacion, monkeypatch):
+    otra = cuentas.crear_organizacion("Otra", "Ana", "ana@otra.com", "otra-clave-larga")
+    monkeypatch.setenv("JARVIS_MARGEN", "30")
+    monkeypatch.setenv(f"JARVIS_MARGEN_{organizacion.organizacion_id}", "50")
+
+    assert cuentas.margen(organizacion.organizacion_id) == 50.0
+    assert cuentas.margen(otra.organizacion_id) == 30.0
+
+
+def test_el_id_del_margen_propio_se_acepta_en_mayusculas(organizacion, monkeypatch):
+    # En Railway se escriben las variables en mayusculas por costumbre.
+    monkeypatch.setenv(f"JARVIS_MARGEN_{organizacion.organizacion_id.upper()}", "50")
+    assert cuentas.margen(organizacion.organizacion_id) == 50.0
+
+
+@pytest.mark.parametrize("escrito, esperado", [
+    ("30", 30.0), ("30%", 30.0), (" 30 ", 30.0), ("12,5", 12.5), ("12.5", 12.5),
+    ("0", 0.0),
+])
+def test_el_porcentaje_se_escribe_como_sea_natural(organizacion, monkeypatch, escrito, esperado):
+    monkeypatch.setenv("JARVIS_MARGEN", escrito)
+    assert cuentas.margen(organizacion.organizacion_id) == esperado
+
+
+@pytest.mark.parametrize("escrito", ["treinta", "-10", "", "30 por ciento"])
+def test_un_margen_invalido_se_cobra_al_costo(organizacion, monkeypatch, escrito):
+    monkeypatch.setenv("JARVIS_MARGEN", escrito)
+    assert cuentas.margen(organizacion.organizacion_id) == 0.0
+
+
+def test_un_margen_propio_invalido_cae_al_general(organizacion, monkeypatch):
+    monkeypatch.setenv("JARVIS_MARGEN", "30")
+    monkeypatch.setenv(f"JARVIS_MARGEN_{organizacion.organizacion_id}", "mucho")
+    assert cuentas.margen(organizacion.organizacion_id) == 30.0
+
+
+def test_quien_no_tiene_organizacion_no_paga_margen(monkeypatch):
+    monkeypatch.setenv("JARVIS_MARGEN", "30")
+    assert cuentas.margen(None) == 0.0
+
+
+def test_avisa_al_arrancar_si_un_margen_esta_mal(organizacion, monkeypatch, capsys):
+    monkeypatch.setenv("JARVIS_MARGEN", "treinta")
+    monkeypatch.setenv("JARVIS_MARGEN_noexiste", "50")
+    monkeypatch.setenv(f"JARVIS_MARGEN_{organizacion.organizacion_id}", "40")
+
+    cuentas.avisar_de_margenes_invalidos()
+
+    # En minusculas: Windows pasa los nombres de variable a mayusculas y Linux
+    # no, y el aviso tiene que salir en los dos.
+    salida = capsys.readouterr().out.lower()
+    assert "jarvis_margen='treinta'" in salida
+    assert "jarvis_margen_noexiste no corresponde" in salida
+    # El que esta bien no se menciona.
+    assert organizacion.organizacion_id not in salida
+
+
+def test_con_todo_bien_no_avisa_nada(organizacion, monkeypatch, capsys):
+    monkeypatch.setenv("JARVIS_MARGEN", "30")
+    cuentas.avisar_de_margenes_invalidos()
+    assert capsys.readouterr().out == ""
 
 
 def test_el_consumo_de_una_organizacion_no_le_pega_a_otra(organizacion):

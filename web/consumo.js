@@ -71,8 +71,9 @@ async function pintarPorOrganizacion(porOrganizacion) {
     (porOrganizacion || []).map((fila) => [fila.organizacion_id, fila]),
   );
   const filas = organizaciones.map((organizacion) => ({
+    id: organizacion.id,
     nombre: organizacion.nombre,
-    markup: organizacion.markup,
+    margen: organizacion.margen,
     historico: organizacion,
     periodo: delPeriodo[organizacion.id] || { consultas: 0, costo: 0, cobrado: 0 },
   }));
@@ -80,8 +81,9 @@ async function pintarPorOrganizacion(porOrganizacion) {
   const sinOrganizacion = delPeriodo[null] || delPeriodo["null"];
   if (sinOrganizacion) {
     filas.push({
+      id: null,
       nombre: sinOrganizacion.organizacion,
-      markup: null,
+      margen: null,
       historico: null,
       periodo: sinOrganizacion,
     });
@@ -99,12 +101,14 @@ const COLUMNAS_ORGANIZACION = [
   { titulo: "Organización", saca: (f) => f.nombre || "—" },
   { titulo: "Consultas", saca: (f) => numero(f.periodo.consultas) },
   { titulo: "Costo", saca: (f) => dinero(f.periodo.costo, 4) },
-  { titulo: "Markup", saca: (f) => (f.markup ? `${f.markup}×` : "—") },
+  { titulo: "Margen", saca: (f) => (f.margen == null ? "—" : `${f.margen}%`) },
   { titulo: "Cobrado", saca: (f) => dinero(f.periodo.cobrado, 4) },
   {
     titulo: "Consumido en total",
     saca: (f) => (f.historico ? dinero(f.historico.cobrado, 2) : "—"),
   },
+  // Para JARVIS_MARGEN_<id>, que pisa el margen general para esa organizacion.
+  { titulo: "Id", saca: (f) => f.id || "—" },
 ];
 
 function llenarModelos(modelos) {

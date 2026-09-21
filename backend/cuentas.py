@@ -7,6 +7,7 @@ solo de "credencial -> Usuario o None / error".
 
 import hashlib
 import hmac
+import os
 import re
 import secrets
 import sqlite3
@@ -189,25 +190,77 @@ def nombre_organizacion(organizacion_id: str | None) -> str | None:
 # Cuanto lleva consumido cada organizacion
 # --------------------------------------------------------------------------
 
-def markup(organizacion_id: str | None) -> float:
-    """Lo que se cobra sobre el costo real. 1.0 es al costo, sin ganancia."""
+MARGEN = "JARVIS_MARGEN"
+PREFIJO_MARGEN = "JARVIS_MARGEN_"
+
+
+def _porcentaje(valor: str | None) -> float | None:
+    """'30', '30%' o '12,5' -> el numero. None si no es un porcentaje valido.
+
+    Negativo tampoco vale: cobrar por debajo del costo no es un margen, y un
+    signo menos de mas es mas probable que un descuento a proposito.
+    """
+    try:
+        numero = float((valor or "").strip().rstrip("%").replace(",", "."))
+    except ValueError:
+        return None
+    return numero if numero >= 0 else None
+
+
+def margen(organizacion_id: str | None) -> float:
+    """El porcentaje que se cobra sobre lo que cobra OpenAI. 30 es 30% mas.
+
+    JARVIS_MARGEN_<id> pisa a JARVIS_MARGEN para esa organizacion. Quien no
+    tiene organizacion es de la casa: no se le cobra margen.
+    """
     if not organizacion_id:
-        return 1.0
+        return 0.0
+
+    for variable, valor in os.environ.items():
+        sufijo = variable[len(PREFIJO_MARGEN):] if variable.startswith(PREFIJO_MARGEN) else None
+        if sufijo and sufijo.lower() == organizacion_id:
+            propio = _porcentaje(valor)
+            if propio is not None:
+                return propio
+
+    return _porcentaje(os.getenv(MARGEN)) or 0.0
+
+
+def markup(organizacion_id: str | None) -> float:
+    """El multiplicador que sale del margen: 30% es 1.3."""
+    return 1 + margen(organizacion_id) / 100
+
+
+def avisar_de_margenes_invalidos() -> None:
+    """Se llama al arrancar. Un margen mal escrito se ignora, y callarlo haria
+    que alguien se quede cobrando al costo sin saberlo."""
     with basedatos.conexion() as con:
-        fila = con.execute(
-            "SELECT markup FROM organizaciones WHERE id = ?", (organizacion_id,)
-        ).fetchone()
-    return float(fila["markup"]) if fila else 1.0
+        existentes = {fila["id"] for fila in con.execute("SELECT id FROM organizaciones")}
+
+    for variable, valor in sorted(os.environ.items()):
+        if variable != MARGEN and not variable.startswith(PREFIJO_MARGEN):
+            continue
+
+        if _porcentaje(valor) is None:
+            print(f"  AVISO: se ignora {variable}={valor!r}: tiene que ser un "
+                  "porcentaje de 0 en adelante, como 30.")
+            continue
+
+        sufijo = variable[len(PREFIJO_MARGEN):].lower()
+        if variable != MARGEN and sufijo not in existentes:
+            print(f"  AVISO: {variable} no corresponde a ninguna organizacion. "
+                  "El id sale en el tablero de Consumo.")
 
 
 def consumido(organizacion_id: str | None) -> dict:
     """Lo que lleva gastado una organizacion desde siempre.
 
     `costo` es lo que cuesta en OpenAI y `cobrado` lo que se le factura: el
-    mismo numero por su markup. Son dos cifras distintas a proposito.
+    mismo numero con su margen encima. Son dos cifras distintas a proposito.
     """
     if not organizacion_id:
-        return {"consultas": 0, "tokens": 0, "costo": 0.0, "cobrado": 0.0, "markup": 1.0}
+        return {"consultas": 0, "tokens": 0, "costo": 0.0, "cobrado": 0.0,
+                "margen": 0.0, "markup": 1.0}
 
     with basedatos.conexion() as con:
         fila = con.execute(
@@ -223,6 +276,7 @@ def consumido(organizacion_id: str | None) -> dict:
         "tokens": fila["tokens"],
         "costo": round(fila["costo"], 6),
         "cobrado": round(fila["costo"] * tarifa, 6),
+        "margen": margen(organizacion_id),
         "markup": tarifa,
     }
 
@@ -231,6 +285,6 @@ def organizaciones() -> list[dict]:
     """Todas, con lo que llevan consumido. Para quien administra Jarvis."""
     with basedatos.conexion() as con:
         filas = con.execute(
-            "SELECT id, nombre, creada, markup FROM organizaciones ORDER BY creada"
+            "SELECT id, nombre, creada FROM organizaciones ORDER BY creada"
         ).fetchall()
     return [{**dict(fila), **consumido(fila["id"])} for fila in filas]
