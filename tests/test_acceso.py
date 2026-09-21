@@ -164,3 +164,15 @@ def test_las_variables_ignoradas_se_avisan_al_arrancar(monkeypatch, capsys):
     acceso.avisar_de_contrasenas_repetidas()
 
     assert "JARVIS_PASSWORD_ANA" in capsys.readouterr().out
+
+
+def test_la_pagina_de_entrada_marca_la_pestana_solo_si_entro():
+    # La marca hace aparecer el nombre y el boton de volver al panel. Si se
+    # pusiera antes de saber si entro, quedaria marcada una pestana que se
+    # quedo en el error.
+    guion = acceso.pagina_de_entrada()
+    assert "marcarQueVieneDeUnPanel(); location.replace('/')" in guion
+    assert guion.count("marcarQueVieneDeUnPanel()") == 2   # definicion y una llamada
+    # Del panel se guarda el origen, nunca la URL entera ni otro esquema.
+    assert "origen.origin" in guion
+    assert "/^https?:$/" in guion

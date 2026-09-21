@@ -356,6 +356,22 @@ def pagina_de_entrada() -> str:
     guardaria en un POST venido de otro sitio.
     """
     guion = """
+// La pagina principal lee esto para mostrar el nombre y el boton de volver.
+// Va en sessionStorage, que es de esta pestana: abrir Jarvis por su cuenta
+// en otra no hereda la marca. Del panel se guarda solo el origen, que es lo
+// que el navegador manda entre sitios, y solo si es http(s).
+function marcarQueVieneDeUnPanel() {
+  try {
+    sessionStorage.setItem('jarvis_desde_panel', '1');
+    const origen = document.referrer ? new URL(document.referrer) : null;
+    if (origen && /^https?:$/.test(origen.protocol) && origen.origin !== location.origin) {
+      sessionStorage.setItem('jarvis_panel_origen', origen.origin);
+    }
+  } catch (e) {
+    // Sin sessionStorage (navegacion privada estricta) no hay boton; se entra igual.
+  }
+}
+
 (async () => {
   const mensaje = document.getElementById('mensaje');
   const token = new URLSearchParams(location.hash.slice(1)).get('t');
@@ -372,7 +388,7 @@ def pagina_de_entrada() -> str:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: token }),
     });
-    if (r.ok) { location.replace('/'); return; }
+    if (r.ok) { marcarQueVieneDeUnPanel(); location.replace('/'); return; }
     const datos = await r.json().catch(() => ({}));
     mensaje.textContent = datos.error || 'No se pudo entrar.';
   } catch (e) {

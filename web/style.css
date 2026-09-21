@@ -125,6 +125,17 @@ body {
 
 .meta { color: var(--tenue); font-size: 12.5px; }
 
+/* Quien esta usando Jarvis, cuando lo abrio desde un panel. Con varias
+   personas en la misma pantalla compartida, que se vea de un vistazo. */
+.nombre-usuario {
+  color: var(--texto);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#btn-volver { color: var(--acento); }
+
 .boton-texto {
   background: none;
   border: none;

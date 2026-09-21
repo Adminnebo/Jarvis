@@ -632,6 +632,38 @@ $("btn-dispositivos").addEventListener("click", abrirPanelDispositivos);
 $("btn-organizacion").addEventListener("click", abrirPanelOrganizacion);
 
 // --------------------------------------------------------------------------
+// Volver al panel
+// --------------------------------------------------------------------------
+
+// La marca la pone /entrar al llegar desde un panel. Vive en sessionStorage:
+// es de esta pestana, y abrir Jarvis por su cuenta en otra no la hereda.
+function leerMarca(clave) {
+  try {
+    return sessionStorage.getItem(clave);
+  } catch {
+    return null;
+  }
+}
+
+function vieneDeUnPanel() {
+  return leerMarca("jarvis_desde_panel") === "1";
+}
+
+$("btn-volver").addEventListener("click", () => {
+  // Los tres paneles abren Jarvis en otra pestana: cerrarla deja a la persona
+  // en el panel exactamente donde estaba, en la conversacion o la cotizacion
+  // que tenia abierta.
+  window.close();
+
+  // Si el navegador no dejo cerrarla -Jarvis no se abrio desde el boton del
+  // panel-, se va al panel. Si se cerro, esto ya no corre.
+  setTimeout(() => {
+    const origen = leerMarca("jarvis_panel_origen");
+    if (origen) location.href = origen;
+  }, 200);
+});
+
+// --------------------------------------------------------------------------
 // Cerrar paneles: Escape y clic en el fondo
 // --------------------------------------------------------------------------
 
@@ -759,6 +791,12 @@ async function cargarEstado() {
     $("btn-fuentes").hidden = !esAdmin;
     $("btn-consumo").hidden = !esAdmin;
     $("btn-organizacion").hidden = !estado.es_admin_org;
+
+    if (vieneDeUnPanel()) {
+      $("nombre-usuario").textContent = estado.usuario;
+      $("nombre-usuario").hidden = false;
+      $("btn-volver").hidden = false;
+    }
     if (!sesionViva) {
       $("meta").textContent =
         `${estado.modelo} · ${estado.hechos_recordados} recuerdos`;
