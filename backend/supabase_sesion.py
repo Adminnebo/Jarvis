@@ -39,10 +39,12 @@ def configurado() -> bool:
     SUPABASE_DB_URL cuenta: sin conexion directa, leer el perfil iria por MCP
     y pondria mas de un segundo en el camino de cada peticion.
     """
+    from . import esquema
+
     return all(
         os.getenv(variable, "").strip()
-        for variable in ("SUPABASE_ANON_KEY", "SUPABASE_PROJECT_REF", "SUPABASE_DB_URL")
-    )
+        for variable in ("SUPABASE_ANON_KEY", "SUPABASE_PROJECT_REF")
+    ) and bool(esquema.cadena_de_conexion())
 
 
 def url_proyecto() -> str:
@@ -220,7 +222,9 @@ def diagnostico(token: str) -> str:
         detalle = str(fallo)
         # Algunos errores de conexion repiten la cadena entera, contrasena
         # incluida. Ni al log ni a la persona llega nunca.
-        cadena = os.getenv("SUPABASE_DB_URL", "").strip()
+        from . import esquema
+
+        cadena = esquema.cadena_de_conexion()
         if cadena:
             detalle = detalle.replace(cadena, "<SUPABASE_DB_URL>")
         clase = type(fallo).__name__

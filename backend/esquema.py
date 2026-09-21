@@ -40,6 +40,23 @@ order by coalesce(s.n_live_tup, 0) desc;
 """
 
 
+def cadena_de_conexion() -> str:
+    """SUPABASE_DB_URL sin lo que no es parte de la URL.
+
+    Railway y los demas guardan el valor literal. Pegado con comillas o con un
+    espacio adelante, psycopg no lo reconoce como URL, lo lee como 'clave=valor'
+    y falla con 'missing "=" after ... in connection info string'.
+
+    Todo el que use la cadena tiene que pasar por aqui: el que la tapa en los
+    mensajes de error tambien, o taparia una version distinta de la que se uso
+    para conectar y la contrasena saldria en el mensaje.
+    """
+    cadena = os.getenv("SUPABASE_DB_URL", "").strip()
+    if len(cadena) >= 2 and cadena[0] == cadena[-1] and cadena[0] in "\"'":
+        cadena = cadena[1:-1].strip()
+    return cadena
+
+
 def consultar(sql: str) -> list[dict]:
     """Ejecuta SQL de solo lectura por la via mas rapida disponible.
 
@@ -47,7 +64,7 @@ def consultar(sql: str) -> list[dict]:
     Sin ella cae al MCP, que funciona igual pero cuesta ~2s por viaje porque
     pasa por los servidores de OpenAI y de Supabase.
     """
-    if os.getenv("SUPABASE_DB_URL", "").strip():
+    if cadena_de_conexion():
         return consultar_directo(sql)
     return consultar_por_mcp(sql)
 
@@ -57,7 +74,7 @@ def consultar_directo(sql: str) -> list[dict]:
     import psycopg
     from psycopg.rows import dict_row
 
-    with psycopg.connect(os.environ["SUPABASE_DB_URL"], connect_timeout=10) as conexion:
+    with psycopg.connect(cadena_de_conexion(), connect_timeout=10) as conexion:
         # read_only a nivel de transaccion: aunque la credencial tenga
         # permisos de escritura, por aqui no se puede escribir.
         conexion.read_only = True
