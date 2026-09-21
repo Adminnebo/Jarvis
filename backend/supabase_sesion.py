@@ -211,6 +211,14 @@ def diagnostico(token: str) -> str:
     if not REFERENCIA.match(os.getenv("SUPABASE_PROJECT_REF", "").strip()):
         return "ref-invalida"
 
+    from . import esquema
+
+    # Antes de ir a Supabase: con la cadena mal, conectar solo da un
+    # 'missing "="' que no dice que tiene la cadena.
+    problema = esquema.problema_de_la_cadena()
+    if problema:
+        return f"cadena-invalida:{problema}"
+
     paso = "token"
     try:
         uuid = id_de_token(token)
