@@ -644,6 +644,22 @@ body {
 .fuente-estado details { margin-top: 4px; }
 .fuente-estado summary { cursor: pointer; color: var(--acento); }
 
+.organizacion-consumo {
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 9px 13px;
+  margin-bottom: 8px;
+}
+.organizacion-consumo summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+.organizacion-consumo[open] summary { margin-bottom: 8px; }
+.organizacion-cifras { color: var(--tenue); font-size: 12.5px; }
+
 .codigo-vinculo {
   margin-top: 14px;
   padding: 18px;
@@ -929,7 +945,8 @@ body {
    le gana al `display: none` que el navegador aplica a [hidden], y la ventana
    queda fija en pantalla aunque el codigo la marque como oculta. */
 .modal[hidden],
-.panel[hidden] { display: none; }
+.panel[hidden],
+.bombillo[hidden] { display: none; }
 
 .modal-caja {
   background: var(--panel);

@@ -199,3 +199,83 @@ def test_migrar_es_idempotente(entorno_limpio):
     consumo.migrar_jsonl()
 
     assert len(consumo.todos()) == 1
+
+
+# --------------------------------------------------------------------------
+# El nombre de cada persona en el desglose por organizacion
+# --------------------------------------------------------------------------
+
+def test_el_nombre_sale_de_donde_vive_cada_cuenta(organizacion, monkeypatch):
+    from backend import supabase_sesion
+
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    monkeypatch.setenv("JARVIS_PASSWORD_JORGE", "la-de-jorge")
+    uuid = "11111111-2222-3333-4444-555555555555"
+    monkeypatch.setattr(supabase_sesion, "nombres_de_perfiles",
+                        lambda uuids: {uuid: "Ana Perez"} if uuid in uuids else {})
+
+    nombres = cuentas.nombres_de_usuarios([
+        organizacion.id,        # cuenta de organizacion: tabla usuarios
+        f"sb-{uuid}",           # panel: perfil de Supabase
+        "jorge",                # contrasena por variable
+        "sb-no-existe",
+        None,
+    ])
+
+    assert nombres[organizacion.id] == "Lucas"
+    assert nombres[f"sb-{uuid}"] == "Ana Perez"
+    assert nombres["jorge"] == "Jorge"
+    # Lo que no se encuentra se muestra por su id, en vez de desaparecer.
+    assert nombres["sb-no-existe"] == "sb-no-existe"
+    assert nombres[None] == "(sin registrar)"
+
+
+def test_si_supabase_no_responde_el_desglose_sale_igual(organizacion, monkeypatch):
+    from backend import supabase_sesion
+
+    def revienta(uuids):
+        raise RuntimeError("sin red")
+
+    monkeypatch.setattr(supabase_sesion, "nombres_de_perfiles", revienta)
+    uuid = "11111111-2222-3333-4444-555555555555"
+
+    # El tablero no puede caerse porque Supabase tarde: sale con los ids.
+    assert cuentas.nombres_de_usuarios([f"sb-{uuid}"]) == {f"sb-{uuid}": f"sb-{uuid}"}
+
+
+def test_los_perfiles_se_piden_de_una_sola_vez(monkeypatch):
+    from backend import supabase_sesion
+
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setenv("SUPABASE_PROJECT_REF", "abcdefghijklmnopqrst")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service")
+    llamadas = []
+
+    class Respuesta:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [
+                {"id": "11111111-2222-3333-4444-555555555555", "full_name": "Ana Perez", "email": "a@x.com"},
+                {"id": "66666666-7777-8888-9999-000000000000", "full_name": "", "email": "beto@x.com"},
+            ]
+
+    monkeypatch.setattr(supabase_sesion.httpx, "get",
+                        lambda url, **o: llamadas.append(o["params"]) or Respuesta())
+
+    nombres = supabase_sesion.nombres_de_perfiles([
+        "11111111-2222-3333-4444-555555555555",
+        "66666666-7777-8888-9999-000000000000",
+        "'); drop table profiles; --",      # no es un uuid: no entra al filtro
+    ])
+
+    assert len(llamadas) == 1
+    assert "drop" not in llamadas[0]["id"]
+    # Mismo criterio que al entrar: sin nombre, la parte del correo.
+    assert nombres == {
+        "11111111-2222-3333-4444-555555555555": "Ana Perez",
+        "66666666-7777-8888-9999-000000000000": "beto",
+    }

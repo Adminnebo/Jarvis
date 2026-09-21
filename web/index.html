@@ -13,7 +13,10 @@
               title="Volver al panel desde donde abriste Jarvis">&larr; Volver al panel</button>
       <span class="punto" id="punto-estado"></span>
       <h1 id="titulo">Jarvis</h1>
-      <button id="bombillo" class="bombillo" type="button"
+      <!-- Todo lo marcado con data-super-admin arranca escondido y solo se
+           muestra si el servidor confirma super admin: si /api/estado falla,
+           no queda nada a la vista. -->
+      <button id="bombillo" class="bombillo" type="button" hidden data-super-admin
               title="Comprobando version...">
         <span class="led led-azul" id="led-version"></span>
         <span class="led led-verde" id="led-datos"></span>
@@ -23,13 +26,13 @@
     <div class="acciones">
       <span class="insignia" id="insignia-supabase" hidden>Supabase</span>
       <span class="nombre-usuario" id="nombre-usuario" hidden></span>
-      <span class="meta" id="meta"></span>
-      <button id="btn-consumo" class="boton-texto">Consumo</button>
-      <button id="btn-fuentes" class="boton-texto">Fuentes</button>
+      <span class="meta" id="meta" hidden data-super-admin></span>
+      <button id="btn-consumo" class="boton-texto" hidden data-super-admin>Consumo</button>
+      <button id="btn-fuentes" class="boton-texto" hidden data-super-admin>Fuentes</button>
       <button id="btn-organizacion" class="boton-texto" hidden>Organización</button>
-      <button id="btn-dispositivos" class="boton-texto">Dispositivos</button>
-      <button id="btn-memoria" class="boton-texto">Memoria</button>
-      <button id="btn-reiniciar" class="boton-texto">Reiniciar</button>
+      <button id="btn-dispositivos" class="boton-texto" hidden data-super-admin>Dispositivos</button>
+      <button id="btn-memoria" class="boton-texto" hidden data-super-admin>Memoria</button>
+      <button id="btn-reiniciar" class="boton-texto" hidden data-super-admin>Reiniciar</button>
     </div>
   </header>
 

@@ -132,14 +132,19 @@ def test_con_jarvis_usar_entra_como_usuario():
     assert usuario.id == "sb-11111111-2222-3333-4444-555555555555"
 
 
-def test_con_jarvis_admin_entra_como_admin():
-    usuario = supabase_sesion.usuario_de_perfil(perfil_de(permissions=["jarvis.admin"]))
-    assert usuario.rol == "admin"
+def test_solo_el_super_admin_administra_jarvis():
+    # Administrar es ver consumo con el costo real y el margen, fuentes con
+    # credenciales y el alta de organizaciones: nada de eso es para el cliente.
+    assert supabase_sesion.usuario_de_perfil(perfil_de(role="super_admin")).rol == "admin"
 
 
-@pytest.mark.parametrize("role", ["super_admin", "admin"])
-def test_los_administradores_de_la_plataforma_son_admin(role):
-    assert supabase_sesion.usuario_de_perfil(perfil_de(role=role)).rol == "admin"
+@pytest.mark.parametrize("perfil", [
+    perfil_de(role="admin"),
+    perfil_de(permissions=["jarvis.admin"]),
+])
+def test_el_admin_del_panel_y_administrar_jarvis_entran_como_usuarios(perfil):
+    # Siguen entrando a conversar, pero sin las funciones de arriba.
+    assert supabase_sesion.usuario_de_perfil(perfil).rol == "usuario"
 
 
 def test_sin_permiso_de_jarvis_no_entra():
@@ -200,7 +205,7 @@ def test_revalidar_devuelve_none_si_le_quitaron_el_permiso(configurado, monkeypa
 def test_revalidar_actualiza_el_rol(configurado, monkeypatch):
     previo = supabase_sesion.usuario_de_perfil(perfil_de(permissions=["jarvis.usar"]))
     monkeypatch.setattr(supabase_sesion, "perfil_cacheado",
-                        lambda u: perfil_de(permissions=["jarvis.admin"]))
+                        lambda u: perfil_de(role="super_admin"))
     assert supabase_sesion.revalidar(previo).rol == "admin"
 
 

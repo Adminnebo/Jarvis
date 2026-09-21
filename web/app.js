@@ -786,11 +786,14 @@ async function cargarEstado() {
     $("titulo").textContent = estado.nombre;
     document.title = estado.nombre;
 
-    // Comodidad, no seguridad: el servidor ya devuelve 403 a quien no es admin.
-    const esAdmin = estado.rol === "admin";
-    $("btn-fuentes").hidden = !esAdmin;
-    $("btn-consumo").hidden = !esAdmin;
-    $("btn-organizacion").hidden = !estado.es_admin_org;
+    // Las funciones de arriba son solo del super admin (rol "admin"). Esto es
+    // comodidad, no seguridad: lo que importa -consumo, fuentes,
+    // organizaciones- el servidor ya lo niega con un 403.
+    const esSuperAdmin = estado.rol === "admin";
+    for (const nodo of document.querySelectorAll("[data-super-admin]")) {
+      nodo.hidden = !esSuperAdmin;
+    }
+    $("btn-organizacion").hidden = !(esSuperAdmin && estado.es_admin_org);
 
     if (vieneDeUnPanel()) {
       $("nombre-usuario").textContent = estado.usuario;
@@ -805,7 +808,7 @@ async function cargarEstado() {
     puntoEstado.className = `punto ${estado.clave_configurada ? "ok" : "problema"}`;
 
     const insignia = $("insignia-supabase");
-    insignia.hidden = !estado.conectores?.supabase;
+    insignia.hidden = !(esSuperAdmin && estado.conectores?.supabase);
     if (estado.conectores?.supabase) {
       const lectura = estado.conectores.supabase_solo_lectura;
       insignia.textContent = lectura ? "Supabase · lectura" : "Supabase · escritura";

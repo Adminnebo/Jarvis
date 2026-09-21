@@ -392,7 +392,8 @@ def agrupar(registros: list[dict]) -> list[dict]:
 
 
 def agrupar_por_organizacion(registros: list[dict]) -> list[dict]:
-    """Una fila por organizacion, para saber a quien cobrarle.
+    """Una fila por organizacion, para saber a quien cobrarle, y dentro de
+    cada una lo de cada persona.
 
     Los registros sin organizacion -de antes de que esto existiera, o de
     gente sin organizacion- se agrupan aparte, sin inventarles una.
@@ -411,15 +412,38 @@ def agrupar_por_organizacion(registros: list[dict]) -> list[dict]:
             "margen": cuentas.margen(clave),
             "markup": cuentas.markup(clave),
             "consultas": 0, "tokens": 0, "costo": 0.0,
+            "usuarios": {},
         })
-        fila["consultas"] += 1
-        fila["tokens"] += registro.get("tokens", 0)
-        fila["costo"] += registro.get("costo", 0.0)
+        persona = fila["usuarios"].setdefault(registro.get("usuario_id"), {
+            "usuario_id": registro.get("usuario_id"),
+            "consultas": 0, "tokens": 0, "costo": 0.0,
+        })
+        for acumulado in (fila, persona):
+            acumulado["consultas"] += 1
+            acumulado["tokens"] += registro.get("tokens", 0)
+            acumulado["costo"] += registro.get("costo", 0.0)
+
+    # Los nombres se buscan una vez para todos: los de los paneles viven en
+    # Supabase y pedirlos de a uno haria esperar al tablero.
+    nombres = cuentas.nombres_de_usuarios(
+        id_usuario for fila in grupos.values() for id_usuario in fila["usuarios"]
+    )
 
     filas = list(grupos.values())
     for fila in filas:
         # Lo que cuesta y lo que se cobra son dos numeros distintos: el segundo
         # es el primero con el margen de esa organizacion encima.
+        personas = []
+        for persona in fila["usuarios"].values():
+            personas.append({
+                "usuario_id": persona["usuario_id"],
+                "nombre": nombres.get(persona["usuario_id"], persona["usuario_id"]),
+                "consultas": persona["consultas"],
+                "tokens": persona["tokens"],
+                "costo": round(persona["costo"], 6),
+                "cobrado": round(persona["costo"] * fila["markup"], 6),
+            })
+        fila["usuarios"] = sorted(personas, key=lambda p: p["costo"], reverse=True)
         fila["cobrado"] = round(fila["costo"] * fila["markup"], 6)
         fila["costo"] = round(fila["costo"], 6)
     return sorted(filas, key=lambda f: f["costo"], reverse=True)

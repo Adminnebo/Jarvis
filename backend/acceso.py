@@ -435,8 +435,10 @@ def exige_admin(ruta: str, metodo: str) -> bool:
     # navegador de cualquiera durante la sesion de voz.
     if ruta == "/api/consumo" and metodo in ("GET", "DELETE"):
         return True
-    # Lo que consumio cada organizacion es del negocio, no de cada cliente.
-    if ruta.startswith("/api/organizaciones"):
+    # Organizaciones: lo que consumio cada una es del negocio, y administrar la
+    # propia tambien quedo para el super admin. El prefijo cubre las dos:
+    # /api/organizacion (la propia) y /api/organizaciones (todas).
+    if ruta.startswith("/api/organizacion"):
         return True
     # Crear organizaciones. Estuvo abierto a cualquiera, y como las fuentes de
     # datos son comunes, cualquiera que tuviera la URL podia registrarse y

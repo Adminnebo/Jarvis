@@ -51,9 +51,13 @@ Cada uno tiene su conversación, su memoria y su nombre —que sale del sufijo d
 la variable—. Las fuentes de datos, el esquema y las leyendas de tablas son
 comunes: son de la empresa, no de la persona.
 
-Quien entra con `JARVIS_PASSWORD` es el administrador y el único que puede
-tocar las fuentes, refrescar el esquema y ver el consumo. Los demás solo
-conversan, aunque Jarvis sí consulta las bases en su nombre.
+Quien entra con `JARVIS_PASSWORD` es el administrador —el super admin— y el
+único, junto al `super_admin` de los paneles, que ve las funciones de la barra
+de arriba: consumo, fuentes, dispositivos, memoria y reiniciar. Los demás solo
+conversan, aunque Jarvis sí consulta las bases en su nombre. Lo que importa
+—consumo con el costo real y el margen, fuentes con sus credenciales,
+organizaciones— además el servidor lo niega con un 403: esconder el botón no
+alcanza.
 
 Para quitarle el acceso a alguien, borra su variable y vuelve a desplegar. Para
 cerrar todas las sesiones a la vez, cambia `JARVIS_CLAVE_SECRETA`.
@@ -65,8 +69,16 @@ primera vez que arranca. Los archivos viejos no se borran.
 
 Quien use el inbox, cotizaciones o cobranzas puede entrar a Jarvis de un clic,
 sin escribir contraseña. El super admin lo concede marcando **Usar Jarvis** en
-el panel de usuarios; **Administrar Jarvis** le da además fuentes, esquema y
-consumo.
+el panel de usuarios.
+
+Solo el rol `super_admin` del panel administra Jarvis. El rol `admin` del panel
+y la casilla **Administrar Jarvis** entran, pero como cualquiera: a conversar,
+sin las funciones de arriba. Administrar es ver el consumo con el costo real y
+el margen, y eso no es para el cliente.
+
+Al entrar desde un panel, arriba se ve el nombre de la persona y un botón
+**Volver al panel**, que cierra la pestaña de Jarvis y deja a la persona donde
+estaba.
 
 Jarvis valida la sesión de Supabase del panel y relee el perfil cada minuto, así
 que quitar la casilla deja fuera a la persona enseguida, sin esperar a que
@@ -103,9 +115,9 @@ casilla **Usar Jarvis**), no el botón **Organización** de Jarvis.
 Además de las contraseñas por variable, hay cuentas con correo y contraseña
 agrupadas en organizaciones. **Solo quien administra Jarvis las crea**, desde
 *Nueva organización* en el tablero de **Consumo** (o en `/registro`): se carga
-la organización con la primera persona que la administra, y esa persona entra
-después con su correo en `/acceso/cuenta` y suma al resto desde
-**Organización** en la barra.
+la organización con su primera persona, que entra después con su correo en
+`/acceso/cuenta`. Sumar más gente a una organización también es del super
+admin: quien la administra ya no lo hace desde Jarvis.
 
 El registro no es abierto a propósito. Las fuentes de datos son comunes a
 todo el que entra, así que un registro abierto dejaba que cualquiera con la
@@ -120,9 +132,12 @@ generó, así el tablero de **Consumo** muestra cuánto gastó cada una.
 
 ### Cuánto consumió cada una
 
-El tablero de **Consumo** tiene una tabla por organización: consultas, costo
-real, margen, lo cobrado en el periodo y lo consumido en total. La
-organización ve lo suyo en **Organización**.
+El tablero de **Consumo** tiene un desplegable por organización. Cerrado,
+muestra sus consultas, el costo real, el margen, lo cobrado en el periodo y lo
+consumido en total; abierto, lo mismo **por persona**. Los nombres salen de
+donde vive cada cuenta: la tabla de usuarios, el perfil del panel (pedidos a
+Supabase todos de una vez) o la variable de la contraseña. Si Supabase no
+responde, el tablero sale igual, con el id en lugar del nombre.
 
 El margen es un porcentaje sobre lo que cobra OpenAI, por variable de entorno:
 

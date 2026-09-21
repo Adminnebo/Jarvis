@@ -96,21 +96,58 @@ async function pintarPorOrganizacion(porOrganizacion) {
     return;
   }
 
-  destino.appendChild(tablaDe(COLUMNAS_ORGANIZACION, filas));
+  for (const fila of filas) destino.appendChild(desplegableDe(fila));
 }
 
-const COLUMNAS_ORGANIZACION = [
-  { titulo: "Organización", saca: (f) => f.nombre || "—" },
-  { titulo: "Consultas", saca: (f) => numero(f.periodo.consultas) },
-  { titulo: "Costo", saca: (f) => dinero(f.periodo.costo, 4) },
-  { titulo: "Margen", saca: (f) => (f.margen == null ? "—" : `${f.margen}%`) },
-  { titulo: "Cobrado", saca: (f) => dinero(f.periodo.cobrado, 4) },
-  {
-    titulo: "Consumido en total",
-    saca: (f) => (f.historico ? dinero(f.historico.cobrado, 2) : "—"),
-  },
-  // Para JARVIS_MARGEN_<id>, que pisa el margen general para esa organizacion.
-  { titulo: "Id", saca: (f) => f.id || "—" },
+// Una organizacion: cerrada, sus numeros; abierta, lo de cada persona. Todo
+// con textContent: los nombres vienen de afuera (perfiles de los paneles,
+// nombres de organizacion) y no pueden meter HTML.
+function desplegableDe(fila) {
+  const desplegable = document.createElement("details");
+  desplegable.className = "organizacion-consumo";
+
+  const resumen = document.createElement("summary");
+  const nombre = document.createElement("strong");
+  nombre.textContent = fila.nombre || "—";
+  const cifras = document.createElement("span");
+  cifras.className = "organizacion-cifras";
+  cifras.textContent = [
+    `${numero(fila.periodo.consultas)} consultas`,
+    `costo ${dinero(fila.periodo.costo, 4)}`,
+    fila.margen == null ? null : `margen ${fila.margen}%`,
+    `cobrado ${dinero(fila.periodo.cobrado, 4)}`,
+    fila.historico ? `en total ${dinero(fila.historico.cobrado, 2)}` : null,
+  ].filter(Boolean).join(" · ");
+  resumen.append(nombre, cifras);
+  desplegable.appendChild(resumen);
+
+  const personas = fila.periodo.usuarios || [];
+  if (personas.length) {
+    desplegable.appendChild(tablaDe(COLUMNAS_PERSONA, personas));
+  } else {
+    const vacio = document.createElement("p");
+    vacio.className = "vacio";
+    vacio.textContent = "Sin consumo en este periodo.";
+    desplegable.appendChild(vacio);
+  }
+
+  if (fila.id) {
+    // Para JARVIS_MARGEN_<id>, que pisa el margen general de esta organizacion.
+    const id = document.createElement("p");
+    id.className = "ayuda-tipo";
+    id.textContent = `Id: ${fila.id}`;
+    desplegable.appendChild(id);
+  }
+
+  return desplegable;
+}
+
+const COLUMNAS_PERSONA = [
+  { titulo: "Persona", saca: (p) => p.nombre || "—" },
+  { titulo: "Consultas", saca: (p) => numero(p.consultas) },
+  { titulo: "Tokens", saca: (p) => numero(p.tokens) },
+  { titulo: "Costo", saca: (p) => dinero(p.costo, 4) },
+  { titulo: "Cobrado", saca: (p) => dinero(p.cobrado, 4) },
 ];
 
 function llenarModelos(modelos) {

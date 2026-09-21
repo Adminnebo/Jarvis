@@ -324,6 +324,53 @@ def consumido(organizacion_id: str | None) -> dict:
     }
 
 
+def nombres_de_usuarios(ids) -> dict:
+    """El nombre de cada id de consumo, busque donde viva su cuenta.
+
+    Tres origenes: cuentas de organizacion (tabla usuarios), paneles (perfil de
+    Supabase, en un solo pedido) y contrasenas por variable. Lo que no se
+    encuentra sale con su id, y si Supabase no responde el tablero sale igual:
+    un nombre de menos no justifica dejar de ver el consumo.
+    """
+    from . import supabase_sesion
+
+    nombres: dict = {}
+    de_organizacion, de_panel = [], []
+
+    for id_usuario in set(ids):
+        if id_usuario is None:
+            nombres[None] = "(sin registrar)"
+        elif id_usuario.startswith(PREFIJO):
+            de_organizacion.append(id_usuario)
+        elif id_usuario.startswith(supabase_sesion.PREFIJO):
+            de_panel.append(id_usuario)
+        else:
+            usuario = acceso.usuario_de_id(id_usuario)
+            nombres[id_usuario] = usuario.nombre if usuario else id_usuario
+
+    if de_organizacion:
+        crudos = [id_usuario[len(PREFIJO):] for id_usuario in de_organizacion]
+        with basedatos.conexion() as con:
+            filas = con.execute(
+                f"SELECT id, nombre FROM usuarios WHERE id IN ({','.join('?' * len(crudos))})",
+                crudos,
+            ).fetchall()
+        encontrados = {f"{PREFIJO}{fila['id']}": fila["nombre"] for fila in filas}
+        for id_usuario in de_organizacion:
+            nombres[id_usuario] = encontrados.get(id_usuario, id_usuario)
+
+    if de_panel:
+        largo = len(supabase_sesion.PREFIJO)
+        try:
+            perfiles = supabase_sesion.nombres_de_perfiles([i[largo:] for i in de_panel])
+        except Exception:  # noqa: BLE001 - sin nombres, pero con consumo
+            perfiles = {}
+        for id_usuario in de_panel:
+            nombres[id_usuario] = perfiles.get(id_usuario[largo:], id_usuario)
+
+    return nombres
+
+
 def organizaciones() -> list[dict]:
     """Todas, con lo que llevan consumido. Para quien administra Jarvis."""
     with basedatos.conexion() as con:

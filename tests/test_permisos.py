@@ -328,15 +328,14 @@ def test_listar_y_revocar_mis_dispositivos(cliente):
 # Organizacion: agregar miembros
 # --------------------------------------------------------------------------
 
-def test_el_dueno_de_la_organizacion_puede_agregar_gente(cliente):
+def test_las_funciones_de_organizacion_son_solo_del_super_admin(cliente):
+    # Ni siquiera quien la administra: todo lo de arriba es del super admin.
     _registrar(cliente)
+    assert cliente.get("/api/organizacion").status_code == 403
     respuesta = cliente.post("/api/organizacion/usuarios", json={
         "nombre": "Ana", "email": "ana@acme.com", "password": "otra-clave-larga",
     })
-    assert respuesta.status_code == 200
-
-    miembros = cliente.get("/api/organizacion").json()["miembros"]
-    assert {m["email"] for m in miembros} == {"lucas@acme.com", "ana@acme.com"}
+    assert respuesta.status_code == 403
 
 
 def test_una_persona_sin_organizacion_no_puede_agregar_gente(cliente):
@@ -351,33 +350,23 @@ def test_una_persona_sin_organizacion_no_puede_agregar_gente(cliente):
 # Consumo por organizacion
 # --------------------------------------------------------------------------
 
-def test_lo_consumido_viaja_en_la_vista_de_la_organizacion(cliente):
-    from backend import consumo, cuentas
-
-    _registrar(cliente)
-    usuario = cuentas.entrar("lucas@acme.com", "una-clave-larga")
-    consumo.registrar("texto", "gpt-5.6-terra", {"input_tokens": 1_000_000}, usuario=usuario)
-
-    consumido = cliente.get("/api/organizacion").json()["consumido"]
-    assert consumido["consultas"] == 1
-    assert consumido["cobrado"] == 2.0
-
-
-def test_el_cliente_no_ve_el_costo_real_ni_el_margen(cliente, monkeypatch):
+def test_el_consumo_por_organizacion_se_abre_por_persona(cliente, monkeypatch):
     from backend import consumo, cuentas
 
     monkeypatch.setenv("JARVIS_MARGEN", "30")
     _registrar(cliente)
-    usuario = cuentas.entrar("lucas@acme.com", "una-clave-larga")
-    consumo.registrar("texto", "gpt-5.6-terra", {"input_tokens": 1_000_000}, usuario=usuario)
+    lucas = cuentas.entrar("lucas@acme.com", "una-clave-larga")
+    consumo.registrar("texto", "gpt-5.6-terra", {"input_tokens": 1_000_000}, usuario=lucas)
+    consumo.registrar("texto", "gpt-5.6-terra", {"input_tokens": 1_000_000}, usuario=lucas)
 
-    consumido = cliente.get("/api/organizacion").json()["consumido"]
-    # Ve lo que paga, con el margen ya adentro...
-    assert consumido["cobrado"] == 2.6
-    # ...pero no de donde sale: con esos dos sacaria cuanto se le gana.
-    assert "costo" not in consumido
-    assert "margen" not in consumido
-    assert "markup" not in consumido
+    _entrar(cliente, "la-del-admin")
+    datos = cliente.get("/api/consumo?periodo=todo").json()
+    acme = next(o for o in datos["por_organizacion"] if o["organizacion"] == "Acme")
+
+    assert acme["usuarios"] == [{
+        "usuario_id": lucas.id, "nombre": "Lucas",
+        "consultas": 2, "tokens": 2_000_000, "costo": 4.0, "cobrado": 5.2,
+    }]
 
 
 def test_el_tablero_del_admin_lista_lo_de_cada_organizacion(cliente):
@@ -402,10 +391,11 @@ def test_lo_de_todas_las_organizaciones_es_solo_del_admin(cliente):
 
 
 def test_un_miembro_normal_no_puede_agregar_gente(cliente):
+    from backend import cuentas
+
     _registrar(cliente)
-    cliente.post("/api/organizacion/usuarios", json={
-        "nombre": "Ana", "email": "ana@acme.com", "password": "otra-clave-larga",
-    })
+    organizacion = cuentas.entrar("lucas@acme.com", "una-clave-larga").organizacion_id
+    cuentas.agregar_usuario(organizacion, "Ana", "ana@acme.com", "otra-clave-larga")
 
     cliente.cookies.clear()
     cliente.post("/acceso/cuenta", data={"email": "ana@acme.com", "password": "otra-clave-larga"})

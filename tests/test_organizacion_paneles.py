@@ -32,9 +32,9 @@ def test_con_variable_entran_a_la_organizacion(jh):
 
 
 def test_el_rol_no_cambia_por_estar_en_la_organizacion(jh):
-    admin = supabase_sesion.usuario_de_perfil({**PERFIL, "permissions": ["jarvis.admin"]})
-    assert admin.rol == "admin"
-    assert admin.organizacion_id == cuentas.ID_PANELES
+    super_admin = supabase_sesion.usuario_de_perfil({**PERFIL, "role": "super_admin"})
+    assert super_admin.rol == "admin"
+    assert super_admin.organizacion_id == cuentas.ID_PANELES
 
 
 def test_sin_permiso_de_jarvis_sigue_sin_entrar(jh):

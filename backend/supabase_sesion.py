@@ -146,6 +146,33 @@ def limpiar_cache() -> None:
 # De perfil a usuario de Jarvis
 # --------------------------------------------------------------------------
 
+def _nombre_de_perfil(datos: dict) -> str:
+    correo = (datos.get("email") or "").strip()
+    return (datos.get("full_name") or "").strip() or correo.split("@")[0] or "Alguien"
+
+
+def nombres_de_perfiles(uuids: list[str]) -> dict[str, str]:
+    """El nombre de cada perfil, de una sola vez. Para el tablero de consumo.
+
+    Un pedido por persona haria esperar al tablero una vuelta a Supabase por
+    cada una. Los uuids se comprueban igual que en perfil(): van dentro del
+    filtro de la API.
+    """
+    validos = [uuid for uuid in uuids if UUID.match(uuid or "")]
+    if not validos or not configurado():
+        return {}
+
+    llave = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    respuesta = httpx.get(
+        f"{url_proyecto()}/rest/v1/profiles",
+        params={"id": f"in.({','.join(validos)})", "select": "id,full_name,email"},
+        headers={"apikey": llave, "Authorization": f"Bearer {llave}"},
+        timeout=10,
+    )
+    respuesta.raise_for_status()
+    return {fila["id"]: _nombre_de_perfil(fila) for fila in respuesta.json()}
+
+
 def usuario_de_perfil(datos: dict | None):
     """El usuario de Jarvis que corresponde a ese perfil, o None si no entra.
 
@@ -162,17 +189,18 @@ def usuario_de_perfil(datos: dict | None):
     rol_plataforma = (datos.get("role") or "").strip()
     permisos = datos.get("permissions") or []
 
-    if rol_plataforma in ("super_admin", "admin"):
+    # Administrar Jarvis es ver el consumo con el costo real y el margen, las
+    # fuentes con sus credenciales y dar de alta organizaciones: es del super
+    # admin. El admin del panel y 'Administrar Jarvis' siguen entrando, pero a
+    # conversar.
+    if rol_plataforma == "super_admin":
         rol = "admin"
-    elif "jarvis.admin" in permisos:
-        rol = "admin"
-    elif "jarvis.usar" in permisos:
+    elif rol_plataforma == "admin" or "jarvis.admin" in permisos or "jarvis.usar" in permisos:
         rol = "usuario"
     else:
         return None
 
-    correo = (datos.get("email") or "").strip()
-    nombre = (datos.get("full_name") or "").strip() or correo.split("@")[0] or "Alguien"
+    nombre = _nombre_de_perfil(datos)
 
     # Por aqui pasan el login, la revalidacion de cada minuto y los relojes
     # vinculados, asi que la organizacion queda puesta en los tres.
