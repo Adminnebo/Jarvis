@@ -72,7 +72,7 @@ def al_arrancar():
     if not supabase_sesion.configurado():
         print(
             "\n  AVISO: nadie puede entrar desde los paneles.\n"
-            "  Faltan SUPABASE_ANON_KEY, SUPABASE_PROJECT_REF o SUPABASE_DB_URL.\n"
+            "  Faltan SUPABASE_ANON_KEY, SUPABASE_PROJECT_REF o SUPABASE_SERVICE_ROLE_KEY.\n"
             "  Las contrasenas de JARVIS_PASSWORD* siguen funcionando.\n"
         )
 
@@ -205,11 +205,6 @@ MOTIVOS = {
     "ref-invalida": "SUPABASE_PROJECT_REF no tiene forma de referencia de proyecto: "
                     "son 20 letras y numeros, sin https:// ni .supabase.co. "
                     "Avisa a quien administra el servidor.",
-    "cadena-invalida": "SUPABASE_DB_URL no es una conexion a Postgres: tiene que "
-                       "empezar con postgresql://. No es la URL del proyecto "
-                       "(https://...supabase.co), sino la de Supabase > Connect > "
-                       "Transaction pooler, con la contrasena de la base. "
-                       "Avisa a quien administra el servidor.",
     "error-token": "No se pudo validar tu sesion con Supabase",
     "error-perfil": "No se pudo leer tu perfil en la base de datos",
 }
@@ -222,10 +217,6 @@ def mensaje_de_rechazo(motivo: str) -> str:
     exactamente que arreglar; el mensaje completo se queda en el log.
     """
     base, _, clase = motivo.partition(":")
-    if base == "cadena-invalida":
-        # Como empieza la cadena dice cual fue el error: la URL del proyecto,
-        # unas comillas tipograficas, un caracter invisible.
-        return f"{MOTIVOS[base]} Hoy {clase}."
     if base.startswith("error-"):
         texto = MOTIVOS.get(base, "No se pudo comprobar tu acceso")
         return f"{texto} ({clase}). Avisa a quien administra: el detalle esta en el log."

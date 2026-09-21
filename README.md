@@ -72,9 +72,15 @@ Jarvis valida la sesión de Supabase del panel y relee el perfil cada minuto, as
 que quitar la casilla deja fuera a la persona enseguida, sin esperar a que
 caduque su cookie.
 
-Necesita `SUPABASE_ANON_KEY` y `SUPABASE_DB_URL`. Si falta alguna, este acceso
-queda apagado —se avisa al arrancar— y las contraseñas por variable siguen
-funcionando.
+Necesita `SUPABASE_ANON_KEY`, `SUPABASE_PROJECT_REF` y
+`SUPABASE_SERVICE_ROLE_KEY`. Si falta alguna, este acceso queda apagado —se
+avisa al arrancar— y las contraseñas por variable siguen funcionando.
+
+El perfil se lee por la API de Supabase con la service role, no con una
+conexión directa a Postgres: así no hace falta la contraseña de la base, que
+solo servía para leer una fila. Si falla, el mensaje dice el código HTTP:
+**401** es la service role mal puesta; **404**, que el proyecto no tiene la
+tabla `profiles` (o que `SUPABASE_PROJECT_REF` apunta a otro proyecto).
 
 Para cobrarle a la empresa dueña de los paneles lo que consume su gente:
 
@@ -349,7 +355,7 @@ como el mismo código, y gana el original.
 
 | Variable | |
 |---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | Solo para listar los buckets. No sale del servidor |
+| `SUPABASE_SERVICE_ROLE_KEY` | Para listar los buckets y leer los perfiles al entrar desde un panel. No sale del servidor |
 | `JARVIS_BUCKET_IMAGENES` | p. ej. `Lucas_imagenes` |
 | `JARVIS_BUCKET_FICHAS` | p. ej. `Lucas_fichas_tecnicas` |
 

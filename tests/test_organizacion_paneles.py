@@ -44,7 +44,7 @@ def test_sin_permiso_de_jarvis_sigue_sin_entrar(jh):
 def test_la_revalidacion_conserva_la_organizacion(jh, monkeypatch):
     monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-de-prueba")
     monkeypatch.setenv("SUPABASE_PROJECT_REF", "abcdefghijklmnopqrst")
-    monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://x:y@z:5432/postgres")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-de-prueba")
     monkeypatch.setattr(supabase_sesion, "perfil_cacheado", lambda uuid: PERFIL)
 
     previo = supabase_sesion.usuario_de_perfil(PERFIL)
@@ -107,7 +107,7 @@ def test_de_punta_a_punta_entrando_por_el_panel(jh, monkeypatch):
     monkeypatch.setenv("JARVIS_CLAVE_SECRETA", "clave-de-pruebas-larga")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-de-prueba")
     monkeypatch.setenv("SUPABASE_PROJECT_REF", "abcdefghijklmnopqrst")
-    monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://x:y@z:5432/postgres")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-de-prueba")
     # Solo se simula Supabase; lo demas es el camino real.
     monkeypatch.setattr(supabase_sesion, "id_de_token", lambda token: PERFIL["id"])
     monkeypatch.setattr(supabase_sesion, "perfil_cacheado", lambda uuid: PERFIL)

@@ -3,11 +3,14 @@ import pytest
 from backend import supabase_sesion
 
 
+SERVICE = "service-de-prueba"
+
+
 @pytest.fixture
 def configurado(monkeypatch):
     monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-de-prueba")
     monkeypatch.setenv("SUPABASE_PROJECT_REF", "abcdefghijklmnopqrst")
-    monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://x:y@z:5432/postgres")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", SERVICE)
 
 
 def test_sin_variables_el_puente_esta_apagado():
@@ -18,11 +21,87 @@ def test_con_las_tres_variables_esta_encendido(configurado):
     assert supabase_sesion.configurado() is True
 
 
-def test_falta_la_cadena_de_postgres(configurado, monkeypatch):
-    # Sin conexion directa, leer el perfil iria por MCP y costaria mas de un
-    # segundo en cada revalidacion.
-    monkeypatch.delenv("SUPABASE_DB_URL")
+def test_falta_la_service_role_key(configurado, monkeypatch):
+    # Sin ella no hay con que leer profiles: la revalidacion corre en el
+    # servidor, sin el token de la persona.
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY")
     assert supabase_sesion.configurado() is False
+
+
+def test_ya_no_hace_falta_la_cadena_de_postgres(configurado, monkeypatch):
+    # Pedia la contrasena de la base solo para leer un perfil. Y una cadena
+    # mal puesta -la URL del proyecto, con https- dejaba a todos afuera.
+    monkeypatch.delenv("SUPABASE_DB_URL", raising=False)
+    assert supabase_sesion.configurado() is True
+    monkeypatch.setenv("SUPABASE_DB_URL", "https://abcdefghijklmnopqrst.supabase.co")
+    assert supabase_sesion.configurado() is True
+
+
+class _Respuesta:
+    def __init__(self, estado, cuerpo):
+        self.status_code = estado
+        self._cuerpo = cuerpo
+
+    def json(self):
+        return self._cuerpo
+
+    def raise_for_status(self):
+        import httpx
+
+        if self.status_code >= 400:
+            peticion = httpx.Request("GET", "https://ejemplo")
+            raise httpx.HTTPStatusError(
+                f"{self.status_code}", request=peticion,
+                response=httpx.Response(self.status_code, request=peticion),
+            )
+
+
+def test_el_perfil_se_lee_por_la_api_de_supabase(configurado, monkeypatch):
+    llamadas = []
+
+    def get_falso(url, **opciones):
+        llamadas.append((url, opciones))
+        return _Respuesta(200, [perfil_de(permissions=["jarvis.usar"])])
+
+    monkeypatch.setattr(supabase_sesion.httpx, "get", get_falso)
+    uuid = "11111111-2222-3333-4444-555555555555"
+
+    datos = supabase_sesion.perfil(uuid)
+
+    assert datos["full_name"] == "Ana Perez"
+    url, opciones = llamadas[0]
+    assert url == "https://abcdefghijklmnopqrst.supabase.co/rest/v1/profiles"
+    assert opciones["params"]["id"] == f"eq.{uuid}"
+    assert "permissions" in opciones["params"]["select"]
+    assert opciones["headers"]["apikey"] == SERVICE
+    assert opciones["headers"]["Authorization"] == f"Bearer {SERVICE}"
+
+
+def test_un_perfil_que_no_esta_en_la_tabla(configurado, monkeypatch):
+    monkeypatch.setattr(supabase_sesion.httpx, "get", lambda url, **o: _Respuesta(200, []))
+    assert supabase_sesion.perfil("11111111-2222-3333-4444-555555555555") is None
+
+
+def test_si_la_api_rechaza_el_pedido_no_entra_nadie(configurado, monkeypatch):
+    monkeypatch.setattr(supabase_sesion.httpx, "get", lambda url, **o: _Respuesta(401, {}))
+    import httpx
+
+    with pytest.raises(httpx.HTTPStatusError):
+        supabase_sesion.perfil("11111111-2222-3333-4444-555555555555")
+
+
+def test_el_diagnostico_dice_el_codigo_http(configurado, monkeypatch):
+    # 401 es la service role mal puesta; 404, que no existe la tabla profiles.
+    # Son arreglos distintos y la clase sola no los distingue.
+    monkeypatch.setattr(supabase_sesion, "id_de_token",
+                        lambda t: "11111111-2222-3333-4444-555555555555")
+    monkeypatch.setattr(supabase_sesion.httpx, "get", lambda url, **o: _Respuesta(401, {}))
+    supabase_sesion._cache.clear()
+
+    motivo = supabase_sesion.diagnostico("un-token")
+
+    assert motivo.startswith("error-perfil:HTTPStatusError")
+    assert "401" in motivo
 
 
 def test_la_url_del_proyecto_sale_de_la_referencia(configurado):
@@ -242,16 +321,20 @@ def test_un_programmingerror_pelado_trae_su_mensaje(configurado, monkeypatch):
     assert "read_only" in motivo
 
 
-def test_el_detalle_nunca_lleva_la_cadena_de_conexion(configurado, monkeypatch):
+def test_el_detalle_nunca_lleva_la_service_role_key(configurado, monkeypatch, capsys):
+    # Abre la base entera saltandose las reglas de acceso: ni a la persona ni
+    # al log.
     class ProgrammingError(Exception):
         pass
 
-    cadena = "postgresql://x:y@z:5432/postgres"
-
     def revienta(_):
-        raise ProgrammingError(f"fallo usando {cadena}")
+        raise ProgrammingError(f"fallo usando la llave {SERVICE}")
 
     monkeypatch.setattr(supabase_sesion, "id_de_token",
                         lambda t: "11111111-2222-3333-4444-555555555555")
     monkeypatch.setattr(supabase_sesion, "perfil_cacheado", revienta)
-    assert cadena not in supabase_sesion.diagnostico("un-token")
+
+    motivo = supabase_sesion.diagnostico("un-token")
+
+    assert SERVICE not in motivo
+    assert SERVICE not in capsys.readouterr().out

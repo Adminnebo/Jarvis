@@ -46,35 +46,11 @@ def cadena_de_conexion() -> str:
     Railway y los demas guardan el valor literal. Pegado con comillas o con un
     espacio adelante, psycopg no lo reconoce como URL, lo lee como 'clave=valor'
     y falla con 'missing "=" after ... in connection info string'.
-
-    Todo el que use la cadena tiene que pasar por aqui: el que la tapa en los
-    mensajes de error tambien, o taparia una version distinta de la que se uso
-    para conectar y la contrasena saldria en el mensaje.
     """
     cadena = os.getenv("SUPABASE_DB_URL", "").strip()
     if len(cadena) >= 2 and cadena[0] == cadena[-1] and cadena[0] in "\"'":
         cadena = cadena[1:-1].strip()
     return cadena
-
-
-def problema_de_la_cadena() -> str | None:
-    """Como empieza la cadena, si no es una URL de Postgres. None si esta bien.
-
-    Muestra solo lo que va antes del primer ':' -el esquema-, con ascii() para
-    que se vean las comillas tipograficas y los caracteres invisibles. La
-    contrasena va despues, asi que por ahi no sale.
-
-    Y solo si ese pedazo parece un esquema: si alguien pego la contrasena sola
-    en la variable, lo de antes del ':' podria ser parte de ella.
-    """
-    cadena = cadena_de_conexion()
-    if not cadena or cadena.startswith(("postgresql://", "postgres://")):
-        return None
-
-    inicio = cadena.split(":", 1)[0] if ":" in cadena else ""
-    if len(inicio) <= 30 and re.search(r"postgres|http|jdbc", inicio, re.IGNORECASE):
-        return f"empieza con {ascii(inicio)}"
-    return "no empieza con postgresql://"
 
 
 def consultar(sql: str) -> list[dict]:

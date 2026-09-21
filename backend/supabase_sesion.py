@@ -36,15 +36,15 @@ UUID = re.compile(
 def configurado() -> bool:
     """Si falta algo, el puente queda apagado y solo entran las contrasenas.
 
-    SUPABASE_DB_URL cuenta: sin conexion directa, leer el perfil iria por MCP
-    y pondria mas de un segundo en el camino de cada peticion.
+    La service role hace falta porque la revalidacion de cada minuto corre en
+    el servidor, sin el token de la persona: sin ella no hay con que leer
+    profiles.
     """
-    from . import esquema
-
     return all(
         os.getenv(variable, "").strip()
-        for variable in ("SUPABASE_ANON_KEY", "SUPABASE_PROJECT_REF")
-    ) and bool(esquema.cadena_de_conexion())
+        for variable in ("SUPABASE_ANON_KEY", "SUPABASE_PROJECT_REF",
+                         "SUPABASE_SERVICE_ROLE_KEY")
+    )
 
 
 def url_proyecto() -> str:
@@ -76,18 +76,30 @@ def id_de_token(token: str) -> str | None:
 
 
 def perfil(uuid: str) -> dict | None:
-    """El perfil de esa persona en la tabla que comparten los paneles."""
+    """El perfil de esa persona en la tabla que comparten los paneles.
+
+    Por la API de Supabase, no por una conexion directa a Postgres: esa pedia
+    la contrasena de la base -y una cadena mal puesta dejaba a todos afuera-
+    solo para leer una fila.
+    """
     if not UUID.match(uuid or ""):
-        # El uuid se interpola en el SQL. Viene de Supabase, pero comprobarlo
+        # Va dentro del filtro de la API. Viene de Supabase, pero comprobarlo
         # aqui es lo que garantiza que nunca entre otra cosa.
         raise ValueError("El identificador no es un uuid.")
 
-    from . import esquema
-
-    filas = esquema.consultar_directo(
-        "select id, email, full_name, role, permissions, platforms "
-        f"from profiles where id = '{uuid}' limit 1;"
+    llave = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    respuesta = httpx.get(
+        f"{url_proyecto()}/rest/v1/profiles",
+        params={
+            "id": f"eq.{uuid}",
+            "select": "id,email,full_name,role,permissions,platforms",
+            "limit": "1",
+        },
+        headers={"apikey": llave, "Authorization": f"Bearer {llave}"},
+        timeout=10,
     )
+    respuesta.raise_for_status()
+    filas = respuesta.json()
     return filas[0] if filas else None
 
 
@@ -211,14 +223,6 @@ def diagnostico(token: str) -> str:
     if not REFERENCIA.match(os.getenv("SUPABASE_PROJECT_REF", "").strip()):
         return "ref-invalida"
 
-    from . import esquema
-
-    # Antes de ir a Supabase: con la cadena mal, conectar solo da un
-    # 'missing "="' que no dice que tiene la cadena.
-    problema = esquema.problema_de_la_cadena()
-    if problema:
-        return f"cadena-invalida:{problema}"
-
     paso = "token"
     try:
         uuid = id_de_token(token)
@@ -233,13 +237,11 @@ def diagnostico(token: str) -> str:
         return "ok" if usuario_de_perfil(datos) else "permiso"
     except Exception as fallo:  # noqa: BLE001 - el fallo es el resultado
         detalle = str(fallo)
-        # Algunos errores de conexion repiten la cadena entera, contrasena
-        # incluida. Ni al log ni a la persona llega nunca.
-        from . import esquema
-
-        cadena = esquema.cadena_de_conexion()
-        if cadena:
-            detalle = detalle.replace(cadena, "<SUPABASE_DB_URL>")
+        # La service role abre la base entera saltandose las reglas de
+        # acceso. Si un error la repitiera, ni al log ni a la persona.
+        llave = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+        if llave:
+            detalle = detalle.replace(llave, "<SUPABASE_SERVICE_ROLE_KEY>")
         clase = type(fallo).__name__
         print(f"  Fallo al comprobar acceso ({paso}): {clase}: {detalle[:300]}")
 
@@ -250,6 +252,11 @@ def diagnostico(token: str) -> str:
         # log del servidor, que no siempre tiene a mano quien pulsa el boton.
         if clase == "ProgrammingError" and detalle:
             motivo += f" | {detalle.splitlines()[0][:160]}"
+        # Lo mismo con la API: 401 es la service role mal puesta y 404 que
+        # no existe profiles. La clase sola no los distingue.
+        respuesta = getattr(fallo, "response", None)
+        if clase == "HTTPStatusError" and respuesta is not None:
+            motivo += f" | {respuesta.status_code}"
         return motivo
 
 
