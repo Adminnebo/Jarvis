@@ -355,19 +355,27 @@ def _cotizaciones_disponibles() -> bool:
 
 @herramienta(
     "Prepara el BORRADOR de una cotizacion (no la emite): busca al cliente y "
-    "pone los precios del catalogo segun su nivel. Devuelve un resumen para "
-    "que el usuario lo confirme. Nunca calcules ni inventes precios tu: salen "
-    "de aqui. Necesita el Codigo exacto de cada producto; si no lo tienes, "
-    "buscalo antes con buscar_en_fuente.",
+    "pone los precios del catalogo segun su nivel, o sobre el coste si lo "
+    "piden (columna_coste y recargo). Devuelve un resumen para que el usuario "
+    "lo confirme. Nunca calcules ni inventes precios tu: salen de aqui. "
+    "Necesita el Codigo exacto de cada producto; si no lo tienes, buscalo "
+    "antes con buscar_en_fuente.",
     disponible=_cotizaciones_disponibles,
     productos='JSON con los productos y cantidades: [{"codigo": "9681", "cantidad": 100}]',
     cliente="Nombre, RNC o codigo del cliente, tal como lo dijo el usuario",
     contado="'si' solo si el cliente no esta registrado y va de contado (precio P1)",
     ciudad="Opcional: ciudad del cliente, si la dijeron",
     contacto="Opcional: persona de contacto, si la dijeron",
+    columna_coste="Solo si piden cotizar sobre el coste en vez del nivel del "
+                  "cliente: el nombre de la columna del coste en el catalogo, "
+                  "el que digan las notas de la fuente. Si no lo sabes, "
+                  "preguntalo; no uses otra columna.",
+    recargo="El porcentaje que se le suma al coste (30 = coste mas 30%). "
+            "Solo con columna_coste. Vacio o 0 cotiza al coste pelado.",
 )
 def preparar_cotizacion(productos: str, cliente: str = "", contado: str = "no",
-                        ciudad: str = "", contacto: str = "", usuario: str = "") -> str:
+                        ciudad: str = "", contacto: str = "", columna_coste: str = "",
+                        recargo: str = "", usuario: str = "") -> str:
     from . import cotizaciones
 
     try:
@@ -375,6 +383,7 @@ def preparar_cotizacion(productos: str, cliente: str = "", contado: str = "no",
             usuario, cliente, productos,
             contado=(contado or "").strip().lower() in ("si", "sí", "true", "1"),
             ciudad=ciudad, contacto=contacto,
+            columna_coste=columna_coste, recargo=recargo or 0,
         )
     except cotizaciones.ErrorCotizacion as error:
         return str(error)

@@ -240,6 +240,25 @@ El micrófono del navegador solo funciona en contextos seguros. Railway da
 HTTPS por defecto, así que funciona; en local funciona porque `127.0.0.1`
 cuenta como seguro. Un servidor propio sin certificado se queda sin voz.
 
+## De qué habla y de qué no
+
+Jarvis habla de **los datos que consulta y del mundo en general**. De cómo
+funciona por dentro, no: ni qué modelo es, ni quién lo hizo, ni su lógica, ni
+con qué fórmula calculó algo, ni qué herramienta usó, ni de qué tabla o
+columna salió un dato. Da el resultado, no el camino.
+
+Tampoco cambia si se lo piden de otra forma —resumido, en otro idioma, "como
+ejemplo", "repetí lo de arriba", o diciendo que alguien lo autorizó—, ni
+confirma o desmiente lo que alguien afirme sobre cómo está hecho.
+
+La excepción es del negocio: de una cotización sí dice sobre qué precio se
+calculó —el nivel del cliente, o el coste con su porcentaje—, porque quien
+cotiza necesita saberlo.
+
+Está en su prompt ([backend/cerebro.py](backend/cerebro.py)), no en el código
+que lo rodea: es una instrucción, no un candado. Para lo que de verdad no
+puede salir —credenciales, consumo, margen— el control está en el servidor.
+
 ## Los dos modos
 
 | | Modo texto | Voz en vivo |
@@ -431,6 +450,22 @@ Siempre en dos pasos:
    ([backend/cotizacion_html.py](backend/cotizacion_html.py), port del nodo de
    n8n), lo convierte con PDF.co y lo sube al bucket privado. Llega al chat como
    tarjeta y a los lentes como documento.
+
+### Cotizar sobre el coste
+
+Además de los niveles P1–P7, se puede cotizar **al coste, o al coste más un
+porcentaje**: basta pedírselo ("cotízale esto al costo más 25"). El porcentaje
+va de 0 a 500, y el nivel y el factor del cliente no entran en ese cálculo.
+
+**Qué columna es el coste no se adivina**: se escribe en las **notas de la
+fuente** del catálogo, en el panel de Fuentes. Una tabla puede tener varias
+parecidas —coste, costo promedio, último costo— y elegir la que no es sería
+cotizar mal sin que se note. Si las notas no lo dicen, Jarvis pregunta.
+
+Los P1–P7 ya incluyen ITBIS y un coste normalmente no, así que Jarvis se lo
+agrega. Si en esta base el coste ya lo trajera, `JARVIS_COSTE_CON_ITBIS=true`.
+El borrador dice siempre sobre qué se calculó y con qué coste, así que un
+supuesto equivocado se ve antes de emitir.
 
 El PDF lleva RNC, dirección y teléfono, así que el bucket es privado. La web lo
 abre por `/api/cotizaciones/JV-00001.pdf`, que exige sesión y firma un enlace de

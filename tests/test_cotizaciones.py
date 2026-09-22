@@ -10,12 +10,12 @@ from backend.main import app
 PRODUCTOS = {
     "9681": {"Codigo": "9681", "Referencia": "#12CR", "Descripcion": "KEYARD ALAMBRE THHN #12 ROJO",
              "Und": "PIES      ", "P1": 14.3, "P2": 14.0, "P3": 13.5, "P4": 13.0, "P5": 12.5,
-             "P6": 12.0, "P7": 11.5, "TipoItbis": 18},
+             "P6": 12.0, "P7": 11.5, "TipoItbis": 18, "Coste": 10.0},
     "3790": {"Codigo": "3790", "Referencia": "QO240", "Descripcion": "BREAKER 2P 40AMP",
              "Und": "UND", "P1": 1614.55, "P2": 1500, "P3": 1400, "P4": 118.0, "P5": 0,
-             "P6": 0, "P7": 0, "TipoItbis": 18},
+             "P6": 0, "P7": 0, "TipoItbis": 18, "Coste": 1000.0},
     "5555": {"Codigo": "5555", "Referencia": "", "Descripcion": "SIN PRECIO", "Und": "UND",
-             "P1": 0, "P2": 0, "P3": 0, "P4": 0, "P5": 0, "P6": 0, "P7": 0, "TipoItbis": 18},
+             "P1": 0, "P2": 0, "P3": 0, "P4": 0, "P5": 0, "P6": 0, "P7": 0, "TipoItbis": 18, "Coste": 0},
 }
 CLIENTES = [
     {"codigo": 6177, "nombre": "FERRETERIA ELIAM MAX EIRL", "rnc": "131832334", "direccion": "C/ 1",
@@ -264,3 +264,85 @@ def test_el_pdf_solo_se_abre_con_sesion_y_numero_valido(servicios, monkeypatch):
     assert respuesta.status_code == 302
     assert respuesta.headers["location"] == "https://firmado/JV-00007.pdf?t=300"
     assert cliente.get("/api/cotizaciones/..%2Fotra.pdf", follow_redirects=False).status_code == 404
+
+
+# --- Cotizar sobre el coste ---
+
+def test_al_coste_se_le_agrega_el_itbis(catalogo):
+    # El coste de la base viene sin impuesto y los P con el: sin agregarlo, la
+    # cotizacion saldria un 18% por debajo del coste.
+    _preparar(cliente="6177", columna_coste="Coste",
+              productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
+
+    linea = cotizaciones.borrador_de("admin").lineas[0]
+    assert linea["coste"] == 1000.0
+    assert linea["precio_unitario"] == 1180.0
+    assert round(linea["precio_bruto"], 2) == 1000.0
+
+
+def test_el_porcentaje_se_suma_sobre_el_coste(catalogo):
+    _preparar(cliente="6177", columna_coste="Coste", recargo="30",
+              productos=json.dumps([{"codigo": "3790", "cantidad": 2}]))
+
+    borrador = cotizaciones.borrador_de("admin")
+    # 1000 + 30% = 1300, y el ITBIS encima.
+    assert borrador.lineas[0]["precio_unitario"] == 1534.0
+    assert borrador.totales == {"subtotal": 2600.0, "itbis": 468.0, "total": 3068.0}
+
+
+def test_el_coste_manda_sobre_el_nivel_y_el_factor_del_cliente(catalogo):
+    # El cliente 4926 es P2 con factor 1.1: nada de eso entra en este precio.
+    _preparar(cliente="4926", columna_coste="Coste",
+              productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
+    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 1180.0
+
+
+def test_si_el_coste_ya_trae_itbis_no_se_agrega(catalogo, monkeypatch):
+    monkeypatch.setenv("JARVIS_COSTE_CON_ITBIS", "true")
+    _preparar(cliente="6177", columna_coste="Coste", recargo="30",
+              productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
+
+    linea = cotizaciones.borrador_de("admin").lineas[0]
+    assert linea["precio_unitario"] == 1300.0
+    assert round(linea["precio_bruto"], 2) == 1101.69
+
+
+def test_el_borrador_dice_sobre_que_se_calculo(catalogo):
+    texto = _preparar(cliente="6177", columna_coste="Coste", recargo="30",
+                      productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
+
+    # Con la cuenta a la vista, un coste que ya trajera ITBIS se nota antes de
+    # emitir: el precio saldria mas alto de lo que deberia.
+    assert "al coste de 'Coste' mas 30%" in texto
+    assert "con ITBIS agregado" in texto
+    assert "(coste 1,000.00)" in texto
+
+
+def test_la_columna_del_coste_no_se_adivina(catalogo):
+    texto = _preparar(cliente="6177", columna_coste="CostoPromedio",
+                      productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
+
+    assert "no tiene una columna 'CostoPromedio'" in texto
+    assert cotizaciones.borrador_de("admin") is None
+
+
+def test_un_producto_sin_coste_no_se_cotiza(catalogo):
+    texto = _preparar(cliente="6177", columna_coste="Coste",
+                      productos=json.dumps([{"codigo": "5555", "cantidad": 1}]))
+
+    assert "Sin coste en 'Coste'" in texto
+    assert cotizaciones.borrador_de("admin") is None
+
+
+@pytest.mark.parametrize("recargo", ["-10", "600", "mucho"])
+def test_un_porcentaje_que_no_sirve_no_deja_borrador(catalogo, recargo):
+    texto = _preparar(cliente="6177", columna_coste="Coste", recargo=recargo,
+                      productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
+
+    assert "porcentaje sobre el coste" in texto
+    assert cotizaciones.borrador_de("admin") is None
+
+
+def test_sin_columna_de_coste_todo_sigue_como_antes(catalogo):
+    _preparar(cliente="6177", productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
+    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 118.0

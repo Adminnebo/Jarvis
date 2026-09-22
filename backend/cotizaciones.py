@@ -31,6 +31,9 @@ PREFIJO = "JV-"
 NIVELES = tuple(f"P{i}" for i in range(1, 8))
 MAX_LINEAS = 60
 MAX_CANTIDAD = 1_000_000
+# Lo que se le puede sumar al coste. Un tope evita que un 2000 mal dictado
+# salga como cotizacion.
+MAX_RECARGO = 500
 VIGENCIA_BORRADOR = 30 * 60
 
 # El enlace que viaja a la app de los lentes, que descarga sin sesion.
@@ -108,13 +111,45 @@ def _texto(valor) -> str:
 
 
 def productos_del_catalogo(codigos: list[str]) -> dict[str, dict]:
+    # Se traen todas las columnas porque el coste no siempre se llama igual
+    # (coste, costo, Costo...) y hace falta para cotizar por encima de el.
     lista = ", ".join(f"'{c}'" for c in codigos)
     filas = _consultar(
-        "SELECT LTRIM(RTRIM(Codigo)) AS Codigo, Referencia, Descripcion, Und, "
-        f"{', '.join(NIVELES)}, TipoItbis FROM dbo.List_ProductosIA "
+        "SELECT *, LTRIM(RTRIM(Codigo)) AS CodigoLimpio FROM dbo.List_ProductosIA "
         f"WHERE Codigo IN ({lista})"
     )
-    return {_texto(f["Codigo"]).upper(): f for f in filas}
+    return {_texto(f.get("CodigoLimpio") or f.get("Codigo")).upper(): f for f in filas}
+
+
+def coste_de(fila: dict, columna: str) -> float:
+    """El coste del producto, leido de la columna que se pida.
+
+    La columna no se adivina: la dice quien configura la fuente, en sus
+    notas. Una tabla puede tener varias parecidas -coste, costo promedio,
+    ultimo costo- y elegir la que no es seria cotizar mal sin que se note.
+    """
+    nombre = (columna or "").strip().lower()
+    clave = next((c for c in fila if c.strip().lower() == nombre), None)
+    if clave is None:
+        raise ErrorCotizacion(
+            f"El catalogo no tiene una columna '{columna}'. La columna del coste "
+            "se configura en las notas de la fuente; preguntale a quien administra "
+            "Jarvis cual es."
+        )
+    try:
+        return float(fila.get(clave) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def coste_con_itbis() -> bool:
+    """Si el coste del catalogo ya trae el ITBIS adentro, como los P1..P7.
+
+    Por defecto no: un coste suele ser sin impuesto, y Jarvis se lo agrega
+    para que el precio quede en la misma moneda que el resto del documento.
+    Si en esta base fuera al reves, JARVIS_COSTE_CON_ITBIS=true.
+    """
+    return os.getenv("JARVIS_COSTE_CON_ITBIS", "").strip().lower() in ("1", "true", "si", "sí")
 
 
 _NOMBRE_PERMITIDO = re.compile(r"[^\w\s.&-]", re.UNICODE)
@@ -243,16 +278,30 @@ def _resolver_cliente(texto: str, contado: bool, ciudad: str, contacto: str) -> 
     }
 
 
-def calcular_linea(fila: dict, cantidad: float, nivel: str, factor: float) -> dict:
+def calcular_linea(fila: dict, cantidad: float, nivel: str, factor: float,
+                   coste: dict | None = None) -> dict:
     """Una linea con los mismos calculos que la plantilla de n8n.
 
     Los precios del catalogo ya incluyen ITBIS: el bruto se despeja.
+
+    Con `coste` -{columna, recargo}- el precio no sale del nivel del cliente
+    sino de esa columna mas ese porcentaje.
     """
-    precio = round(float(fila.get(nivel) or 0) * factor, 2)
     try:
         tasa = float(fila.get("TipoItbis") or 0)
     except (TypeError, ValueError):
         tasa = 0.0
+
+    if coste is None:
+        precio = round(float(fila.get(nivel) or 0) * factor, 2)
+        base = 0.0
+    else:
+        base = coste_de(fila, coste["columna"])
+        con_recargo = base * (1 + coste["recargo"] / 100)
+        # El coste suele venir sin ITBIS y los P con el: se lo agrega para que
+        # el precio quede en la misma moneda que el resto del documento.
+        precio = round(con_recargo if coste_con_itbis() else con_recargo * (1 + tasa / 100), 2)
+
     bruto = precio / (1 + tasa / 100)
     return {
         "codigo": _texto(fila.get("Codigo")),
@@ -260,6 +309,7 @@ def calcular_linea(fila: dict, cantidad: float, nivel: str, factor: float) -> di
         "descripcion": _texto(fila.get("Descripcion")),
         "unidad": _texto(fila.get("Und")),
         "cantidad": cantidad,
+        "coste": round(base, 2),
         "precio_unitario": precio,
         "TipoItbis": tasa,
         "precio_bruto": bruto,
@@ -284,10 +334,27 @@ def _cantidad(valor: float) -> str:
     return f"{valor:g}"
 
 
+def _leer_coste(columna: str, recargo) -> dict | None:
+    """Los datos para cotizar desde el coste, o None para usar los niveles."""
+    if not (columna or "").strip():
+        return None
+    try:
+        por_ciento = float(recargo or 0)
+    except (TypeError, ValueError):
+        raise ErrorCotizacion(f"El porcentaje sobre el coste no es un numero: '{recargo}'.") from None
+    if not 0 <= por_ciento <= MAX_RECARGO:
+        raise ErrorCotizacion(
+            f"El porcentaje sobre el coste tiene que estar entre 0 y {MAX_RECARGO:g}."
+        )
+    return {"columna": columna.strip(), "recargo": por_ciento}
+
+
 def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
-             ciudad: str = "", contacto: str = "") -> str:
+             ciudad: str = "", contacto: str = "", columna_coste: str = "",
+             recargo=0) -> str:
     """Arma el borrador y devuelve el resumen para confirmar."""
     pedidos = _leer_productos(productos)
+    coste = _leer_coste(columna_coste, recargo)
     datos_cliente = _resolver_cliente(cliente or "", contado, ciudad or "", contacto or "")
 
     catalogo = productos_del_catalogo([codigo for codigo, _ in pedidos])
@@ -299,13 +366,15 @@ def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
         )
 
     lineas = [
-        calcular_linea(catalogo[codigo], cantidad, datos_cliente["nivel"], datos_cliente["factor"])
+        calcular_linea(catalogo[codigo], cantidad, datos_cliente["nivel"],
+                       datos_cliente["factor"], coste)
         for codigo, cantidad in pedidos
     ]
     sin_precio = [l["descripcion"] or l["codigo"] for l in lineas if l["precio_unitario"] <= 0]
     if sin_precio:
+        falta = f"coste en '{coste['columna']}'" if coste else f"precio {datos_cliente['nivel']}"
         raise ErrorCotizacion(
-            f"Sin precio {datos_cliente['nivel']} en el catalogo: {', '.join(sin_precio)}. "
+            f"Sin {falta} en el catalogo: {', '.join(sin_precio)}. "
             "No se puede cotizar asi; dilo."
         )
 
@@ -315,16 +384,30 @@ def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
 
     detalle = "; ".join(
         f"{_cantidad(l['cantidad'])} {l['unidad'] or 'UND'} de {l['descripcion']} "
-        f"a {_num(l['precio_unitario'])} = {_num(l['subtotal_linea'])}"
+        + (f"(coste {_num(l['coste'])}) " if coste else "")
+        + f"a {_num(l['precio_unitario'])} = {_num(l['subtotal_linea'])}"
         for l in lineas
     )
-    tipo_cliente = "de contado" if contado else f"precio {datos_cliente['nivel']}"
+    if coste:
+        # Se dice como se calculo para que quien cotiza lo vea antes de emitir:
+        # si el coste de esta base ya tuviera ITBIS, el precio saldria alto y
+        # se corrige con JARVIS_COSTE_CON_ITBIS.
+        tipo_cliente = (
+            f"al coste de '{coste['columna']}'"
+            + (f" mas {_cantidad(coste['recargo'])}%" if coste["recargo"] else "")
+            + (", ITBIS ya incluido en el coste" if coste_con_itbis() else ", con ITBIS agregado")
+        )
+    else:
+        tipo_cliente = "de contado" if contado else f"precio {datos_cliente['nivel']}"
+
     return (
         f"Borrador listo (aun NO emitido). Cliente: {datos_cliente['nombre']} ({tipo_cliente}). "
         f"{len(lineas)} producto(s): {detalle}. Total RD$ {_num(totales['total'])}, "
         f"ITBIS incluido RD$ {_num(totales['itbis'])}. "
         "Resume cliente, cantidad de productos y total, y pregunta si la emite. "
-        "Llama a emitir_cotizacion solo si dice que si; si pide cambios, vuelve a "
+        + ("Al resumir, di sobre que precio se calculo y el total; el coste de "
+           "cada producto no se lee salvo que lo pidan. " if coste else "")
+        + "Llama a emitir_cotizacion solo si dice que si; si pide cambios, vuelve a "
         "llamar a preparar_cotizacion."
     )
 
