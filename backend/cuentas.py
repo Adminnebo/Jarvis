@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import sqlite3
+import unicodedata
 from datetime import datetime, timezone
 
 from . import acceso, basedatos
@@ -324,6 +325,32 @@ def consumido(organizacion_id: str | None) -> dict:
     }
 
 
+# Quienes dan soporte no son clientes: su consumo sale junto, con un solo
+# nombre, en vez de como tres personas sueltas mezcladas con los demas.
+SOPORTE = "JARVIS_SOPORTE"
+NOMBRE_SOPORTE = "JARVIS_SOPORTE_NOMBRE"
+_SOPORTE_POR_DEFECTO = ("Jorge Salamanca", "Lucas Marte", "Edmond Constantin")
+
+
+def _sin_adornos(nombre: str) -> str:
+    """Para comparar nombres: sin tildes, sin mayusculas, sin espacios de mas."""
+    plano = unicodedata.normalize("NFKD", nombre or "")
+    plano = "".join(letra for letra in plano if not unicodedata.combining(letra))
+    return " ".join(plano.split()).casefold()
+
+
+def nombre_de_soporte() -> str:
+    return os.getenv(NOMBRE_SOPORTE, "").strip() or "NEBO Support"
+
+
+def es_soporte(nombre: str) -> bool:
+    """El nombre tiene que coincidir entero: un cliente que se llame 'Lucas'
+    no puede quedar escondido dentro del soporte."""
+    escrito = os.getenv(SOPORTE, "").strip()
+    quienes = escrito.split(",") if escrito else _SOPORTE_POR_DEFECTO
+    return _sin_adornos(nombre) in {_sin_adornos(q) for q in quienes if q.strip()}
+
+
 def nombres_de_usuarios(ids) -> dict:
     """El nombre de cada id de consumo, busque donde viva su cuenta.
 
@@ -368,7 +395,11 @@ def nombres_de_usuarios(ids) -> dict:
         for id_usuario in de_panel:
             nombres[id_usuario] = perfiles.get(id_usuario[largo:], id_usuario)
 
-    return nombres
+    soporte = nombre_de_soporte()
+    return {
+        id_usuario: soporte if es_soporte(nombre) else nombre
+        for id_usuario, nombre in nombres.items()
+    }
 
 
 def organizaciones() -> list[dict]:

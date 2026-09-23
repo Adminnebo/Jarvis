@@ -132,6 +132,15 @@ generó, así el tablero de **Consumo** muestra cuánto gastó cada una.
 
 ### Cuánto consumió cada una
 
+Quienes dan soporte no aparecen como clientes: el consumo de **Jorge
+Salamanca, Lucas Marte y Edmond Constantin** sale junto, en una sola fila
+llamada **NEBO Support**, y así viaja también a la nota de agentia. Se cambia
+con `JARVIS_SOPORTE` (nombres separados por coma) y `JARVIS_SOPORTE_NOMBRE`.
+
+El nombre tiene que coincidir entero con el que muestra el tablero —no
+distingue mayúsculas, tildes ni espacios de más—, para que un cliente que se
+llame "Lucas" no quede escondido dentro del soporte.
+
 El tablero de **Consumo** tiene un desplegable por organización. Cerrado,
 muestra sus consultas, el costo real, el margen, lo cobrado en el periodo y lo
 consumido en total; abierto, lo mismo **por persona**. Los nombres salen de

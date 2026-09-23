@@ -433,17 +433,23 @@ def agrupar_por_organizacion(registros: list[dict]) -> list[dict]:
     for fila in filas:
         # Lo que cuesta y lo que se cobra son dos numeros distintos: el segundo
         # es el primero con el margen de esa organizacion encima.
-        personas = []
+        personas: dict = {}
         for persona in fila["usuarios"].values():
-            personas.append({
-                "usuario_id": persona["usuario_id"],
-                "nombre": nombres.get(persona["usuario_id"], persona["usuario_id"]),
-                "consultas": persona["consultas"],
-                "tokens": persona["tokens"],
-                "costo": round(persona["costo"], 6),
-                "cobrado": round(persona["costo"] * fila["markup"], 6),
+            nombre = nombres.get(persona["usuario_id"], persona["usuario_id"])
+            # Quienes dan soporte van juntos en una fila: si solo se les
+            # cambiara el nombre, saldrian tres filas llamadas igual.
+            junta = nombre == cuentas.nombre_de_soporte()
+            acumulado = personas.setdefault(nombre if junta else persona["usuario_id"], {
+                "usuario_id": None if junta else persona["usuario_id"],
+                "nombre": nombre, "consultas": 0, "tokens": 0, "costo": 0.0,
             })
-        fila["usuarios"] = sorted(personas, key=lambda p: p["costo"], reverse=True)
+            for clave in ("consultas", "tokens", "costo"):
+                acumulado[clave] += persona[clave]
+
+        for persona in personas.values():
+            persona["cobrado"] = round(persona["costo"] * fila["markup"], 6)
+            persona["costo"] = round(persona["costo"], 6)
+        fila["usuarios"] = sorted(personas.values(), key=lambda p: p["costo"], reverse=True)
         fila["cobrado"] = round(fila["costo"] * fila["markup"], 6)
         fila["costo"] = round(fila["costo"], 6)
     return sorted(filas, key=lambda f: f["costo"], reverse=True)

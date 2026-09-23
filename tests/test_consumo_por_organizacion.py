@@ -279,3 +279,66 @@ def test_los_perfiles_se_piden_de_una_sola_vez(monkeypatch):
         "11111111-2222-3333-4444-555555555555": "Ana Perez",
         "66666666-7777-8888-9999-000000000000": "beto",
     }
+
+
+# --------------------------------------------------------------------------
+# Soporte: Jorge, Lucas Marte y Edmond salen juntos como NEBO Support
+# --------------------------------------------------------------------------
+
+def test_los_de_soporte_salen_con_un_solo_nombre(organizacion):
+    jorge = cuentas.agregar_usuario(
+        organizacion.organizacion_id, "Jorge Salamanca", "jorge@nebo.com", "una-clave-larga")
+    edmond = cuentas.agregar_usuario(
+        organizacion.organizacion_id, "Edmond Constantin", "edmond@nebo.com", "una-clave-larga")
+    cliente = cuentas.entrar("lucas@acme.com", "una-clave-larga")   # se llama Lucas
+
+    nombres = cuentas.nombres_de_usuarios([jorge.id, edmond.id, cliente.id])
+
+    assert nombres[jorge.id] == "NEBO Support"
+    assert nombres[edmond.id] == "NEBO Support"
+    # "Lucas" a secas no es "Lucas Marte": un cliente no puede quedar tapado.
+    assert nombres[cliente.id] == "Lucas"
+
+
+@pytest.mark.parametrize("escrito", [
+    "Jorge Salamanca", "jorge salamanca", "JORGE  SALAMANCA", " Jorge Salamanca ",
+])
+def test_el_nombre_se_compara_sin_mayusculas_ni_espacios_de_mas(escrito):
+    assert cuentas.es_soporte(escrito) is True
+
+
+@pytest.mark.parametrize("escrito", ["Lucas", "Jorge", "Jorge Salamanca Perez", ""])
+def test_lo_que_no_coincide_entero_no_es_soporte(escrito):
+    assert cuentas.es_soporte(escrito) is False
+
+
+def test_quienes_son_soporte_se_pueden_cambiar(monkeypatch, organizacion):
+    monkeypatch.setenv("JARVIS_SOPORTE", "Ana Perez, Beto Gomez")
+    monkeypatch.setenv("JARVIS_SOPORTE_NOMBRE", "Soporte")
+
+    assert cuentas.es_soporte("Ana Perez") is True
+    assert cuentas.es_soporte("Jorge Salamanca") is False
+    assert cuentas.nombre_de_soporte() == "Soporte"
+
+
+def test_en_el_tablero_van_en_una_sola_fila(organizacion):
+    jorge = cuentas.agregar_usuario(
+        organizacion.organizacion_id, "Jorge Salamanca", "jorge@nebo.com", "una-clave-larga")
+    edmond = cuentas.agregar_usuario(
+        organizacion.organizacion_id, "Edmond Constantin", "edmond@nebo.com", "una-clave-larga")
+    cliente = cuentas.entrar("lucas@acme.com", "una-clave-larga")
+
+    for usuario in (jorge, edmond, cliente):
+        consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON, usuario=usuario)
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON, usuario=jorge)
+
+    [fila] = consumo.agrupar_por_organizacion(consumo.todos())
+    por_nombre = {p["nombre"]: p for p in fila["usuarios"]}
+
+    assert set(por_nombre) == {"NEBO Support", "Lucas"}
+    # Las tres consultas de soporte (dos de Jorge y una de Edmond), juntas.
+    assert por_nombre["NEBO Support"]["consultas"] == 3
+    assert por_nombre["NEBO Support"]["costo"] == 6.0
+    assert por_nombre["Lucas"]["consultas"] == 1
+    # La suma de las filas sigue siendo el total de la organizacion.
+    assert sum(p["costo"] for p in fila["usuarios"]) == fila["costo"]
