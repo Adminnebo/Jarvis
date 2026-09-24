@@ -342,3 +342,80 @@ def test_en_el_tablero_van_en_una_sola_fila(organizacion):
     assert por_nombre["Lucas"]["consultas"] == 1
     # La suma de las filas sigue siendo el total de la organizacion.
     assert sum(p["costo"] for p in fila["usuarios"]) == fila["costo"]
+
+
+# --------------------------------------------------------------------------
+# El reloj sin vincular: todo junto, a una organizacion
+# --------------------------------------------------------------------------
+
+@pytest.fixture
+def reloj_a_jh(monkeypatch):
+    monkeypatch.setenv("JARVIS_ORGANIZACION_PANELES", "JH Electroalambres")
+    cuentas.asegurar_organizacion_de_paneles()
+    monkeypatch.setenv("JARVIS_RELOJ_ORGANIZACION", cuentas.ID_PANELES)
+
+
+def test_lo_del_reloj_se_suma_a_la_organizacion_que_se_diga(reloj_a_jh):
+    from backend import acceso
+
+    # Entra con la clave del puente, que es la del admin: sin organizacion.
+    puente = acceso.Usuario("admin", "Admin", "admin")
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON,
+                      usuario=puente, dispositivo=consumo.RELOJ_SIN_VINCULAR)
+
+    [registro] = consumo.todos()
+    assert registro["usuario_id"] == cuentas.ID_RELOJ
+    assert registro["organizacion_id"] == cuentas.ID_PANELES
+    assert registro["dispositivo"] == "reloj"
+    assert cuentas.consumido(cuentas.ID_PANELES)["costo"] == 2.0
+
+
+def test_en_el_tablero_sale_como_reloj(reloj_a_jh):
+    from backend import acceso
+
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON,
+                      usuario=acceso.Usuario("admin", "Admin", "admin"),
+                      dispositivo=consumo.RELOJ_SIN_VINCULAR)
+
+    [fila] = consumo.agrupar_por_organizacion(consumo.todos())
+    assert [p["nombre"] for p in fila["usuarios"]] == ["Reloj"]
+
+
+def test_se_le_puede_poner_otro_nombre(reloj_a_jh, monkeypatch):
+    monkeypatch.setenv("JARVIS_RELOJ_NOMBRE", "Relojes de JH")
+    assert cuentas.nombres_de_usuarios([cuentas.ID_RELOJ]) == {cuentas.ID_RELOJ: "Relojes de JH"}
+
+
+def test_sin_la_variable_nada_cambia():
+    from backend import acceso
+
+    puente = acceso.Usuario("admin", "Admin", "admin")
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON,
+                      usuario=puente, dispositivo=consumo.RELOJ_SIN_VINCULAR)
+
+    [registro] = consumo.todos()
+    assert registro["usuario_id"] == "admin"
+    assert registro["organizacion_id"] is None
+    # Aun asi queda anotado que vino de un reloj.
+    assert registro["dispositivo"] == "reloj"
+
+
+def test_un_reloj_vinculado_sigue_contando_por_persona(reloj_a_jh, organizacion):
+    # Con su token, Jarvis sabe de quien es: no se mezcla con la bolsa comun.
+    dueno = cuentas.entrar("lucas@acme.com", "una-clave-larga")
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON, usuario=dueno, dispositivo="reloj")
+
+    [registro] = consumo.todos()
+    assert registro["usuario_id"] == dueno.id
+    assert registro["organizacion_id"] == organizacion.organizacion_id
+
+
+def test_las_sesiones_de_voz_del_reloj_tambien(reloj_a_jh):
+    from backend import acceso
+
+    consumo.registrar_sesion("gpt-realtime-2.1", 60.0,
+                             usuario=acceso.Usuario("admin", "Admin", "admin"),
+                             dispositivo=consumo.RELOJ_SIN_VINCULAR)
+
+    [registro] = consumo.todos()
+    assert registro["organizacion_id"] == cuentas.ID_PANELES

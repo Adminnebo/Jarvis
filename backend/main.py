@@ -369,6 +369,12 @@ def chat(peticion_http: Request, peticion: PeticionDeChat):
     )
 
     dispositivo = peticion_http.state.dispositivo
+    if peticion.breve and dispositivo == "navegador":
+        # El reloj no se loguea: entra con la clave del puente, igual que
+        # cualquiera, y pedir respuestas cortas es lo unico que hoy lo
+        # distingue -ningun navegador lo pide-. Cuando mande su token, la
+        # cookie ya dira de quien es y esto no se usa.
+        dispositivo = consumo.RELOJ_SIN_VINCULAR
 
     def flujo():
         for evento in cerebro.responder(mensajes, usuario, extra, dispositivo):

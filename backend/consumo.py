@@ -212,6 +212,32 @@ def _guardar(registro: dict) -> dict:
     return registro
 
 
+# Lo que llega de un reloj que todavia no manda su token: entra con la clave
+# del puente, asi que su usuario es el del puente y no el de quien lo lleva.
+RELOJ_SIN_VINCULAR = "reloj-sin-vincular"
+
+
+def _a_quien_se_le_anota(usuario, dispositivo: str) -> tuple:
+    """A que usuario y organizacion se le cuenta esto, y desde que aparato.
+
+    Un reloj vinculado trae su propio token y cuenta por persona, como debe
+    ser. Uno sin vincular no tiene a quien atribuirselo: se junta todo bajo un
+    solo nombre en la organizacion que diga JARVIS_RELOJ_ORGANIZACION.
+    """
+    from . import cuentas
+
+    id_usuario = usuario.id if usuario else None
+    organizacion = getattr(usuario, "organizacion_id", None)
+
+    if dispositivo == RELOJ_SIN_VINCULAR:
+        dispositivo = "reloj"
+        destino = cuentas.organizacion_del_reloj()
+        if destino:
+            id_usuario, organizacion = cuentas.ID_RELOJ, destino
+
+    return id_usuario, organizacion, dispositivo
+
+
 def registrar(modo: str, modelo: str, uso: dict,
               segundos: float | None = None, usuario=None,
               dispositivo: str = "navegador") -> dict:
@@ -222,12 +248,13 @@ def registrar(modo: str, modelo: str, uso: dict,
     tambien su organizacion si tiene una, para poder cobrarle a ella.
     """
     casillas = desglosar(uso)
+    id_usuario, organizacion, dispositivo = _a_quien_se_le_anota(usuario, dispositivo)
     return _guardar({
         "cuando": datetime.now().isoformat(timespec="seconds"),
         "modo": modo,
         "modelo": modelo,
-        "usuario_id": usuario.id if usuario else None,
-        "organizacion_id": getattr(usuario, "organizacion_id", None),
+        "usuario_id": id_usuario,
+        "organizacion_id": organizacion,
         "dispositivo": dispositivo,
         **casillas,
         "tokens": sum(casillas.values()),
@@ -239,12 +266,13 @@ def registrar(modo: str, modelo: str, uso: dict,
 def registrar_sesion(modelo: str, segundos: float, usuario=None,
                      dispositivo: str = "navegador") -> dict:
     """Anota cuanto duro una sesion de voz, para el costo por minuto."""
+    id_usuario, organizacion, dispositivo = _a_quien_se_le_anota(usuario, dispositivo)
     return _guardar({
         "cuando": datetime.now().isoformat(timespec="seconds"),
         "modo": "sesion",
         "modelo": modelo,
-        "usuario_id": usuario.id if usuario else None,
-        "organizacion_id": getattr(usuario, "organizacion_id", None),
+        "usuario_id": id_usuario,
+        "organizacion_id": organizacion,
         "dispositivo": dispositivo,
         "segundos": round(segundos, 2),
         "tokens": 0,

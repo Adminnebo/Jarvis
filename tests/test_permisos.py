@@ -404,3 +404,22 @@ def test_un_miembro_normal_no_puede_agregar_gente(cliente):
         "nombre": "Otro", "email": "otro@acme.com", "password": "otra-clave-larga",
     })
     assert respuesta.status_code == 403
+
+
+def test_el_pedido_del_reloj_se_marca_como_tal(cliente, monkeypatch):
+    """Pedir respuestas cortas es hoy lo unico que distingue al reloj."""
+    from backend import cerebro, consumo
+
+    vistos = []
+
+    def responder_falso(mensajes, usuario, extra="", dispositivo="navegador"):
+        vistos.append(dispositivo)
+        return iter(())
+
+    monkeypatch.setattr(cerebro, "responder", responder_falso)
+    _entrar(cliente, "la-del-admin")
+
+    cliente.post("/api/chat", json={"mensaje": "hola", "breve": True})
+    cliente.post("/api/chat", json={"mensaje": "hola"})
+
+    assert vistos == [consumo.RELOJ_SIN_VINCULAR, "navegador"]

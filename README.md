@@ -132,6 +132,16 @@ generó, así el tablero de **Consumo** muestra cuánto gastó cada una.
 
 ### Cuánto consumió cada una
 
+**Lo que se consume desde un reloj** se suma a la organización que diga
+`JARVIS_RELOJ_ORGANIZACION`, bajo un solo nombre (`JARVIS_RELOJ_NOMBRE`,
+"Reloj" por defecto). Es así porque los relojes no se loguean: entran con la
+clave del puente, que es la misma para todos, y no hay a quién atribuirle cada
+consulta. Lo único que hoy los distingue de un navegador es que piden
+respuestas cortas para su pantalla.
+
+En cuanto un reloj mande su propio token —el del código de vinculación— deja
+de caer en esa bolsa y cuenta por su dueño, sin tocar nada.
+
 Quienes dan soporte no aparecen como clientes: el consumo de **Jorge
 Salamanca, Lucas Marte y Edmond Constantin** sale junto, en una sola fila
 llamada **NEBO Support**, y así viaja también a la nota de agentia. Se cambia

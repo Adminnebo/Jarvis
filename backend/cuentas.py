@@ -351,6 +351,22 @@ def es_soporte(nombre: str) -> bool:
     return _sin_adornos(nombre) in {_sin_adornos(q) for q in quienes if q.strip()}
 
 
+# El reloj no se loguea: entra con la clave del puente, que es la misma para
+# todos. Hasta que cada reloj mande su token, lo que consuman se suma junto a
+# una organizacion, bajo un solo nombre.
+RELOJ = "JARVIS_RELOJ_ORGANIZACION"
+NOMBRE_RELOJ = "JARVIS_RELOJ_NOMBRE"
+ID_RELOJ = "reloj"
+
+
+def organizacion_del_reloj() -> str | None:
+    return os.getenv(RELOJ, "").strip() or None
+
+
+def nombre_del_reloj() -> str:
+    return os.getenv(NOMBRE_RELOJ, "").strip() or "Reloj"
+
+
 def nombres_de_usuarios(ids) -> dict:
     """El nombre de cada id de consumo, busque donde viva su cuenta.
 
@@ -367,6 +383,8 @@ def nombres_de_usuarios(ids) -> dict:
     for id_usuario in set(ids):
         if id_usuario is None:
             nombres[None] = "(sin registrar)"
+        elif id_usuario == ID_RELOJ:
+            nombres[id_usuario] = nombre_del_reloj()
         elif id_usuario.startswith(PREFIJO):
             de_organizacion.append(id_usuario)
         elif id_usuario.startswith(supabase_sesion.PREFIJO):
