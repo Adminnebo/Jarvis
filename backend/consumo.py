@@ -229,7 +229,11 @@ def _a_quien_se_le_anota(usuario, dispositivo: str) -> tuple:
     id_usuario = usuario.id if usuario else None
     organizacion = getattr(usuario, "organizacion_id", None)
 
-    if dispositivo == RELOJ_SIN_VINCULAR:
+    # Dos formas de saber que algo viene de un reloj: que el puente entre con
+    # su propia clave -JARVIS_PASSWORD_RELOJ, y su usuario ya es "reloj"- o,
+    # si comparte la del admin, que pida respuestas cortas para su pantalla.
+    # La clave propia es la buena: vale para todo, no solo para el chat.
+    if dispositivo == RELOJ_SIN_VINCULAR or id_usuario == cuentas.ID_RELOJ:
         dispositivo = "reloj"
         destino = cuentas.organizacion_del_reloj()
         if destino:

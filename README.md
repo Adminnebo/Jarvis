@@ -136,8 +136,14 @@ generó, así el tablero de **Consumo** muestra cuánto gastó cada una.
 `JARVIS_RELOJ_ORGANIZACION`, bajo un solo nombre (`JARVIS_RELOJ_NOMBRE`,
 "Reloj" por defecto). Es así porque los relojes no se loguean: entran con la
 clave del puente, que es la misma para todos, y no hay a quién atribuirle cada
-consulta. Lo único que hoy los distingue de un navegador es que piden
-respuestas cortas para su pantalla.
+consulta.
+
+Para que Jarvis sepa que es un reloj, **dale al puente su propia clave**:
+`JARVIS_PASSWORD_RELOJ` acá y la misma en la configuración del puente. Su
+usuario pasa a ser `reloj` y todo lo que haga —chat, voz, fotos— se suma ahí,
+sin tocar el reloj. Si el puente comparte la clave del admin, lo único que lo
+distingue es que pide respuestas cortas para su pantalla, y eso solo alcanza
+para el chat.
 
 En cuanto un reloj mande su propio token —el del código de vinculación— deja
 de caer en esa bolsa y cuenta por su dueño, sin tocar nada.

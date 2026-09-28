@@ -419,3 +419,39 @@ def test_las_sesiones_de_voz_del_reloj_tambien(reloj_a_jh):
 
     [registro] = consumo.todos()
     assert registro["organizacion_id"] == cuentas.ID_PANELES
+
+
+def test_con_su_propia_clave_el_puente_ya_se_identifica(reloj_a_jh, monkeypatch):
+    """JARVIS_PASSWORD_RELOJ le da al puente un usuario propio, "reloj".
+
+    Asi no hace falta tocar el reloj ni que pida respuestas cortas: vale
+    para todo lo que haga, incluida la voz y las fotos.
+    """
+    from backend import acceso
+
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    monkeypatch.setenv("JARVIS_PASSWORD_RELOJ", "la-del-puente")
+    puente = acceso.quien_entra("la-del-puente")
+    assert (puente.id, puente.nombre) == ("reloj", "Reloj")
+
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON, usuario=puente)
+    consumo.registrar_sesion("gpt-realtime-2.1", 60.0, usuario=puente)
+
+    for registro in consumo.todos():
+        assert registro["organizacion_id"] == cuentas.ID_PANELES
+        assert registro["dispositivo"] == "reloj"
+    assert cuentas.consumido(cuentas.ID_PANELES)["costo"] == 2.0
+
+
+def test_el_admin_sigue_siendo_el_admin(reloj_a_jh, monkeypatch):
+    # Lo del navegador del admin no se mezcla con lo de los relojes.
+    from backend import acceso
+
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON,
+                      usuario=acceso.quien_entra("la-del-admin"))
+
+    [registro] = consumo.todos()
+    assert registro["usuario_id"] == "admin"
+    assert registro["organizacion_id"] is None
+    assert registro["dispositivo"] == "navegador"
