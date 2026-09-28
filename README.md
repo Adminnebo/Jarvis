@@ -481,10 +481,14 @@ fuente** del catálogo, en el panel de Fuentes. Una tabla puede tener varias
 parecidas —coste, costo promedio, último costo— y elegir la que no es sería
 cotizar mal sin que se note. Si las notas no lo dicen, Jarvis pregunta.
 
-Los P1–P7 ya incluyen ITBIS y un coste normalmente no, así que Jarvis se lo
-agrega. Si en esta base el coste ya lo trajera, `JARVIS_COSTE_CON_ITBIS=true`.
+**El coste de este catálogo ya trae el ITBIS adentro**, igual que los P1–P7:
+es una columna de precio más, y el bruto se despeja dividiendo. No se le suma
+nada. Coste 1.000 más 30% son 1.300 al cliente, de los cuales 198.31 son
+ITBIS. El porcentaje se traslada igual al neto: sigue siendo 30% de margen
+sobre el coste sin impuesto.
+
 El borrador dice siempre sobre qué se calculó y con qué coste, así que un
-supuesto equivocado se ve antes de emitir.
+número raro se ve antes de emitir.
 
 El PDF lleva RNC, dirección y teléfono, así que el bucket es privado. La web lo
 abre por `/api/cotizaciones/JV-00001.pdf`, que exige sesión y firma un enlace de

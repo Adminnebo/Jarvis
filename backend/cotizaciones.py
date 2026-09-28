@@ -142,14 +142,6 @@ def coste_de(fila: dict, columna: str) -> float:
         return 0.0
 
 
-def coste_con_itbis() -> bool:
-    """Si el coste del catalogo ya trae el ITBIS adentro, como los P1..P7.
-
-    Por defecto no: un coste suele ser sin impuesto, y Jarvis se lo agrega
-    para que el precio quede en la misma moneda que el resto del documento.
-    Si en esta base fuera al reves, JARVIS_COSTE_CON_ITBIS=true.
-    """
-    return os.getenv("JARVIS_COSTE_CON_ITBIS", "").strip().lower() in ("1", "true", "si", "sí")
 
 
 _NOMBRE_PERMITIDO = re.compile(r"[^\w\s.&-]", re.UNICODE)
@@ -296,11 +288,10 @@ def calcular_linea(fila: dict, cantidad: float, nivel: str, factor: float,
         precio = round(float(fila.get(nivel) or 0) * factor, 2)
         base = 0.0
     else:
+        # El coste de este catalogo ya trae el ITBIS adentro, igual que los
+        # P1..P7: es una columna de precio mas, y el bruto se despeja abajo.
         base = coste_de(fila, coste["columna"])
-        con_recargo = base * (1 + coste["recargo"] / 100)
-        # El coste suele venir sin ITBIS y los P con el: se lo agrega para que
-        # el precio quede en la misma moneda que el resto del documento.
-        precio = round(con_recargo if coste_con_itbis() else con_recargo * (1 + tasa / 100), 2)
+        precio = round(base * (1 + coste["recargo"] / 100), 2)
 
     bruto = precio / (1 + tasa / 100)
     return {
@@ -389,13 +380,11 @@ def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
         for l in lineas
     )
     if coste:
-        # Se dice como se calculo para que quien cotiza lo vea antes de emitir:
-        # si el coste de esta base ya tuviera ITBIS, el precio saldria alto y
-        # se corrige con JARVIS_COSTE_CON_ITBIS.
+        # Se dice como se calculo, para que quien cotiza lo vea antes de emitir.
         tipo_cliente = (
             f"al coste de '{coste['columna']}'"
             + (f" mas {_cantidad(coste['recargo'])}%" if coste["recargo"] else "")
-            + (", ITBIS ya incluido en el coste" if coste_con_itbis() else ", con ITBIS agregado")
+            + ", ITBIS incluido"
         )
     else:
         tipo_cliente = "de contado" if contado else f"precio {datos_cliente['nivel']}"

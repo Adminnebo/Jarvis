@@ -268,16 +268,15 @@ def test_el_pdf_solo_se_abre_con_sesion_y_numero_valido(servicios, monkeypatch):
 
 # --- Cotizar sobre el coste ---
 
-def test_al_coste_se_le_agrega_el_itbis(catalogo):
-    # El coste de la base viene sin impuesto y los P con el: sin agregarlo, la
-    # cotizacion saldria un 18% por debajo del coste.
+def test_el_coste_ya_trae_el_itbis_y_no_se_le_agrega(catalogo):
+    # Es una columna de precio mas, como los P1..P7: el bruto se despeja.
     _preparar(cliente="6177", columna_coste="Coste",
               productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
 
     linea = cotizaciones.borrador_de("admin").lineas[0]
     assert linea["coste"] == 1000.0
-    assert linea["precio_unitario"] == 1180.0
-    assert round(linea["precio_bruto"], 2) == 1000.0
+    assert linea["precio_unitario"] == 1000.0
+    assert round(linea["precio_bruto"], 2) == 847.46
 
 
 def test_el_porcentaje_se_suma_sobre_el_coste(catalogo):
@@ -285,26 +284,16 @@ def test_el_porcentaje_se_suma_sobre_el_coste(catalogo):
               productos=json.dumps([{"codigo": "3790", "cantidad": 2}]))
 
     borrador = cotizaciones.borrador_de("admin")
-    # 1000 + 30% = 1300, y el ITBIS encima.
-    assert borrador.lineas[0]["precio_unitario"] == 1534.0
-    assert borrador.totales == {"subtotal": 2600.0, "itbis": 468.0, "total": 3068.0}
+    # 1000 + 30% = 1300, con el ITBIS ya adentro.
+    assert borrador.lineas[0]["precio_unitario"] == 1300.0
+    assert borrador.totales == {"subtotal": 2203.39, "itbis": 396.61, "total": 2600.0}
 
 
 def test_el_coste_manda_sobre_el_nivel_y_el_factor_del_cliente(catalogo):
     # El cliente 4926 es P2 con factor 1.1: nada de eso entra en este precio.
     _preparar(cliente="4926", columna_coste="Coste",
               productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
-    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 1180.0
-
-
-def test_si_el_coste_ya_trae_itbis_no_se_agrega(catalogo, monkeypatch):
-    monkeypatch.setenv("JARVIS_COSTE_CON_ITBIS", "true")
-    _preparar(cliente="6177", columna_coste="Coste", recargo="30",
-              productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
-
-    linea = cotizaciones.borrador_de("admin").lineas[0]
-    assert linea["precio_unitario"] == 1300.0
-    assert round(linea["precio_bruto"], 2) == 1101.69
+    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 1000.0
 
 
 def test_el_borrador_dice_sobre_que_se_calculo(catalogo):
@@ -314,7 +303,7 @@ def test_el_borrador_dice_sobre_que_se_calculo(catalogo):
     # Con la cuenta a la vista, un coste que ya trajera ITBIS se nota antes de
     # emitir: el precio saldria mas alto de lo que deberia.
     assert "al coste de 'Coste' mas 30%" in texto
-    assert "con ITBIS agregado" in texto
+    assert "ITBIS incluido" in texto
     assert "(coste 1,000.00)" in texto
 
 
@@ -346,3 +335,14 @@ def test_un_porcentaje_que_no_sirve_no_deja_borrador(catalogo, recargo):
 def test_sin_columna_de_coste_todo_sigue_como_antes(catalogo):
     _preparar(cliente="6177", productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
     assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 118.0
+
+
+def test_el_porcentaje_es_el_mismo_sobre_el_neto(catalogo):
+    # El coste trae ITBIS, pero el recargo se traslada igual al neto: 30% de
+    # margen sobre el coste sin impuesto.
+    _preparar(cliente="6177", columna_coste="Coste", recargo="30",
+              productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
+
+    linea = cotizaciones.borrador_de("admin").lineas[0]
+    coste_neto = 1000 / 1.18
+    assert round(linea["precio_bruto"] / coste_neto, 4) == 1.3
