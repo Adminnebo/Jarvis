@@ -287,6 +287,8 @@ function pintarPorModelo(filas, precios) {
 const COLUMNAS_DETALLE = [
   { titulo: "Cuando", saca: (r) => (r.cuando || "").replace("T", " ").slice(5) },
   { titulo: "Modo", saca: (r) => r.modo },
+  // Para ver si lo que entra por un reloj se esta reconociendo como tal.
+  { titulo: "Desde", saca: (r) => r.dispositivo || "—" },
   { titulo: "Modelo", saca: (r) => r.modelo },
   { titulo: "Tokens", saca: (r) => numero(r.tokens) },
   { titulo: "Costo", saca: (r) => dinero(r.costo, 6) },
