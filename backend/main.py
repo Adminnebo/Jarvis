@@ -488,6 +488,16 @@ async def negociar_voz(peticion: Request):
     except Exception as error:  # noqa: BLE001
         return JSONResponse(status_code=502, content={"error": str(error)})
 
+    # Toda sesion de voz de la web y del reloj se abre aqui, informe despues
+    # su gasto o no: con esto el tablero nota a quien deja de informarlo.
+    try:
+        consumo.registrar_apertura(
+            os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1"),
+            usuario=peticion.state.usuario, dispositivo=peticion.state.dispositivo,
+        )
+    except Exception:  # noqa: BLE001 - contabilizar no es critico
+        pass
+
     return Response(content=respuesta, media_type="application/sdp")
 
 
@@ -556,7 +566,8 @@ def ejecutar_herramienta(peticion_http: Request, peticion: PeticionDeHerramienta
     navegador y el puente de los lentes; al modelo solo le llega `resultado`.
     """
     resultado, adjuntos = herramientas.ejecutar_completo(
-        peticion.nombre, peticion.argumentos, peticion_http.state.usuario.id
+        peticion.nombre, peticion.argumentos, peticion_http.state.usuario.id,
+        peticion_http.state.usuario, peticion_http.state.dispositivo,
     )
     return {"resultado": resultado, "adjuntos": adjuntos}
 
@@ -643,19 +654,35 @@ def ver_consumo(
 
 @app.post("/api/consumo/voz")
 def anotar_consumo_de_voz(peticion: Request, datos: dict):
-    """Lo manda el navegador: en voz el uso llega por el canal de datos."""
-    modelo = datos.get("modelo") or os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1")
+    """Lo mandan el navegador y los puentes: lo que gastan fuera de este
+    servidor (el audio va directo a OpenAI) solo lo ven ellos.
+
+    `modo` dice que es: 'voz' (por defecto, lo que mandaban siempre),
+    'transcripcion', 'tts' o 'apertura'. Se manda el uso tal cual lo devolvio
+    OpenAI; el precio lo pone consumo.py. Un modo desconocido se rechaza: si
+    se anotara como voz, se cobraria a precio de voz.
+    """
+    quien = {"usuario": peticion.state.usuario, "dispositivo": peticion.state.dispositivo}
+    modo = datos.get("modo") or "voz"
+    if modo not in consumo.MODOS_INFORMADOS:
+        return JSONResponse(status_code=400, content={"error": f"Modo desconocido: {modo}."})
+
+    por_defecto = (
+        consumo.MODELO_TRANSCRIPCION if modo == "transcripcion"
+        else os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1")
+    )
+    modelo = datos.get("modelo") or por_defecto
 
     if datos.get("segundos_sesion"):
-        return consumo.registrar_sesion(
-            modelo, float(datos["segundos_sesion"]),
-            usuario=peticion.state.usuario, dispositivo=peticion.state.dispositivo,
-        )
+        return consumo.registrar_sesion(modelo, float(datos["segundos_sesion"]), **quien)
 
-    return consumo.registrar(
-        "voz", modelo, datos.get("uso") or {},
-        usuario=peticion.state.usuario, dispositivo=peticion.state.dispositivo,
-    )
+    if modo == "apertura":
+        return consumo.registrar_apertura(modelo, **quien)
+
+    if modo == "tts" and not datos.get("modelo"):
+        return JSONResponse(status_code=400, content={"error": "Falta el modelo del TTS."})
+
+    return consumo.registrar(modo, modelo, datos.get("uso") or {}, **quien)
 
 
 @app.delete("/api/consumo")

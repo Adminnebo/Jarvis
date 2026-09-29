@@ -13,7 +13,7 @@ from typing import Callable
 
 import httpx
 
-from . import memoria
+from . import consumo, memoria
 
 REGISTRO: dict[str, dict] = {}
 
@@ -85,12 +85,17 @@ def esquemas() -> list[dict]:
     ]
 
 
-def ejecutar_completo(nombre: str, argumentos_json: str, usuario: str) -> tuple[str, list[dict]]:
+def ejecutar_completo(nombre: str, argumentos_json: str, usuario: str,
+                     quien=None, dispositivo: str = "navegador") -> tuple[str, list[dict]]:
     """Corre una herramienta: el texto para el modelo y los adjuntos, si trae.
 
     Devuelve siempre texto, incluso si falla. Un error aqui no debe tumbar la
     conversacion: se lo devolvemos al modelo para que lo explique o intente
     otra cosa.
+
+    `quien` (el acceso.Usuario) y `dispositivo` son para las herramientas que
+    gastan por su cuenta, como la cotizacion en PDF.co: con eso su gasto se
+    anota a la organizacion y al aparato de quien la pidio.
     """
     entrada = REGISTRO.get(nombre)
     if entrada is None:
@@ -109,7 +114,8 @@ def ejecutar_completo(nombre: str, argumentos_json: str, usuario: str) -> tuple[
     try:
         if entrada["necesita_usuario"]:
             argumentos["usuario"] = usuario
-        resultado = entrada["funcion"](**argumentos)
+        with consumo.atribuir(quien, dispositivo):
+            resultado = entrada["funcion"](**argumentos)
         if isinstance(resultado, ConAdjuntos):
             return resultado.texto, resultado.adjuntos
         if isinstance(resultado, str):

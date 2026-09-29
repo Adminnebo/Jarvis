@@ -225,6 +225,19 @@ def avisar_de_contrasenas_repetidas() -> None:
             "al entrar y comparten memoria. Ponles contrasenas distintas."
         )
 
+    # Un puente con la clave del admin entra como admin: lo que gasta no se
+    # anota a su organizacion y no se cobra. Paso con el reloj sin que nadie
+    # lo notara, asi que se dice con todas las letras.
+    admin = clave()
+    for puente in ("reloj", "lentes"):
+        propia = os.getenv(f"{PREFIJO}{puente.upper()}", "").strip()
+        if admin and propia == admin:
+            print(
+                f"  AVISO: {PREFIJO}{puente.upper()} es igual a JARVIS_PASSWORD. "
+                f"El puente de {puente} entra como admin y lo que gasta NO SE "
+                "COBRA. Dale una clave distinta, aqui y en el puente."
+            )
+
 
 # --------------------------------------------------------------------------
 # Paginas

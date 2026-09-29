@@ -310,7 +310,7 @@ def consumido(organizacion_id: str | None) -> dict:
         fila = con.execute(
             "SELECT COUNT(*) AS consultas, COALESCE(SUM(tokens), 0) AS tokens, "
             "COALESCE(SUM(costo), 0) AS costo FROM consumo "
-            "WHERE organizacion_id = ? AND modo != 'sesion'",
+            "WHERE organizacion_id = ? AND modo NOT IN ('sesion', 'apertura')",
             (organizacion_id,),
         ).fetchone()
 
@@ -351,20 +351,39 @@ def es_soporte(nombre: str) -> bool:
     return _sin_adornos(nombre) in {_sin_adornos(q) for q in quienes if q.strip()}
 
 
-# El reloj no se loguea: entra con la clave del puente, que es la misma para
-# todos. Hasta que cada reloj mande su token, lo que consuman se suma junto a
-# una organizacion, bajo un solo nombre.
-RELOJ = "JARVIS_RELOJ_ORGANIZACION"
-NOMBRE_RELOJ = "JARVIS_RELOJ_NOMBRE"
+# Los puentes no se loguean por persona: entran con la clave del puente, la
+# misma para todos sus aparatos. Con su propia clave (JARVIS_PASSWORD_RELOJ,
+# JARVIS_PASSWORD_LENTES) su usuario es el id del puente, y lo que consuman se
+# suma junto a la organizacion que se diga, bajo un solo nombre.
 ID_RELOJ = "reloj"
+ID_LENTES = "lentes"
+PUENTES = {
+    # id: (variable de la organizacion, variable del nombre, nombre por defecto)
+    ID_RELOJ: ("JARVIS_RELOJ_ORGANIZACION", "JARVIS_RELOJ_NOMBRE", "Reloj"),
+    ID_LENTES: ("JARVIS_LENTES_ORGANIZACION", "JARVIS_LENTES_NOMBRE", "Lentes"),
+}
+RELOJ, NOMBRE_RELOJ, _ = PUENTES[ID_RELOJ]
+
+
+def es_puente(id_usuario: str | None) -> bool:
+    return id_usuario in PUENTES
+
+
+def organizacion_del_puente(id_puente: str) -> str | None:
+    return os.getenv(PUENTES[id_puente][0], "").strip() or None
+
+
+def nombre_del_puente(id_puente: str) -> str:
+    _, variable, por_defecto = PUENTES[id_puente]
+    return os.getenv(variable, "").strip() or por_defecto
 
 
 def organizacion_del_reloj() -> str | None:
-    return os.getenv(RELOJ, "").strip() or None
+    return organizacion_del_puente(ID_RELOJ)
 
 
 def nombre_del_reloj() -> str:
-    return os.getenv(NOMBRE_RELOJ, "").strip() or "Reloj"
+    return nombre_del_puente(ID_RELOJ)
 
 
 def nombres_de_usuarios(ids) -> dict:
@@ -383,8 +402,8 @@ def nombres_de_usuarios(ids) -> dict:
     for id_usuario in set(ids):
         if id_usuario is None:
             nombres[None] = "(sin registrar)"
-        elif id_usuario == ID_RELOJ:
-            nombres[id_usuario] = nombre_del_reloj()
+        elif es_puente(id_usuario):
+            nombres[id_usuario] = nombre_del_puente(id_usuario)
         elif id_usuario.startswith(PREFIJO):
             de_organizacion.append(id_usuario)
         elif id_usuario.startswith(supabase_sesion.PREFIJO):

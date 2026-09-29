@@ -60,10 +60,18 @@ def test_la_imagen_cacheada_no_se_cobra_dos_veces():
     assert casillas["cache_texto"] == 0
 
 
-def test_sin_precio_de_imagen_se_cobra_como_texto():
+def test_realtime_cobra_la_imagen_a_su_precio():
     registro = consumo.registrar("voz", "gpt-realtime-2.1", USO_CON_IMAGEN)
 
-    tarifa = consumo.precio_de("gpt-realtime-2.1")
+    # Texto a $4, imagen a $5 y salida a $24 por millon.
+    esperado = (171 * 4.0 + 323 * 5.0 + 33 * 24.0) / 1_000_000
+    assert registro["costo"] == round(esperado, 6)
+
+
+def test_sin_precio_de_imagen_se_cobra_como_texto():
+    registro = consumo.registrar("texto", "gpt-5.6-terra", USO_CON_IMAGEN)
+
+    tarifa = consumo.precio_de("gpt-5.6-terra")
     esperado = ((171 + 323) * tarifa["texto_entrada"] + 33 * tarifa["texto_salida"]) / 1_000_000
     assert registro["costo"] == round(esperado, 6)
 

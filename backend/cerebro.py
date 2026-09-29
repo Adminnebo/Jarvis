@@ -392,7 +392,7 @@ def responder(
 
         for llamada in llamadas:
             resultado, adjuntos = herramientas.ejecutar_completo(
-                llamada.name, llamada.arguments, usuario.id
+                llamada.name, llamada.arguments, usuario.id, usuario, dispositivo
             )
             if adjuntos:
                 adjuntos_del_turno.extend(adjuntos)
@@ -551,7 +551,7 @@ def configuracion_de_sesion(usuario: acceso.Usuario) -> dict:
                 # con frases cortas o ruido se va a otro idioma: una pregunta
                 # de dos palabras volvia transcrita en coreano.
                 "transcription": {
-                    "model": "gpt-live-transcribe",
+                    "model": consumo.MODELO_TRANSCRIPCION,
                     "language": os.getenv("JARVIS_IDIOMA", "es"),
                 },
                 # Filtra el ruido antes de que llegue al detector de voz, asi

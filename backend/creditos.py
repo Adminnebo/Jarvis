@@ -104,7 +104,7 @@ def _acumular() -> None:
 
         filas = con.execute(
             "SELECT organizacion_id, usuario_id, costo FROM consumo "
-            "WHERE id > ? AND id <= ? AND modo != 'sesion'",
+            "WHERE id > ? AND id <= ? AND modo NOT IN ('sesion', 'apertura')",
             (int(visto["valor"]), maximo),
         ).fetchall()
 

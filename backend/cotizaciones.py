@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from . import cotizacion_html
+from . import consumo, cotizacion_html
 
 PREFIJO = "JV-"
 NIVELES = tuple(f"P{i}" for i in range(1, 8))
@@ -454,6 +454,9 @@ def _pdf(html: str, nombre: str) -> bytes:
     datos = respuesta.json()
     if respuesta.status_code >= 400 or datos.get("error") or not datos.get("url"):
         raise RuntimeError(f"PDF.co: {datos.get('message') or respuesta.status_code}")
+    # PDF.co ya cobro la conversion, llegue o no el archivo: se anota aqui.
+    # Dice cuantos creditos gasto (una pagina simple, ~9).
+    consumo.registrar_cotizacion(datos.get("credits") or 0)
     archivo = httpx.get(datos["url"], timeout=60)
     archivo.raise_for_status()
     if not archivo.content.startswith(b"%PDF"):

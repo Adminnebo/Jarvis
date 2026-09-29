@@ -45,6 +45,7 @@ async function cargarConsumo() {
 
   llenarModelos(datos.modelos);
   pintarResumen(datos.totales);
+  pintarPorOrigen(datos.por_origen || []);
   pintarPorModelo(datos.por_modelo, datos.precios);
   await pintarPorOrganizacion(datos.por_organizacion);
   pintarCreditos(datos.creditos);
@@ -68,6 +69,108 @@ function pintarCreditos(creditos) {
 
   $c("organizaciones-consumo").appendChild(linea);
 }
+
+// --------------------------------------------------------------------------
+// Por origen: web, cada puente y las cotizaciones, y de que se compone cada
+// total. El total de arriba es la suma de las filas, y el de cada fila la
+// suma de sus conceptos: se puede seguir cualquier numero hasta su origen.
+// --------------------------------------------------------------------------
+
+const NOMBRES_CONCEPTO = {
+  texto: "Chat de texto",
+  voz: "Voz en vivo",
+  transcripcion: "Transcripción de la voz",
+  tts: "Voz leída (TTS)",
+  cotizacion: "PDF de cotizaciones",
+};
+
+function pintarPorOrigen(origenes) {
+  const destino = $c("origenes-consumo");
+  destino.innerHTML = "<h3>Por origen</h3>";
+
+  if (!origenes.length) {
+    destino.innerHTML += '<p class="vacio">Nada registrado en este periodo.</p>';
+    return;
+  }
+
+  const costo = origenes.reduce((suma, o) => suma + o.costo, 0);
+  const cobrado = origenes.reduce((suma, o) => suma + o.cobrado, 0);
+  const total = document.createElement("p");
+  total.className = "ayuda-tipo";
+  total.textContent =
+    `Total: costo ${dinero(costo, 4)} · cobrado ${dinero(cobrado, 4)} ` +
+    `(${origenes.map((o) => o.nombre).join(" + ")})`;
+  destino.appendChild(total);
+
+  for (const origen of origenes) destino.appendChild(desplegableDeOrigen(origen));
+}
+
+function desplegableDeOrigen(origen) {
+  const desplegable = document.createElement("details");
+  desplegable.className = "organizacion-consumo";
+
+  const resumen = document.createElement("summary");
+  const nombre = document.createElement("strong");
+  nombre.textContent = origen.nombre;
+  const cifras = document.createElement("span");
+  cifras.className = "organizacion-cifras";
+  const sesiones = origen.sesiones_abiertas || origen.sesiones_informadas
+    ? `${contar(origen.sesiones_abiertas, "sesión", "sesiones")} de voz, ` +
+      `${contar(origen.sesiones_informadas, "informada", "informadas")}` +
+      (origen.minutos_voz ? ` (${origen.minutos_voz.toFixed(1)} min)` : "")
+    : null;
+  cifras.textContent = [
+    `costo ${dinero(origen.costo, 4)}`,
+    `cobrado ${dinero(origen.cobrado, 4)}`,
+    sesiones,
+  ].filter(Boolean).join(" · ");
+  resumen.append(nombre, cifras);
+  desplegable.appendChild(resumen);
+
+  const filas = [
+    ...origen.conceptos,
+    { modo: "total", cantidad: null, costo: origen.costo, cobrado: origen.cobrado },
+  ];
+  desplegable.appendChild(tablaDe(COLUMNAS_CONCEPTO, filas));
+
+  if (origen.sesiones_sin_informar) {
+    const aviso = document.createElement("p");
+    aviso.className = "resultado-prueba mal";
+    aviso.textContent = origen.sesiones_sin_informar === 1
+      ? "1 sesión de voz se abrió y no informó su gasto: ese costo no está en el total."
+      : `${origen.sesiones_sin_informar} sesiones de voz se abrieron y no ` +
+        "informaron su gasto: ese costo no está en el total.";
+    desplegable.appendChild(aviso);
+  }
+  return desplegable;
+}
+
+// La unidad que manda el servidor, en singular y plural para la pantalla.
+const UNIDADES = {
+  consultas: ["consulta", "consultas"],
+  respuestas: ["respuesta", "respuestas"],
+  "respuestas leidas": ["respuesta leída", "respuestas leídas"],
+  cotizaciones: ["cotización", "cotizaciones"],
+};
+
+function contar(cantidad, singular, plural) {
+  return `${numero(cantidad)} ${cantidad === 1 ? singular : plural}`;
+}
+
+function cantidadDe(concepto) {
+  if (concepto.cantidad === null) return "";
+  const creditos = concepto.creditos ? ` (${numero(concepto.creditos)} créditos)` : "";
+  if (concepto.unidad === "minutos") return `${concepto.cantidad.toFixed(1)} min${creditos}`;
+  const [singular, plural] = UNIDADES[concepto.unidad] || [concepto.unidad, concepto.unidad];
+  return contar(concepto.cantidad, singular, plural) + creditos;
+}
+
+const COLUMNAS_CONCEPTO = [
+  { titulo: "Concepto", saca: (c) => (c.modo === "total" ? "Total" : NOMBRES_CONCEPTO[c.modo] || c.modo) },
+  { titulo: "Cantidad", saca: cantidadDe },
+  { titulo: "Costo", saca: (c) => dinero(c.costo, 4) },
+  { titulo: "Cobrado", saca: (c) => dinero(c.cobrado, 4) },
+];
 
 // --------------------------------------------------------------------------
 // Por organizacion: lo que gasto en el periodo y lo que lleva consumido

@@ -145,8 +145,38 @@ sin tocar el reloj. Si el puente comparte la clave del admin, lo único que lo
 distingue es que pide respuestas cortas para su pantalla, y eso solo alcanza
 para el chat.
 
+La clave del puente tiene que ser **distinta de la del admin**: si es la
+misma, el login se queda con el admin, lo que gasta el puente no llega a
+ninguna organización y no se cobra. Jarvis lo avisa al arrancar.
+
+**Los lentes funcionan igual**: `JARVIS_PASSWORD_LENTES` acá y la misma en
+`JARVIS_PASSWORD` de `puente-android`, con `JARVIS_LENTES_ORGANIZACION` y
+`JARVIS_LENTES_NOMBRE` ("Lentes"). La clave propia gana a la pista de las
+respuestas cortas, que los lentes también piden y los hacía pasar por reloj.
+
 En cuanto un reloj mande su propio token —el del código de vinculación— deja
 de caer en esa bolsa y cuenta por su dueño, sin tocar nada.
+
+### Lo que se cobra aparte de texto y voz
+
+Además del chat y la voz, se anotan (y se cobran con el mismo margen):
+
+| Modo | Qué es | Cómo se cobra | Quién lo informa |
+|---|---|---|---|
+| `transcripcion` | lo que dice el usuario en la voz, con `gpt-live-transcribe` | por duración, $0.017 el minuto | el navegador y el puente, del evento `input_audio_transcription.completed` |
+| `tts` | la respuesta leída en voz alta por un puente (`gpt-4o-mini-tts`) | tokens: $0.60/M de texto, $12/M de audio | el puente, del `usage` que da el TTS con `stream_format: "sse"` |
+| `cotizacion` | el PDF de cada cotización en PDF.co | por crédito (el `credits` de la respuesta) | Jarvis mismo |
+
+Todo entra por `POST /api/consumo/voz` con `{"modo", "modelo", "uso"}` —el
+uso tal cual lo devolvió el proveedor, nunca un precio—, y el precio lo pone
+`data/precios.json`. Un modo desconocido se rechaza con 400. Con
+`{"modo": "apertura"}` un puente avisa que abrió una sesión de voz; las de la
+web y el reloj las anota `/api/voz/sdp` solo.
+
+El tablero de **Consumo** muestra **Por origen** (web, puente de los lentes,
+puente del reloj, cotizaciones): el costo y lo cobrado de cada uno, cómo se
+compone y cuántas sesiones de voz se abrieron contra cuántas informaron su
+duración. Si no cuadran, alguien dejó de informar su gasto.
 
 Quienes dan soporte no aparecen como clientes: el consumo de **Jorge
 Salamanca, Lucas Marte y Edmond Constantin** sale junto, en una sola fila
@@ -329,8 +359,12 @@ Acepta JPEG, PNG y WebP de hasta 2 MB, y comprueba la firma de los bytes, no
 solo el mime.
 
 Cada imagen cuesta unos cientos de tokens; el tablero de consumo los muestra en
-**Imagen in**. Si `data/precios.json` no trae `imagen_entrada` para el modelo,
-se cobran al precio del texto de entrada.
+**Imagen in**. Realtime las cobra a $5/M (`imagen_entrada`); los modelos de
+texto, al precio del texto de entrada.
+
+`data/precios.json` se crea una vez en el volumen. Lo que diga pisa a los
+precios por defecto del código, pero un modelo o una casilla que no esté ahí
+se toma del código: agregar precios nuevos no obliga a editar el archivo.
 
 Necesitas **Chrome o Edge**, y dar permiso al micrófono.
 

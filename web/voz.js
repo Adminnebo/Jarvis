@@ -283,6 +283,9 @@ export function crearSesionDeVoz(eventos) {
 
       case "conversation.item.input_audio_transcription.completed":
         if (evento.transcript?.trim()) avisar("onUsuario", evento.transcript.trim());
+        // La transcripcion se cobra aparte, por duracion, y su uso solo llega
+        // aqui. El modelo lo pone el servidor, que es quien lo eligio.
+        anotarConsumo(evento.usage, "transcripcion");
         break;
 
       // --- Lo que responde Jarvis ---
@@ -347,12 +350,13 @@ export function crearSesionDeVoz(eventos) {
   let modeloEnUso = null;
   let sesionDesde = null;
 
-  function anotarConsumo(uso) {
+  function anotarConsumo(uso, modo = "voz") {
     if (!uso) return;
+    const cuerpo = modo === "voz" ? { modelo: modeloEnUso, uso } : { modo, uso };
     fetch("/api/consumo/voz", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ modelo: modeloEnUso, uso }),
+      body: JSON.stringify(cuerpo),
     }).catch(() => {});   // contabilizar nunca debe estorbar la conversacion
   }
 
