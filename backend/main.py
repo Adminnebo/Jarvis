@@ -41,6 +41,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     rutas,
     supabase_sesion,
     version,
+    voz_registro,
 )
 
 WEB = RAIZ / "web"
@@ -488,6 +489,59 @@ async def negociar_voz(peticion: Request):
         return JSONResponse(status_code=502, content={"error": str(error)})
 
     return Response(content=respuesta, media_type="application/sdp")
+
+
+class EventoDeVoz(BaseModel):
+    """Un turno de la conversacion de voz, tal como lo manda el puente.
+
+    Los campos van opcionales porque un "dicho" no trae `nombre` ni
+    `resultado` y una "herramienta" no trae `texto`. `argumentos` y
+    `resultado` llegan como texto JSON, pero se aceptan ya deserializados
+    para no romper el puente si algun dia los manda como objeto.
+    """
+
+    ts: str = ""
+    tipo: str = ""
+    quien: str = ""
+    texto: str = ""
+    nombre: str = ""
+    argumentos: object = ""
+    resultado: object = ""
+    ms: int | None = None
+
+
+class LoteDeVoz(BaseModel):
+    sesion: str = ""
+    dispositivo: str = "lentes"
+    eventos: list[EventoDeVoz] = []
+
+
+@app.post("/api/voz/registro")
+def anotar_voz(lote: LoteDeVoz):
+    """Guarda lo que se dijo en voz y avisa de los precios sin respaldo.
+
+    Lo manda el puente de los lentes cada pocos turnos. Entra con la clave del
+    puente como el resto, asi que no lleva comprobacion extra aqui: de eso se
+    encarga el middleware.
+    """
+    sospechas = voz_registro.guardar(
+        lote.sesion, lote.dispositivo,
+        [evento.model_dump() for evento in lote.eventos],
+    )
+    return {"ok": True, "sospechas": sospechas}
+
+
+@app.get("/api/voz/registro")
+def ver_registro_de_voz(dia: str = ""):
+    """Lo que se dijo ese dia. Solo admin: lo aplica acceso.exige_admin."""
+    if dia and not voz_registro.dia_valido(dia):
+        return JSONResponse(status_code=400, content={"error": "El dia va como YYYY-MM-DD."})
+    eventos = voz_registro.leer(dia)
+    return {
+        "dia": dia or voz_registro.hoy(),
+        "eventos": eventos,
+        "total": len(eventos),
+    }
 
 
 @app.post("/api/herramienta")

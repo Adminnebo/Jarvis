@@ -440,6 +440,11 @@ def exige_admin(ruta: str, metodo: str) -> bool:
     # /api/organizacion (la propia) y /api/organizaciones (todas).
     if ruta.startswith("/api/organizacion"):
         return True
+    # Leer lo que se dijo en voz es auditoria: ahi va literal lo que hablo
+    # cualquiera con los lentes. Escribirlo no, que eso lo hace el puente con
+    # la clave de siempre y no tiene por que ser admin.
+    if ruta == "/api/voz/registro" and metodo == "GET":
+        return True
     # Crear organizaciones. Estuvo abierto a cualquiera, y como las fuentes de
     # datos son comunes, cualquiera que tuviera la URL podia registrarse y
     # consultarlas.

@@ -334,6 +334,57 @@ se cobran al precio del texto de entrada.
 
 Necesitas **Chrome o Edge**, y dar permiso al micrófono.
 
+### Lo que se dijo en voz queda guardado
+
+Las conversaciones de los lentes vivían sólo en los logs de Railway, que se
+borran en un día: cuando alguien decía *"Jarvis se inventó el precio de un
+casco"* ya no había nada que revisar.
+
+El puente manda los turnos a `POST /api/voz/registro` (misma autenticación que
+`/api/herramienta`: la clave del puente y su cookie):
+
+```json
+{"sesion": "abc123", "dispositivo": "lentes",
+ "eventos": [
+   {"ts": "...", "tipo": "dicho", "quien": "tu", "texto": "..."},
+   {"ts": "...", "tipo": "dicho", "quien": "jarvis", "texto": "..."},
+   {"ts": "...", "tipo": "herramienta", "nombre": "buscar_en_fuente",
+    "argumentos": "{...}", "resultado": "[{...}]", "ms": 1886}
+ ]}
+```
+
+Responde `{"ok": true, "sospechas": [...]}`. Cada evento queda en
+`data/voz-YYYY-MM-DD.jsonl` (o en el volumen, donde apunte `JARVIS_DATA_DIR`) y
+se borran los días de más de 14. Si el disco falla, se avisa por el log y la
+conversación sigue: nunca tumba una petición.
+
+Para auditar: `GET /api/voz/registro?dia=YYYY-MM-DD` (hoy por defecto), **sólo
+para quien administra Jarvis**.
+
+#### El detector de precios dichos
+
+En el autotest de Camila, con este mismo catálogo, se coló un `549.55` donde el
+catálogo decía `1614.55`. Al guardar un turno de Jarvis se buscan las cifras que
+suenan a precio y se comprueban contra los números que de verdad devolvieron las
+herramientas de esa sesión. Lo que no cuadra sale por el log y queda como
+`sospechas` en el registro.
+
+**Es un detector, no una verdad**: marca para revisar, no acusa. Por eso es
+deliberadamente conservador — ante la duda, no marca:
+
+- Sólo mira cifras con decimales o pegadas a una marca de dinero (`RD$`,
+  `cuesta`, `pesos`). Un *"tengo 3 cascos"* no es un precio.
+- Teléfonos, fechas, horas y porcentajes se descartan antes de mirar.
+- Cuentan como respaldo los números de los `resultado` **y** de los
+  `argumentos` de las herramientas, y los que dijo el usuario.
+- No marca sumas de dos o tres líneas, cantidad × precio, el ITBIS ni los
+  redondeos al hablar (*"como 1,615 pesos"* sobre `1614.55`).
+- El orden importa: la herramienta tiene que haber corrido **antes**.
+
+Lo que **no** cubre: precios dichos en letras ("mil seiscientos catorce"),
+descuentos o conversiones de moneda que Jarvis calcule por su cuenta, y
+combinaciones aritméticas de más de tres líneas.
+
 ## Supabase
 
 Jarvis consulta tu base de datos real por MCP. Para conectarlo, en `.env`:
@@ -628,12 +679,13 @@ backend/
   conectores.py     servidores MCP remotos
   herramientas.py   funciones locales
   memoria.py        persistencia
+  voz_registro.py   turnos de voz en disco y chequeo de precios dichos
 web/
   index.html
   app.js            interfaz y modo texto
   voz.js            WebRTC con Realtime
   style.css
-data/               hechos.json y conversacion.json
+data/               hechos.json, conversacion.json y voz-<dia>.jsonl
 ```
 
 La API usa **Responses**, no Chat Completions: es la única que acepta
