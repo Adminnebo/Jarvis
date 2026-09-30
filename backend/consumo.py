@@ -268,6 +268,14 @@ def _guardar(registro: dict) -> dict:
 # Lo que llega de un reloj que todavia no manda su token: entra con la clave
 # del puente, asi que su usuario es el del puente y no el de quien lo lleva.
 RELOJ_SIN_VINCULAR = "reloj-sin-vincular"
+LENTES_SIN_VINCULAR = "lentes-sin-vincular"
+
+# Un puente que entra con la clave del admin puede decir quien es con el
+# encabezado X-Jarvis-Puente. Es una pista, no una credencial: sigue entrando
+# como admin -su memoria y su conversacion son las del admin- y solo cambia a
+# quien se le anota el gasto.
+PISTAS = {"reloj": RELOJ_SIN_VINCULAR, "lentes": LENTES_SIN_VINCULAR}
+_PUENTE_DE_LA_PISTA = {pista: puente for puente, pista in PISTAS.items()}
 
 
 def _a_quien_se_le_anota(usuario, dispositivo: str) -> tuple:
@@ -283,14 +291,14 @@ def _a_quien_se_le_anota(usuario, dispositivo: str) -> tuple:
     id_usuario = usuario.id if usuario else None
     organizacion = getattr(usuario, "organizacion_id", None)
 
-    # La clave propia del puente es la buena: vale para todo -chat, voz,
-    # fotos- y gana a la pista de las respuestas cortas, que tambien piden
-    # los lentes. Sin clave propia, pedir respuestas cortas es lo unico que
-    # distingue a un reloj de un navegador, y solo alcanza para el chat.
+    # La clave propia del puente gana: vale para todo -chat, voz, fotos- y
+    # para cualquier pista. Sin ella, el puente se reconoce por su pista: el
+    # encabezado X-Jarvis-Puente o, en el chat del reloj, pedir respuestas
+    # cortas (que los lentes tambien piden, pero ellos mandan el encabezado).
     if cuentas.es_puente(id_usuario):
         puente = id_usuario
-    elif dispositivo == RELOJ_SIN_VINCULAR:
-        puente = cuentas.ID_RELOJ
+    elif dispositivo in _PUENTE_DE_LA_PISTA:
+        puente = _PUENTE_DE_LA_PISTA[dispositivo]
     else:
         return id_usuario, organizacion, dispositivo
 
@@ -692,8 +700,8 @@ ORIGENES = {
     "reloj": "Puente del reloj",
 }
 
-# Un reloj sin vincular es un reloj: se ve junto a los demas.
-RELOJ_SIN_VINCULAR_A = {RELOJ_SIN_VINCULAR: "reloj"}
+# Un puente sin vincular es ese puente: se ve junto a los demas.
+RELOJ_SIN_VINCULAR_A = _PUENTE_DE_LA_PISTA
 
 # Lo que se cuenta en cada modo, para mostrar "30 min" y no "30 consultas".
 UNIDADES = {

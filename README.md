@@ -149,6 +149,13 @@ La clave del puente tiene que ser **distinta de la del admin**: si es la
 misma, el login se queda con el admin, lo que gasta el puente no llega a
 ninguna organización y no se cobra. Jarvis lo avisa al arrancar.
 
+**Un puente que sigue con la clave del admin** puede presentarse con el
+encabezado `X-Jarvis-Puente: lentes` (o `reloj`). Sigue entrando como admin
+—comparte su conversación y su memoria—, pero su gasto se anota como de ese
+puente: se ve aparte en el tablero y, si está `JARVIS_<PUENTE>_ORGANIZACION`,
+se le cobra a esa organización. Es una pista, no una credencial. El puente de
+los lentes lo manda siempre.
+
 **Los lentes funcionan igual**: `JARVIS_PASSWORD_LENTES` acá y la misma en
 `JARVIS_PASSWORD` de `puente-android`, con `JARVIS_LENTES_ORGANIZACION` y
 `JARVIS_LENTES_NOMBRE` ("Lentes"). La clave propia gana a la pista de las

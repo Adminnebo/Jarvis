@@ -82,7 +82,7 @@ def test_avisa_si_un_puente_tiene_la_clave_del_admin(monkeypatch, capsys):
 
     salida = capsys.readouterr().out
     assert "JARVIS_PASSWORD_RELOJ es igual a JARVIS_PASSWORD" in salida
-    assert "NO SE COBRA" in salida
+    assert "no se cobra" in salida
     assert "JARVIS_PASSWORD_LENTES es igual" not in salida
 
 
@@ -295,3 +295,75 @@ def test_un_modo_desconocido_se_rechaza(cliente_lentes):
 def test_el_tts_sin_modelo_se_rechaza(cliente_lentes):
     respuesta = cliente_lentes.post("/api/consumo/voz", json={"modo": "tts", "uso": {}})
     assert respuesta.status_code == 400
+
+
+# --------------------------------------------------------------------------
+# Puente con la clave del admin que se identifica con X-Jarvis-Puente
+# --------------------------------------------------------------------------
+
+def test_la_pista_de_los_lentes_anota_a_su_organizacion(puentes_a_jh):
+    admin = acceso.quien_entra("la-del-admin")
+    consumo.registrar("voz", "gpt-realtime-2.1", {"input_tokens": 1000},
+                      usuario=admin, dispositivo=consumo.LENTES_SIN_VINCULAR)
+
+    [registro] = consumo.todos()
+    assert registro["usuario_id"] == "lentes"
+    assert registro["organizacion_id"] == cuentas.ID_PANELES
+    assert registro["dispositivo"] == "lentes"
+
+
+def test_sin_organizacion_la_pista_solo_etiqueta(monkeypatch):
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    consumo.registrar("voz", "gpt-realtime-2.1", {"input_tokens": 1000},
+                      usuario=acceso.quien_entra("la-del-admin"),
+                      dispositivo=consumo.LENTES_SIN_VINCULAR)
+
+    [registro] = consumo.todos()
+    assert registro["usuario_id"] == "admin"      # sigue siendo del admin, sin cobro
+    assert registro["organizacion_id"] is None
+    assert registro["dispositivo"] == "lentes"    # pero se ve que fue de los lentes
+
+
+@pytest.fixture
+def cliente_admin(puentes_a_jh, monkeypatch):
+    monkeypatch.setenv("JARVIS_CLAVE_SECRETA", "clave-de-pruebas-larga")
+    cliente = TestClient(app)
+    respuesta = cliente.post("/acceso", data={"clave": "la-del-admin"}, follow_redirects=False)
+    assert respuesta.status_code == 303
+    return cliente
+
+
+def test_el_encabezado_cambia_a_quien_se_anota_no_quien_entra(cliente_admin):
+    cuerpo = {"modo": "transcripcion", "uso": {"type": "duration", "seconds": 5}}
+    cliente_admin.post("/api/consumo/voz", json=cuerpo, headers={"X-Jarvis-Puente": "lentes"})
+    cliente_admin.post("/api/consumo/voz", json=cuerpo)                       # la web del admin
+    cliente_admin.post("/api/consumo/voz", json=cuerpo, headers={"X-Jarvis-Puente": "otro"})
+
+    registros = [(r["dispositivo"], r["usuario_id"], r["organizacion_id"]) for r in consumo.todos()]
+    assert registros == [
+        ("lentes", "lentes", cuentas.ID_PANELES),
+        ("navegador", "admin", None),
+        ("navegador", "admin", None),       # una pista desconocida no hace nada
+    ]
+    # Entra como admin: su estado y su conversacion son las del admin.
+    estado = cliente_admin.get("/api/estado", headers={"X-Jarvis-Puente": "lentes"}).json()
+    assert estado["usuario"] == "Admin"
+
+
+def test_en_el_chat_los_lentes_no_pasan_por_reloj(cliente_admin, monkeypatch):
+    # Los lentes piden respuestas cortas, como el reloj; con el encabezado
+    # se sabe que son los lentes.
+    from backend import cerebro
+
+    vistos = []
+
+    def responder_falso(mensajes, usuario, extra="", dispositivo="navegador"):
+        vistos.append(dispositivo)
+        return iter(())
+
+    monkeypatch.setattr(cerebro, "responder", responder_falso)
+    cliente_admin.post("/api/chat", json={"mensaje": "hola", "breve": True},
+                       headers={"X-Jarvis-Puente": "lentes"})
+    cliente_admin.post("/api/chat", json={"mensaje": "hola", "breve": True})
+
+    assert vistos == [consumo.LENTES_SIN_VINCULAR, consumo.RELOJ_SIN_VINCULAR]

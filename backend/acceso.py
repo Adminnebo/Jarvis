@@ -233,9 +233,11 @@ def avisar_de_contrasenas_repetidas() -> None:
         propia = os.getenv(f"{PREFIJO}{puente.upper()}", "").strip()
         if admin and propia == admin:
             print(
-                f"  AVISO: {PREFIJO}{puente.upper()} es igual a JARVIS_PASSWORD. "
-                f"El puente de {puente} entra como admin y lo que gasta NO SE "
-                "COBRA. Dale una clave distinta, aqui y en el puente."
+                f"  AVISO: {PREFIJO}{puente.upper()} es igual a JARVIS_PASSWORD, "
+                f"asi que el puente de {puente} entra como admin. Su gasto solo "
+                "llega a su organizacion si el puente manda X-Jarvis-Puente; "
+                "si no, no se cobra. Para que entre como el mismo, dale una "
+                "clave distinta, aqui y en el puente."
             )
 
 

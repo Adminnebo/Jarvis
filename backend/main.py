@@ -122,6 +122,12 @@ async def guardia(peticion: Request, siguiente):
         # En local, sin contrasena, todo se atribuye al usuario por defecto.
         usuario = acceso.por_defecto()
 
+    # Un puente que entra con una clave compartida dice quien es. Solo
+    # cambia a quien se le anota el gasto (consumo.PISTAS), no quien entra.
+    pista = peticion.headers.get("x-jarvis-puente", "").strip().lower()
+    if dispositivo == "navegador" and pista in consumo.PISTAS:
+        dispositivo = consumo.PISTAS[pista]
+
     if usuario is None:
         # A la interfaz le mostramos el formulario; a la API, un 401 limpio.
         if ruta.startswith("/api/"):
