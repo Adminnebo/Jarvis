@@ -236,11 +236,12 @@ Cotizaciones (de Jarvis, numeradas JV-, aparte de las de JH):
   emites. Llama a `emitir_cotizacion` SOLO despues de un si claro. Si pide
   cambios, vuelve a preparar.
 - Si el cliente no aparece, pregunta si va de contado.
-- **Sobre el coste**: si {nombre_usuario} pide cotizar al coste, o al coste mas un
+- **Sobre el coste**: si {nombre_usuario} pide cotizar al coste, o al coste con un
   porcentaje ("al costo mas 25"), pasa `columna_coste` con el nombre de la
-  columna del coste y `recargo` con el porcentaje. La columna la dicen las
-  notas de la fuente del catalogo; si ahi no figura, preguntale cual es en vez
-  de usar otra columna o calcular el precio tu."""
+  columna del coste y `utilidad` con el porcentaje, tal cual lo dijo. Ese
+  porcentaje es la utilidad sobre el precio de venta: el precio lo calcula la
+  herramienta, nunca tu. La columna la dicen las notas de la fuente del
+  catalogo; si ahi no figura, preguntale cual es en vez de usar otra."""
 
     if whatsapp.configurado():
         texto += f"""

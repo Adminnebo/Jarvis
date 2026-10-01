@@ -362,7 +362,7 @@ def _cotizaciones_disponibles() -> bool:
 @herramienta(
     "Prepara el BORRADOR de una cotizacion (no la emite): busca al cliente y "
     "pone los precios del catalogo segun su nivel, o sobre el coste si lo "
-    "piden (columna_coste y recargo). Devuelve un resumen para que el usuario "
+    "piden (columna_coste y utilidad). Devuelve un resumen para que el usuario "
     "lo confirme. Nunca calcules ni inventes precios tu: salen de aqui. "
     "Necesita el Codigo exacto de cada producto; si no lo tienes, buscalo "
     "antes con buscar_en_fuente.",
@@ -376,12 +376,14 @@ def _cotizaciones_disponibles() -> bool:
                   "cliente: el nombre de la columna del coste en el catalogo, "
                   "el que digan las notas de la fuente. Si no lo sabes, "
                   "preguntalo; no uses otra columna.",
-    recargo="El porcentaje que se le suma al coste (30 = coste mas 30%). "
-            "Solo con columna_coste. Vacio o 0 cotiza al coste pelado.",
+    utilidad="El porcentaje de utilidad que pidieron ('al costo mas 30' es 30). "
+             "Es la parte del precio de venta: el precio sale de dividir el "
+             "coste entre (1 - ese porcentaje), no de sumarselo. Solo con "
+             "columna_coste. Vacio o 0 cotiza al coste pelado.",
 )
 def preparar_cotizacion(productos: str, cliente: str = "", contado: str = "no",
                         ciudad: str = "", contacto: str = "", columna_coste: str = "",
-                        recargo: str = "", usuario: str = "") -> str:
+                        utilidad: str = "", usuario: str = "") -> str:
     from . import cotizaciones
 
     try:
@@ -389,7 +391,7 @@ def preparar_cotizacion(productos: str, cliente: str = "", contado: str = "no",
             usuario, cliente, productos,
             contado=(contado or "").strip().lower() in ("si", "sí", "true", "1"),
             ciudad=ciudad, contacto=contacto,
-            columna_coste=columna_coste, recargo=recargo or 0,
+            columna_coste=columna_coste, utilidad=utilidad or 0,
         )
     except cotizaciones.ErrorCotizacion as error:
         return str(error)

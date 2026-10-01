@@ -279,14 +279,14 @@ def test_el_coste_ya_trae_el_itbis_y_no_se_le_agrega(catalogo):
     assert round(linea["precio_bruto"], 2) == 847.46
 
 
-def test_el_porcentaje_se_suma_sobre_el_coste(catalogo):
-    _preparar(cliente="6177", columna_coste="Coste", recargo="30",
+def test_el_porcentaje_es_la_utilidad_sobre_el_precio_de_venta(catalogo):
+    _preparar(cliente="6177", columna_coste="Coste", utilidad="30",
               productos=json.dumps([{"codigo": "3790", "cantidad": 2}]))
 
     borrador = cotizaciones.borrador_de("admin")
-    # 1000 + 30% = 1300, con el ITBIS ya adentro.
-    assert borrador.lineas[0]["precio_unitario"] == 1300.0
-    assert borrador.totales == {"subtotal": 2203.39, "itbis": 396.61, "total": 2600.0}
+    # PV = coste / (1 - 0.30): 1000 / 0.7 = 1428.57, no 1300.
+    assert borrador.lineas[0]["precio_unitario"] == 1428.57
+    assert borrador.totales == {"subtotal": 2421.31, "itbis": 435.83, "total": 2857.14}
 
 
 def test_el_coste_manda_sobre_el_nivel_y_el_factor_del_cliente(catalogo):
@@ -297,12 +297,12 @@ def test_el_coste_manda_sobre_el_nivel_y_el_factor_del_cliente(catalogo):
 
 
 def test_el_borrador_dice_sobre_que_se_calculo(catalogo):
-    texto = _preparar(cliente="6177", columna_coste="Coste", recargo="30",
+    texto = _preparar(cliente="6177", columna_coste="Coste", utilidad="30",
                       productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
 
     # Con la cuenta a la vista, un coste que ya trajera ITBIS se nota antes de
     # emitir: el precio saldria mas alto de lo que deberia.
-    assert "al coste de 'Coste' mas 30%" in texto
+    assert "al coste de 'Coste' con 30% de utilidad" in texto
     assert "ITBIS incluido" in texto
     assert "(coste 1,000.00)" in texto
 
@@ -323,12 +323,13 @@ def test_un_producto_sin_coste_no_se_cotiza(catalogo):
     assert cotizaciones.borrador_de("admin") is None
 
 
-@pytest.mark.parametrize("recargo", ["-10", "600", "mucho"])
-def test_un_porcentaje_que_no_sirve_no_deja_borrador(catalogo, recargo):
-    texto = _preparar(cliente="6177", columna_coste="Coste", recargo=recargo,
+@pytest.mark.parametrize("utilidad", ["-10", "100", "mucho"])
+def test_un_porcentaje_que_no_sirve_no_deja_borrador(catalogo, utilidad):
+    # 100% de utilidad seria dividir por cero: el precio no existe.
+    texto = _preparar(cliente="6177", columna_coste="Coste", utilidad=utilidad,
                       productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
 
-    assert "porcentaje sobre el coste" in texto
+    assert "porcentaje de utilidad" in texto
     assert cotizaciones.borrador_de("admin") is None
 
 
@@ -337,12 +338,15 @@ def test_sin_columna_de_coste_todo_sigue_como_antes(catalogo):
     assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 118.0
 
 
-def test_el_porcentaje_es_el_mismo_sobre_el_neto(catalogo):
-    # El coste trae ITBIS, pero el recargo se traslada igual al neto: 30% de
-    # margen sobre el coste sin impuesto.
-    _preparar(cliente="6177", columna_coste="Coste", recargo="30",
+def test_la_utilidad_queda_siendo_la_pedida(catalogo):
+    # Lo que define la formula: de cada peso vendido, 30 centavos son utilidad.
+    _preparar(cliente="6177", columna_coste="Coste", utilidad="30",
               productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
 
     linea = cotizaciones.borrador_de("admin").lineas[0]
+    ganancia = linea["precio_unitario"] - linea["coste"]
+    assert round(ganancia / linea["precio_unitario"], 4) == 0.3
+
+    # Sobre el neto da lo mismo: el ITBIS esta de los dos lados.
     coste_neto = 1000 / 1.18
-    assert round(linea["precio_bruto"] / coste_neto, 4) == 1.3
+    assert round((linea["precio_bruto"] - coste_neto) / linea["precio_bruto"], 4) == 0.3

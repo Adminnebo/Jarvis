@@ -33,7 +33,10 @@ MAX_LINEAS = 60
 MAX_CANTIDAD = 1_000_000
 # Lo que se le puede sumar al coste. Un tope evita que un 2000 mal dictado
 # salga como cotizacion.
-MAX_RECARGO = 500
+# La utilidad es sobre el precio de venta, asi que 100 seria dividir por cero.
+# El tope deja afuera lo que ya es un error de dictado: con 95 el precio sale
+# veinte veces el coste.
+MAX_UTILIDAD = 95
 VIGENCIA_BORRADOR = 30 * 60
 
 # El enlace que viaja a la app de los lentes, que descarga sin sesion.
@@ -276,8 +279,8 @@ def calcular_linea(fila: dict, cantidad: float, nivel: str, factor: float,
 
     Los precios del catalogo ya incluyen ITBIS: el bruto se despeja.
 
-    Con `coste` -{columna, recargo}- el precio no sale del nivel del cliente
-    sino de esa columna mas ese porcentaje.
+    Con `coste` -{columna, utilidad}- el precio no sale del nivel del cliente
+    sino de esa columna con ese porcentaje de utilidad.
     """
     try:
         tasa = float(fila.get("TipoItbis") or 0)
@@ -290,8 +293,11 @@ def calcular_linea(fila: dict, cantidad: float, nivel: str, factor: float,
     else:
         # El coste de este catalogo ya trae el ITBIS adentro, igual que los
         # P1..P7: es una columna de precio mas, y el bruto se despeja abajo.
+        # PV = coste / (1 - % utilidad). El porcentaje es la tajada del PRECIO
+        # DE VENTA, no un recargo sobre el coste: con 30%, 1000 no va a 1300
+        # sino a 1428.57, que es lo que deja 30% de utilidad de verdad.
         base = coste_de(fila, coste["columna"])
-        precio = round(base * (1 + coste["recargo"] / 100), 2)
+        precio = round(base / (1 - coste["utilidad"] / 100), 2)
 
     bruto = precio / (1 + tasa / 100)
     return {
@@ -325,27 +331,28 @@ def _cantidad(valor: float) -> str:
     return f"{valor:g}"
 
 
-def _leer_coste(columna: str, recargo) -> dict | None:
+def _leer_coste(columna: str, utilidad) -> dict | None:
     """Los datos para cotizar desde el coste, o None para usar los niveles."""
     if not (columna or "").strip():
         return None
     try:
-        por_ciento = float(recargo or 0)
+        por_ciento = float(utilidad or 0)
     except (TypeError, ValueError):
-        raise ErrorCotizacion(f"El porcentaje sobre el coste no es un numero: '{recargo}'.") from None
-    if not 0 <= por_ciento <= MAX_RECARGO:
+        raise ErrorCotizacion(f"El porcentaje de utilidad no es un numero: '{utilidad}'.") from None
+    if not 0 <= por_ciento <= MAX_UTILIDAD:
         raise ErrorCotizacion(
-            f"El porcentaje sobre el coste tiene que estar entre 0 y {MAX_RECARGO:g}."
+            f"El porcentaje de utilidad tiene que estar entre 0 y {MAX_UTILIDAD:g}. "
+            "Es la parte del precio de venta, no lo que se le suma al coste."
         )
-    return {"columna": columna.strip(), "recargo": por_ciento}
+    return {"columna": columna.strip(), "utilidad": por_ciento}
 
 
 def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
              ciudad: str = "", contacto: str = "", columna_coste: str = "",
-             recargo=0) -> str:
+             utilidad=0) -> str:
     """Arma el borrador y devuelve el resumen para confirmar."""
     pedidos = _leer_productos(productos)
-    coste = _leer_coste(columna_coste, recargo)
+    coste = _leer_coste(columna_coste, utilidad)
     datos_cliente = _resolver_cliente(cliente or "", contado, ciudad or "", contacto or "")
 
     catalogo = productos_del_catalogo([codigo for codigo, _ in pedidos])
@@ -383,7 +390,8 @@ def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
         # Se dice como se calculo, para que quien cotiza lo vea antes de emitir.
         tipo_cliente = (
             f"al coste de '{coste['columna']}'"
-            + (f" mas {_cantidad(coste['recargo'])}%" if coste["recargo"] else "")
+            + (f" con {_cantidad(coste['utilidad'])}% de utilidad"
+               if coste["utilidad"] else "")
             + ", ITBIS incluido"
         )
     else:

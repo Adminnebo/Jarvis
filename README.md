@@ -570,9 +570,20 @@ Siempre en dos pasos:
 
 ### Cotizar sobre el coste
 
-Además de los niveles P1–P7, se puede cotizar **al coste, o al coste más un
-porcentaje**: basta pedírselo ("cotízale esto al costo más 25"). El porcentaje
-va de 0 a 500, y el nivel y el factor del cliente no entran en ese cálculo.
+Además de los niveles P1–P7, se puede cotizar **al coste, o al coste con un
+porcentaje de utilidad**: basta pedírselo ("cotízale esto al costo más 25").
+El nivel y el factor del cliente no entran en ese cálculo.
+
+El porcentaje es **utilidad sobre el precio de venta**, no un recargo sobre el
+coste:
+
+```
+precio = coste / (1 - % utilidad)
+```
+
+Con un coste de 1.000 y 30%, el precio es **1.428,57** y no 1.300: de cada
+peso vendido, 30 centavos son utilidad. (Sumarle 30% al coste dejaría 23%.)
+Va de 0 a 95; el 100% no existe, sería dividir por cero.
 
 **Qué columna es el coste no se adivina**: se escribe en las **notas de la
 fuente** del catálogo, en el panel de Fuentes. Una tabla puede tener varias
