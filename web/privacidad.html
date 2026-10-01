@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Política de privacidad de Jarvis · Nebo AI: qué datos se tratan, con qué proveedores y por cuánto tiempo.">
+<title>Política de Privacidad · Jarvis · Nebo AI</title>
+
+<style>
+  :root {
+    --papel:  #FBFBFC;
+    --panel:  #F2F3F6;
+    --tinta:  #1A1D24;
+    --suave:  #5B6272;
+    --linea:  #E2E4EA;
+    --acento: #34496E;
+    --marca:  #8C4B3C;
+
+    --titulo: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --texto:  "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --dato:   ui-monospace, "Cascadia Mono", Consolas, "SF Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --papel:  #14161B;
+      --panel:  #1B1E25;
+      --tinta:  #E7E8EC;
+      --suave:  #9AA1B0;
+      --linea:  #2A2E38;
+      --acento: #97AEDA;
+      --marca:  #D89179;
+    }
+  }
+  :root[data-theme="dark"] {
+    --papel:  #14161B;
+    --panel:  #1B1E25;
+    --tinta:  #E7E8EC;
+    --suave:  #9AA1B0;
+    --linea:  #2A2E38;
+    --acento: #97AEDA;
+    --marca:  #D89179;
+  }
+
+  body {
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: var(--texto);
+    font-size: 17px;
+    line-height: 1.68;
+    margin: 0;
+    padding: 0 24px 110px;
+  }
+  .hoja { max-width: 700px; margin: 0 auto; }
+
+  header.tapa {
+    padding: 76px 0 28px;
+    border-bottom: 2px solid var(--tinta);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .empresa {
+    font-family: var(--titulo); font-size: 12px; font-weight: 700;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--acento);
+  }
+  h1 {
+    font-family: var(--titulo);
+    font-size: clamp(30px, 5.4vw, 41px); font-weight: 700;
+    line-height: 1.12; margin: 0; letter-spacing: -.015em; text-wrap: balance;
+  }
+  .fechas {
+    font-family: var(--dato); font-size: 12.5px; color: var(--suave);
+    display: flex; flex-wrap: wrap; gap: 4px 20px;
+  }
+
+  .resumen {
+    margin: 30px 0 8px; padding: 20px 24px;
+    background: var(--panel); border-radius: 5px;
+    border-left: 3px solid var(--acento);
+  }
+  .resumen p { margin: 0 0 10px; }
+  .resumen p:last-child { margin-bottom: 0; }
+
+  section.clausula {
+    padding-top: 40px; margin-top: 40px; border-top: 1px solid var(--linea);
+  }
+  h2 {
+    font-family: var(--titulo); font-size: 21px; font-weight: 700;
+    margin: 0 0 16px; line-height: 1.3; text-wrap: balance;
+    display: flex; gap: 13px; align-items: baseline;
+  }
+  h2 .num {
+    font-family: var(--dato); font-size: 13px; color: var(--acento);
+    flex: none; font-variant-numeric: tabular-nums;
+  }
+  h3 {
+    font-family: var(--titulo); font-size: 15px; font-weight: 700;
+    margin: 26px 0 10px; color: var(--acento);
+  }
+  p { margin: 0 0 14px; }
+  section.clausula > p:last-child, li > p:last-child { margin-bottom: 0; }
+
+  ul, ol.letras { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  ol.letras { list-style: lower-latin; }
+
+  .tabla-scroll { overflow-x: auto; margin: 0 0 16px; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--titulo); font-size: 14px; }
+  th, td {
+    text-align: left; padding: 10px 14px 10px 0;
+    border-bottom: 1px solid var(--linea); vertical-align: top;
+  }
+  th {
+    font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--suave); font-weight: 700; border-bottom-color: var(--tinta);
+  }
+  td strong { font-weight: 700; }
+
+  .destacado {
+    margin: 18px 0; padding: 16px 20px;
+    background: var(--panel); border-left: 3px solid var(--marca); border-radius: 0 5px 5px 0;
+  }
+  .destacado p:last-child { margin-bottom: 0; }
+  .destacado b { color: var(--marca); }
+
+  code {
+    font-family: var(--dato); font-size: .85em;
+    background: var(--panel); padding: 2px 5px; border-radius: 3px; overflow-wrap: anywhere;
+  }
+  a { color: var(--acento); }
+  :focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+  footer {
+    margin-top: 52px; padding-top: 22px; border-top: 2px solid var(--tinta);
+    font-family: var(--titulo); font-size: 14px; color: var(--suave);
+  }
+</style>
+
+</head>
+<body>
+<div class="hoja">
+
+<header class="tapa">
+  <div class="empresa">Jarvis · Nebo AI</div>
+  <h1>Política de Privacidad</h1>
+  <div class="fechas">
+    <span>Vigente desde: 1 de octubre de 2026</span>
+    <span>Versión 1.0</span>
+  </div>
+</header>
+
+<div class="resumen">
+  <p><b>En resumen.</b> Jarvis es un asistente de voz y texto que consulta las fuentes de datos de tu organización, recuerda lo que le pides recordar y prepara cotizaciones. Para responder, envía tu consulta y los datos necesarios a un modelo de inteligencia artificial.</p>
+  <p>No guardamos el audio de tu voz ni las fotos que envías, y no entrenamos modelos con tus datos.</p>
+</div>
+
+<section class="clausula">
+  <h2><span class="num">1</span> Quiénes somos y a qué aplica esta política</h2>
+<p>Nebo AI es un nombre comercial registrado en el Estado de Florida por LM Consulting Group USA LLC, con domicilio en 3905 NW 107th Ave, Suite 304, Doral, FL 33178, Estados Unidos. LM Consulting Group USA LLC (en adelante, «Nebo AI», «nosotros») es la responsable de este sitio.</p>
+<p>Esta política aplica a el asistente Jarvis en <code>asistente.neboaiconsulting.com</code> y a los dispositivos que se vinculan a él (reloj, lentes y aplicación). Contacto: <strong>privacidad@neboaiconsulting.com</strong>.</p>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">2</span> Qué datos se tratan</h2>
+<h3>De tu cuenta y tu uso</h3>
+<ul>
+<li>Nombre de la organización, tu nombre, correo y contraseña (guardada de forma irreversible).</li>
+<li>Dispositivos vinculados: nombre y fecha de último uso.</li>
+<li>Los últimos 40 mensajes de tu conversación, incluidas las transcripciones de voz.</li>
+<li>Los «hechos» que le pides a Jarvis recordar sobre ti.</li>
+<li>Consumo y cargos: tokens, segundos de voz y coste por usuario y dispositivo.</li>
+<li>Registro de los envíos por WhatsApp: destinatario, quién lo envió y qué archivo.</li>
+</ul>
+<h3>De las fuentes de datos que conectas</h3>
+<p>Al responder, Jarvis consulta las bases de datos que tu organización conecta. Pueden contener datos de terceros, como los clientes de tu organización: nombre, RNC, dirección, correo, teléfonos, cotizaciones, saldos, promesas de pago y registros de llamadas. Las cotizaciones que generas se guardan con los datos del cliente destinatario.</p>
+<h3>Voz e imágenes</h3>
+<p>El audio de tu voz y las fotos que envías se procesan para responderte, pero no se almacenan en nuestros servidores: queda la transcripción o la lectura en texto.</p>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">3</span> Para qué se usan</h2>
+<p>Para responder tus consultas, generar y enviar cotizaciones y archivos, recordar lo que le pides, y medir y facturar el consumo.</p>
+<div class="destacado"><p><b>Lo que no hacemos.</b> No vendemos datos personales, no los usamos para publicidad y no entrenamos modelos de inteligencia artificial con ellos.</p></div>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">4</span> Proveedores que intervienen</h2>
+<div class="tabla-scroll"><table><thead><tr><th>Proveedor</th><th>Para qué</th><th>Qué recibe</th></tr></thead><tbody>
+<tr><td><strong>OpenAI</strong></td><td>Modelo que genera las respuestas, voz en vivo y lectura de imágenes</td><td>Tu consulta, tu nombre, los hechos recordados, los resultados de las consultas a tus fuentes, el audio de la voz en vivo y las fotos</td></tr>
+<tr><td><strong>Supabase</strong></td><td>Verificación de acceso desde los paneles, cotizaciones y archivos</td><td>Datos de la sesión, cotizaciones y documentos PDF</td></tr>
+<tr><td><strong>PDF.co</strong></td><td>Generación del PDF de cotización</td><td>El contenido de la cotización, con nombre, RNC, dirección y teléfono del destinatario</td></tr>
+<tr><td><strong>Evolution API y WhatsApp</strong></td><td>Envío de archivos por WhatsApp</td><td>Número del destinatario, archivo y texto del mensaje</td></tr>
+<tr><td><strong>Open-Meteo</strong></td><td>Consulta del clima</td><td>Solo el nombre de la ciudad</td></tr>
+<tr><td><strong>Google</strong></td><td>Establecer la conexión de voz y, según tu navegador, el dictado</td><td>Tu dirección IP; el audio del dictado si tu navegador usa su servicio de reconocimiento de voz</td></tr>
+<tr><td><strong>Railway</strong></td><td>Alojamiento del servicio</td><td>Toda la información del servicio</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">5</span> Cookies y almacenamiento en tu navegador</h2>
+<p>Jarvis usa una única cookie de sesión, estrictamente necesaria para mantenerte dentro, con una duración de 30 días. No usa herramientas de analítica ni publicidad.</p>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">6</span> Por cuánto tiempo se conservan</h2>
+<ul>
+<li><strong>Conversación:</strong> solo se guardan los últimos 40 mensajes, y puedes reiniciarla cuando quieras.</li>
+<li><strong>Hechos recordados:</strong> se conservan hasta que los borres o le pidas a Jarvis olvidarlos.</li>
+<li><strong>Dispositivos:</strong> puedes revocar su acceso en cualquier momento.</li>
+<li><strong>Cuenta, consumo, cotizaciones y registro de envíos:</strong> no tienen un borrado automático; se conservan mientras uses el servicio y se eliminan a tu solicitud.</li>
+</ul>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">7</span> Dónde se procesan los datos</h2>
+<p>Nebo AI opera desde Estados Unidos y sus proveedores procesan datos en Estados Unidos y en otros países. Si usas el servicio desde la República Dominicana u otro país, tus datos se transfieren fuera de él. Solo reciben datos los proveedores indicados en esta política, y únicamente lo necesario para su función.</p>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">8</span> Seguridad</h2>
+<p>Aplicamos medidas proporcionales al riesgo:</p>
+<ul>
+<li>las comunicaciones viajan cifradas mediante TLS;</li>
+<li>las contraseñas no se guardan en claro;</li>
+<li>las credenciales de tus fuentes de datos se guardan cifradas;</li>
+<li>las conexiones a tus fuentes de datos son de solo lectura por defecto;</li>
+<li>los enlaces a los documentos generados están firmados y caducan.</li>
+</ul>
+<p>Ningún sistema es invulnerable. Si un incidente afecta tus datos personales, te lo notificaremos sin demora indebida y dentro de los plazos legales aplicables.</p>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">9</span> Tus derechos</h2>
+<p>Puedes pedir acceso, corrección o eliminación de tus datos, u oponerte a su uso, escribiendo a <strong>privacidad@neboaiconsulting.com</strong>. Atendemos estas solicitudes sin importar tu país de residencia. Si resides en la República Dominicana, te asisten además los derechos de la Ley 172-13 sobre Protección de Datos de Carácter Personal.</p>
+<p>Si tus datos figuran en las fuentes de una organización que usa Jarvis (por ejemplo, como cliente suyo), dirige tu solicitud a esa organización: es ella quien decide sobre tus datos. Si recibimos tu solicitud directamente, se la trasladamos y le prestamos la asistencia técnica necesaria para atenderla.</p>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">10</span> Menores de edad</h2>
+<p>El servicio está dirigido a empresas y a su personal. No está diseñado para menores de edad.</p>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">11</span> Cambios en esta política</h2>
+<p>Podemos actualizar esta política. Publicaremos aquí la versión vigente con su fecha, y avisaremos de los cambios sustanciales dentro del propio servicio.</p>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">12</span> Ley aplicable</h2>
+<p>Esta política se rige por las leyes del Estado de Florida y las leyes federales de Estados Unidos. Cuando la persona titular o la empresa cliente estén sujetas a otra normativa de protección de datos, como la Ley 172-13 de la República Dominicana, se respetarán también los derechos que esa normativa les reconoce.</p>
+</section>
+
+<footer>Jarvis · Nebo AI · LM Consulting Group USA LLC · <a href="/">Volver</a></footer>
+
+</div>
+</body>
+</html>

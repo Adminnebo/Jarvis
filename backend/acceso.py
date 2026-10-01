@@ -287,6 +287,7 @@ def pagina_login(error: str = "") -> str:
   <p style="margin-top:18px;">
     <a href="/acceso/cuenta">Entrar con tu correo</a>
   </p>
+  <p><a href="/privacidad">Politica de privacidad</a></p>
 </div></body></html>"""
 
 
@@ -338,6 +339,7 @@ def pagina_entrar_cuenta(error: str = "") -> str:
     <button type="submit">Entrar</button>
   </form>
   {aviso}
+  <p style="margin-top:18px;"><a href="/privacidad">Politica de privacidad</a></p>
 </div></body></html>"""
 
 
@@ -428,7 +430,7 @@ function marcarQueVieneDeUnPanel() {
 
 LIBRES = (
     "/acceso", "/api/salud", "/api/version", "/entrar", "/acceso/supabase",
-    "/acceso/cuenta", "/api/dispositivos/vincular",
+    "/acceso/cuenta", "/api/dispositivos/vincular", "/privacidad",
 )
 
 

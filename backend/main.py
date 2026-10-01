@@ -800,4 +800,10 @@ def inicio():
     return FileResponse(WEB / "index.html")
 
 
+@app.get("/privacidad")
+def privacidad():
+    """Publica, sin sesion: esta ruta esta en acceso.LIBRES."""
+    return FileResponse(WEB / "privacidad.html")
+
+
 app.mount("/", StaticFiles(directory=WEB), name="web")
