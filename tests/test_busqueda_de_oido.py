@@ -100,3 +100,20 @@ def test_si_el_catalogo_no_se_puede_leer_se_busca_como_siempre(catalogo, monkeyp
 
     assert "no pude leer el vocabulario" in capsys.readouterr().out
     assert "truper" not in catalogo[-1]
+
+
+def test_sin_saber_el_tamano_de_la_tabla_no_se_lee_entera(catalogo, monkeypatch):
+    monkeypatch.setattr(fuentes, "contar_filas", lambda id_fuente, tabla: None)
+    fuentes.buscar_en_tabla("f1", "Productos", "trooper")
+
+    assert not any(sql.startswith("select Descripcion from") for sql in catalogo)
+    assert ("f1", "Productos") not in fuentes._vocabularios_en_curso
+
+
+def test_una_fuente_por_mcp_no_se_lee_entera(catalogo, monkeypatch, capsys):
+    monkeypatch.setattr(fuentes, "obtener",
+                        lambda id_fuente: {"tipo": "supabase", "config": {"access_token": "x"}})
+    fuentes.vocabulario_de("f1", "Productos", ["Codigo", "Descripcion"], esperar=True)
+
+    assert not any(sql.startswith("select Descripcion from") for sql in catalogo)
+    assert fuentes.parecidas_de_oido("trooper", fuentes._vocabularios[("f1", "Productos")]) == []

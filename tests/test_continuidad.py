@@ -58,6 +58,15 @@ def test_el_borrador_sin_emitir_llega_a_la_sesion_nueva():
     assert texto.startswith(cerebro.instrucciones(admin()))
 
 
+def test_si_el_contexto_falla_la_voz_abre_igual(monkeypatch, capsys):
+    def roto(usuario):
+        raise RuntimeError("algo se rompio")
+
+    monkeypatch.setattr(continuidad, "para_prompt", roto)
+    assert cerebro.configuracion_de_sesion(admin())["instructions"] == cerebro.instrucciones(admin())
+    assert "abre sin contexto" in capsys.readouterr().out
+
+
 def test_el_borrador_de_otro_no_se_cuela():
     cotizaciones._borradores["otra-persona"] = _borrador(time.time())
     assert continuidad.para_prompt(admin()) == ""

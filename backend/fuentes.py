@@ -781,6 +781,10 @@ def _cargar_vocabulario(id_fuente: str, tabla: str, columnas: list[str]) -> None
     clave = (id_fuente, tabla)
     try:
         fuente = obtener(id_fuente)
+        # Supabase sin cadena directa va por MCP: traer miles de filas por ahi
+        # es lento y no vale la pena. Esa fuente se busca como siempre.
+        if fuente["tipo"] == "supabase" and not fuente["config"].get("url"):
+            raise ValueError("fuente por MCP, sin vocabulario")
         filas = MOTORES[fuente["tipo"]](
             fuente["config"], f"select {', '.join(columnas)} from {tabla}",
             UMBRAL_TABLA_GRANDE, id_fuente,
@@ -866,7 +870,9 @@ def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
 
     # Una palabra que no esta en el catalogo se busca tambien como suena:
     # 'trooper' encuentra TRUPER y 'cascos' encuentra CASCO.
-    vocabulario = vocabulario_de(id_fuente, nombre_real, columnas)
+    # Solo si se sabe que la tabla es chica: sin el conteo podria ser enorme, y
+    # el vocabulario se arma leyendola entera.
+    vocabulario = vocabulario_de(id_fuente, nombre_real, columnas) if n is not None else None
     de_oido = {
         termino: parecidas_de_oido(termino, vocabulario) for termino in terminos
     } if vocabulario else {}

@@ -546,6 +546,18 @@ def puerta_de_microfono() -> dict:
     }
 
 
+def _donde_quedaron(usuario: acceso.Usuario) -> str:
+    """El contexto de la conversacion anterior, o nada si algo falla.
+
+    Es un extra: un error aqui no puede ser lo que deje a alguien sin voz.
+    """
+    try:
+        return continuidad.para_prompt(usuario)
+    except Exception as fallo:  # noqa: BLE001
+        print(f"  Voz: la sesion abre sin contexto ({type(fallo).__name__}: {fallo}).")
+        return ""
+
+
 def configuracion_de_sesion(usuario: acceso.Usuario) -> dict:
     modelo = os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1")
 
@@ -554,7 +566,7 @@ def configuracion_de_sesion(usuario: acceso.Usuario) -> dict:
         "model": modelo,
         # Las reglas de siempre y, al final, donde quedo la conversacion: sin
         # eso cada sesion de voz arranca sin saber de que se venia hablando.
-        "instructions": instrucciones(usuario) + continuidad.para_prompt(usuario),
+        "instructions": instrucciones(usuario) + _donde_quedaron(usuario),
         # Cuanto piensa antes de hablar. 'low' es el punto recomendado para
         # agentes de voz; 'minimal' responde antes pero acierta menos con las
         # herramientas, y aqui casi todo turno lleva una consulta.
