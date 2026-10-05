@@ -13,6 +13,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 import uuid
 from pathlib import Path
 
@@ -649,6 +650,184 @@ def ordenar_por_utilidad(columnas: list[str]) -> list[str]:
     return sorted(columnas, key=peso)
 
 
+# --------------------------------------------------------------------------
+# Lo que se oye frente a lo que esta escrito
+# --------------------------------------------------------------------------
+#
+# En voz, el nombre de una marca llega como suena: "trooper" por TRUPER,
+# "maquita" por MAKITA. Y la gente pide "cascos" de un catalogo que dice CASCO.
+# Un LIKE no encuentra ninguna de las dos. Aqui se guarda el vocabulario de
+# las descripciones de cada tabla y, para una palabra que no aparece en ninguna
+# parte, se busca la que suena igual o casi. Solo se agrega como alternativa:
+# una palabra que ya esta en el catalogo se busca exactamente como antes.
+
+VIGENCIA_VOCABULARIO = 6 * 60 * 60
+MIN_LETRAS_DE_OIDO = 4
+
+_vocabularios: dict[tuple, dict] = {}
+_vocabularios_en_curso: set = set()
+_PALABRA = re.compile(r"[a-záéíóúüñ]{4,}")
+
+
+def sin_tildes(texto: str) -> str:
+    return "".join(
+        letra for letra in unicodedata.normalize("NFD", texto)
+        if unicodedata.category(letra) != "Mn" or letra == "̃"
+    ).replace("ñ", "ñ")
+
+
+_SONIDOS = (
+    ("ph", "f"), ("ck", "k"), ("qu", "k"), ("oo", "u"), ("ee", "i"),
+    ("ou", "u"), ("ll", "i"), ("w", "u"), ("y", "i"), ("z", "s"), ("v", "b"),
+    ("x", "ks"),
+)
+
+
+def clave_de_oido(palabra: str) -> str:
+    """Como suena una palabra dicha por alguien que habla espanol.
+
+    'trooper' y 'truper' dan la misma clave, igual que 'maquita' y 'makita'.
+    No es fonetica de verdad: son las confusiones que se ven al dictar marcas.
+    """
+    clave = sin_tildes(palabra.lower())
+    # La ch es un sonido propio: se aparta para que no la toquen la c ni la h.
+    clave = clave.replace("ch", "#")
+    for escrito, sonido in _SONIDOS:
+        clave = clave.replace(escrito, sonido)
+    clave = re.sub(r"c(?=[ei])", "s", clave).replace("c", "k").replace("h", "")
+    clave = re.sub(r"(.)\1+", r"\1", clave)
+    # "estanli" por STANLEY: la e de apoyo antes de s + consonante.
+    clave = re.sub(r"^es(?=[^aeiou])", "s", clave)
+    return clave
+
+
+def distancia(a: str, b: str, tope: int) -> int:
+    """Cuantas letras hay que cambiar para ir de a a b; tope + 1 si son mas."""
+    if abs(len(a) - len(b)) > tope:
+        return tope + 1
+    anterior = list(range(len(b) + 1))
+    for i, letra_a in enumerate(a, 1):
+        actual = [i]
+        for j, letra_b in enumerate(b, 1):
+            actual.append(min(
+                anterior[j] + 1, actual[j - 1] + 1,
+                anterior[j - 1] + (letra_a != letra_b),
+            ))
+        if min(actual) > tope:
+            return tope + 1
+        anterior = actual
+    return anterior[-1]
+
+
+def armar_vocabulario(textos) -> dict:
+    """De las descripciones, las palabras que hay y como suena cada una."""
+    cuantas: dict[str, int] = {}
+    for texto in textos:
+        for palabra in set(_PALABRA.findall(str(texto or "").lower())):
+            cuantas[palabra] = cuantas.get(palabra, 0) + 1
+
+    por_clave: dict[str, list[str]] = {}
+    for palabra in cuantas:
+        por_clave.setdefault(clave_de_oido(palabra), []).append(palabra)
+
+    por_inicial: dict[str, list[str]] = {}
+    for clave in por_clave:
+        por_inicial.setdefault(clave[:1], []).append(clave)
+
+    return {
+        "cuantas": cuantas, "por_clave": por_clave, "por_inicial": por_inicial,
+        "todo": "\n".join(sin_tildes(p) for p in cuantas),
+        "cache": {}, "ts": time.time(),
+    }
+
+
+def parecidas_de_oido(termino: str, vocabulario: dict, maximo: int = 2) -> list[str]:
+    """Palabras del catalogo que suenan como `termino`, si el no aparece.
+
+    Vacio si el termino ya esta en el catalogo (entero o dentro de otra
+    palabra): ahi no hay nada que corregir.
+    """
+    if len(termino) < MIN_LETRAS_DE_OIDO or not termino.isalpha():
+        return []
+    cache = vocabulario["cache"]
+    if termino in cache:
+        return cache[termino]
+
+    plano = sin_tildes(termino.lower())
+    if plano in vocabulario["todo"]:
+        cache[termino] = []
+        return []
+
+    cuantas, por_clave = vocabulario["cuantas"], vocabulario["por_clave"]
+    clave = clave_de_oido(plano)
+    # Palabra corta, margen corto: con seis letras, dos cambios ya es otra
+    # palabra ('teclas' no es TECLADO).
+    tope = 1 if len(clave) < 7 else 2
+
+    candidatas: list[tuple[int, int, str]] = []
+    for otra in vocabulario["por_inicial"].get(clave[:1], ()):
+        d = 0 if otra == clave else distancia(clave, otra, tope)
+        if d <= tope:
+            candidatas.extend((d, -cuantas[p], p) for p in por_clave[otra])
+
+    candidatas.sort()
+    # Solo las mas cercanas: si hay una que suena igual, las de "casi" sobran.
+    mejores = [p for d, _, p in candidatas if d == candidatas[0][0]][:maximo]
+    cache[termino] = mejores
+    return mejores
+
+
+def _cargar_vocabulario(id_fuente: str, tabla: str, columnas: list[str]) -> None:
+    clave = (id_fuente, tabla)
+    try:
+        fuente = obtener(id_fuente)
+        filas = MOTORES[fuente["tipo"]](
+            fuente["config"], f"select {', '.join(columnas)} from {tabla}",
+            UMBRAL_TABLA_GRANDE, id_fuente,
+        )
+        vocabulario = armar_vocabulario(
+            valor for fila in filas for valor in fila.values()
+        )
+    except Exception as error:  # noqa: BLE001 - sin vocabulario se busca como siempre
+        print(f"  AVISO: no pude leer el vocabulario de {tabla}: {explicar(error)}")
+        vocabulario = armar_vocabulario(())
+    _vocabularios[clave] = vocabulario
+    _vocabularios_en_curso.discard(clave)
+
+
+def vocabulario_de(id_fuente: str, tabla: str, columnas: list[str],
+                   esperar: bool = False) -> dict | None:
+    """El vocabulario de esa tabla, o None si todavia se esta leyendo.
+
+    La primera busqueda en una tabla lo manda a leer en segundo plano y sigue
+    sin el: son miles de filas, y nadie debe esperarlas con el microfono
+    abierto. Desde la siguiente ya esta.
+    """
+    clave = (id_fuente, tabla)
+    vocabulario = _vocabularios.get(clave)
+    if vocabulario and time.time() - vocabulario["ts"] < VIGENCIA_VOCABULARIO:
+        return vocabulario
+
+    # Donde vive el lenguaje: la descripcion y, si hay, como le dice la gente.
+    utiles = [c for c in columnas if any(p in c.lower() for p in DESCRIPTIVAS + ALTERNATIVAS)][:2]
+    if not utiles:
+        return vocabulario
+
+    with _candado:
+        if clave in _vocabularios_en_curso:
+            return vocabulario
+        _vocabularios_en_curso.add(clave)
+
+    if esperar:
+        _cargar_vocabulario(id_fuente, tabla, utiles)
+        return _vocabularios.get(clave)
+    threading.Thread(
+        target=_cargar_vocabulario, args=(id_fuente, tabla, utiles), daemon=True,
+    ).start()
+    # Mientras se relee, el viejo sigue sirviendo.
+    return vocabulario
+
+
 def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
                     limite: int = 8) -> list[dict]:
     """Busca por texto y devuelve las mejores coincidencias primero.
@@ -685,12 +864,22 @@ def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
     columnas = ordenar_por_utilidad(columnas)[:8]
     principal = columna_descriptiva(columnas)
 
+    # Una palabra que no esta en el catalogo se busca tambien como suena:
+    # 'trooper' encuentra TRUPER y 'cascos' encuentra CASCO.
+    vocabulario = vocabulario_de(id_fuente, nombre_real, columnas)
+    de_oido = {
+        termino: parecidas_de_oido(termino, vocabulario) for termino in terminos
+    } if vocabulario else {}
+
     def patron(columna: str, termino: str) -> str:
         # Un termino que empieza por cifra debe empezar tambien palabra: si no,
         # '6.0mm' coincide dentro de '16.0MM' y da el calibre equivocado.
         if termino[0].isdigit():
             return f"({columna} like '% {termino}%' or {columna} like '{termino}%')"
-        return f"{columna} like '%{termino}%'"
+        formas = [termino, *de_oido.get(termino, ())]
+        if len(formas) == 1:
+            return f"{columna} like '%{termino}%'"
+        return "(" + " or ".join(f"{columna} like '%{forma}%'" for forma in formas) + ")"
 
     def en_alguna(termino: str) -> str:
         return "(" + " or ".join(patron(c, termino) for c in columnas) + ")"

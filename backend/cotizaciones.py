@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from . import consumo, cotizacion_html
+from . import consumo, continuidad, cotizacion_html
 
 PREFIJO = "JV-"
 NIVELES = tuple(f"P{i}" for i in range(1, 8))
@@ -150,14 +150,75 @@ def coste_de(fila: dict, columna: str) -> float:
 _NOMBRE_PERMITIDO = re.compile(r"[^\w\s.&-]", re.UNICODE)
 
 
+_COLUMNAS_CLIENTE = (
+    "codigo, nombre, RTRIM(rnc) AS rnc, direccion, email, "
+    "telefono1, Celular, NivelPrecio, factor"
+)
+
+# Un RNC tiene 9 cifras y una cedula 11.
+LARGOS_DE_RNC = (9, 10, 11)
+
+
+def cifras_de_rnc(texto: str) -> str | None:
+    """Las cifras, si lo que se dijo es un RNC o una cedula y no un nombre.
+
+    Dictado en voz llega con una cifra de mas o de menos, asi que el largo no
+    se exige aqui: '402-21599556-0' tiene doce y sigue siendo un RNC mal oido,
+    no el nombre de un cliente.
+    """
+    limpio = texto.strip()
+    cifras = re.sub(r"\D", "", limpio)
+    if re.fullmatch(r"[\d\s.-]+", limpio) and 7 <= len(cifras) <= 15:
+        return cifras
+    return None
+
+
+def deletreado(cifras: str) -> str:
+    """Para que se lea cifra por cifra y no como un numero de doce digitos."""
+    return " ".join(cifras)
+
+
+def a_una_cifra_de(cifras: str) -> list[str]:
+    """Los RNC que salen de equivocarse en una sola cifra.
+
+    Una de mas, una de menos, una cambiada o dos vecinas al reves: los errores
+    de dictar un numero largo de corrido.
+    """
+    variantes = set()
+    for i in range(len(cifras)):
+        variantes.add(cifras[:i] + cifras[i + 1:])
+        for digito in "0123456789":
+            variantes.add(cifras[:i] + digito + cifras[i + 1:])
+    for i in range(len(cifras) + 1):
+        for digito in "0123456789":
+            variantes.add(cifras[:i] + digito + cifras[i:])
+    for i in range(len(cifras) - 1):
+        variantes.add(cifras[:i] + cifras[i + 1] + cifras[i] + cifras[i + 2:])
+    variantes.discard(cifras)
+    return sorted(v for v in variantes if len(v) in LARGOS_DE_RNC)
+
+
+def clientes_con_rnc_parecido(cifras: str) -> list[dict]:
+    """Clientes activos cuyo RNC esta a una cifra del que se dijo."""
+    variantes = a_una_cifra_de(cifras)
+    if not variantes:
+        return []
+    lista = ", ".join(f"'{v}'" for v in variantes)
+    return _consultar(
+        f"SELECT TOP 4 {_COLUMNAS_CLIENTE} FROM dbo.List_ClientesIA "
+        "WHERE activo = 1 AND Suspendido = 0 AND "
+        f"REPLACE(RTRIM(rnc), '-', '') IN ({lista}) ORDER BY nombre"
+    )
+
+
 def buscar_cliente(texto: str) -> list[dict]:
     """Clientes activos por codigo, RNC o nombre. Nada llega crudo al SQL."""
     limpio = texto.strip()
-    solo_digitos = re.sub(r"\D", "", limpio)
+    solo_digitos = cifras_de_rnc(limpio)
 
     if re.fullmatch(r"\d{1,6}", limpio):
         condicion = f"codigo = {int(limpio)}"
-    elif re.fullmatch(r"[\d\s-]{9,15}", limpio) and 9 <= len(solo_digitos) <= 11:
+    elif solo_digitos:
         condicion = f"REPLACE(RTRIM(rnc), '-', '') = '{solo_digitos}'"
     else:
         from . import fuentes
@@ -173,8 +234,7 @@ def buscar_cliente(texto: str) -> list[dict]:
         condicion = " AND ".join(f"nombre LIKE '%{p}%'" for p in palabras)
 
     return _consultar(
-        "SELECT TOP 6 codigo, nombre, RTRIM(rnc) AS rnc, direccion, email, "
-        "telefono1, Celular, NivelPrecio, factor FROM dbo.List_ClientesIA "
+        f"SELECT TOP 6 {_COLUMNAS_CLIENTE} FROM dbo.List_ClientesIA "
         f"WHERE activo = 1 AND Suspendido = 0 AND {condicion} ORDER BY nombre"
     )
 
@@ -227,6 +287,37 @@ def _leer_productos(productos) -> list[tuple[str, float]]:
     return list(cantidades.items())
 
 
+def _rnc_sin_cliente(cifras: str) -> str:
+    """Que decir cuando el RNC no existe: casi siempre se oyo mal una cifra.
+
+    Un numero largo dictado de corrido llega con una cifra cambiada o de mas.
+    En vez de dar al cliente por inexistente, se busca el que esta a una cifra
+    y se manda a confirmar el numero en voz alta antes de seguir.
+    """
+    try:
+        parecidos = clientes_con_rnc_parecido(cifras)
+    except Exception:  # noqa: BLE001 - sin parecidos se pide repetir igual
+        parecidos = []
+
+    if not parecidos:
+        return (
+            f"No hay ningun cliente con el RNC {deletreado(cifras)}. Lee ese numero "
+            "cifra por cifra y pregunta si lo entendiste bien, o si va de contado."
+        )
+
+    opciones = "; ".join(
+        f"{_texto(f['nombre'])} (RNC {deletreado(re.sub(r'[^0-9]', '', _texto(f.get('rnc'))))}, "
+        f"codigo {f['codigo']})"
+        for f in parecidos
+    )
+    return (
+        f"No hay ningun cliente con el RNC {deletreado(cifras)}, pero a una cifra "
+        f"de diferencia esta: {opciones}. Lee cifra por cifra el RNC que entendiste "
+        "y pregunta si es ese cliente. No cotices hasta que lo confirme; si dice "
+        "que si, prepara de nuevo con su codigo."
+    )
+
+
 def _resolver_cliente(texto: str, contado: bool, ciudad: str, contacto: str) -> dict:
     extra = {"ciudad": ciudad.strip()[:60], "contacto": contacto.strip()[:60], "sector": ""}
 
@@ -242,6 +333,8 @@ def _resolver_cliente(texto: str, contado: bool, ciudad: str, contacto: str) -> 
         )
 
     filas = buscar_cliente(texto)
+    if not filas and cifras_de_rnc(texto):
+        raise ErrorCotizacion(_rnc_sin_cliente(cifras_de_rnc(texto)))
     if not filas:
         raise ErrorCotizacion(
             f"No encontre al cliente '{texto}'. Pregunta el nombre exacto o el RNC, "
@@ -543,6 +636,9 @@ def emitir(id_usuario: str, nombre_usuario: str) -> dict:
         _subir(ruta, _pdf(html, nombre_de_archivo(borrador.cliente["nombre"], texto_numero)))
         _actualizar(numero, {"pdf_ruta": ruta, "estado": "emitida"})
         url = firmar(ruta, FIRMA_APP)
+        continuidad.anotar_emision(
+            id_usuario, texto_numero, borrador.cliente["nombre"], borrador.totales["total"],
+        )
     except Exception as error:  # noqa: BLE001
         try:
             _actualizar(numero, {"estado": "fallida"})

@@ -29,6 +29,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     cerebro,
     conectores,
     consumo,
+    continuidad,
     costos,
     cotizaciones,
     creditos,
@@ -128,6 +129,8 @@ async def guardia(peticion: Request, siguiente):
     pista = peticion.headers.get("x-jarvis-puente", "").strip().lower()
     if dispositivo == "navegador" and pista in consumo.PISTAS:
         dispositivo = consumo.PISTAS[pista]
+    elif dispositivo == "navegador" and consumo.es_de_pruebas(pista, usuario):
+        dispositivo = consumo.PRUEBAS
 
     if usuario is None:
         # A la interfaz le mostramos el formulario; a la API, un 401 limpio.
@@ -534,7 +537,7 @@ class LoteDeVoz(BaseModel):
 
 
 @app.post("/api/voz/registro")
-def anotar_voz(lote: LoteDeVoz):
+def anotar_voz(peticion: Request, lote: LoteDeVoz):
     """Guarda lo que se dijo en voz y avisa de los precios sin respaldo.
 
     Lo manda el puente de los lentes cada pocos turnos. Entra con la clave del
@@ -545,6 +548,12 @@ def anotar_voz(lote: LoteDeVoz):
         lote.sesion, lote.dispositivo,
         [evento.model_dump() for evento in lote.eventos],
     )
+    # La proxima sesion de voz de esta persona arranca sabiendo esto.
+    for evento in lote.eventos:
+        if evento.tipo == "dicho":
+            continuidad.anotar_turno(
+                peticion.state.usuario.id, evento.quien, evento.texto, lote.dispositivo,
+            )
     return {"ok": True, "sospechas": sospechas}
 
 
@@ -645,6 +654,7 @@ def agregar_a_conversacion(peticion: Request, mensaje: MensajeSuelto):
         turno["adjuntos"] = mensaje.adjuntos
     mensajes.append(turno)
     memoria.guardar_conversacion(id_usuario, mensajes)
+    continuidad.anotar_turno(id_usuario, mensaje.role, mensaje.content, "web")
     return {"ok": True}
 
 
@@ -734,6 +744,7 @@ def borrar_hecho(peticion: Request, id_hecho: str):
 @app.post("/api/conversacion/reiniciar")
 def reiniciar_conversacion(peticion: Request):
     memoria.borrar_conversacion(peticion.state.usuario.id)
+    continuidad.olvidar(peticion.state.usuario.id)
     return {"ok": True}
 
 

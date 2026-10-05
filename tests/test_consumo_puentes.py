@@ -367,3 +367,27 @@ def test_en_el_chat_los_lentes_no_pasan_por_reloj(cliente_admin, monkeypatch):
     cliente_admin.post("/api/chat", json={"mensaje": "hola", "breve": True})
 
     assert vistos == [consumo.LENTES_SIN_VINCULAR, consumo.RELOJ_SIN_VINCULAR]
+
+
+# --------------------------------------------------------------------------
+# Lo que se gasta probando
+# --------------------------------------------------------------------------
+
+def test_las_pruebas_salen_en_su_fila_y_no_se_cobran(cliente_admin):
+    cuerpo = {"modelo": "gpt-realtime-2.1", "uso": {"input_tokens": 1000}}
+    cliente_admin.post("/api/consumo/voz", json=cuerpo, headers={"X-Jarvis-Puente": "pruebas"})
+
+    [registro] = consumo.todos()
+    assert (registro["dispositivo"], registro["usuario_id"], registro["organizacion_id"]) == \
+        ("pruebas", "admin", None)
+
+    [fila] = consumo.agrupar_por_origen(consumo.todos())
+    assert fila["nombre"] == "Pruebas (banco de pruebas)"
+    assert fila["costo"] > 0 and fila["cobrado"] == 0
+
+
+def test_un_cliente_no_se_libra_de_pagar_diciendo_que_es_una_prueba(puentes_a_jh):
+    cliente = acceso.Usuario("u1", "Cliente", "usuario", organizacion_id=cuentas.ID_PANELES)
+    assert not consumo.es_de_pruebas("pruebas", cliente)
+    assert consumo.es_de_pruebas("pruebas", acceso.por_defecto())
+    assert not consumo.es_de_pruebas("pruebas", None)

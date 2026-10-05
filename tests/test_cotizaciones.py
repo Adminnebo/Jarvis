@@ -350,3 +350,44 @@ def test_la_utilidad_queda_siendo_la_pedida(catalogo):
     # Sobre el neto da lo mismo: el ITBIS esta de los dos lados.
     coste_neto = 1000 / 1.18
     assert round((linea["precio_bruto"] - coste_neto) / linea["precio_bruto"], 4) == 0.3
+
+
+# --------------------------------------------------------------------------
+# Un RNC dictado en voz llega con una cifra mal
+# --------------------------------------------------------------------------
+
+def test_un_rnc_con_una_cifra_de_mas_no_se_busca_como_nombre(catalogo):
+    # Doce cifras: antes no parecia un RNC y se buscaba como nombre, sin exito.
+    assert cotizaciones.cifras_de_rnc("402-21599556-0") == "402215995560"
+    assert cotizaciones.cifras_de_rnc("FERRETERIA ELIAM") is None
+    assert cotizaciones.cifras_de_rnc("6177") is None        # eso es un codigo
+
+
+def test_a_una_cifra_cubre_los_errores_de_dictado():
+    variantes = cotizaciones.a_una_cifra_de("1318323334")       # sobra un 3
+    assert "131832334" in variantes
+    assert "131832334" in cotizaciones.a_una_cifra_de("131832834")   # una cambiada
+    assert "131832334" in cotizaciones.a_una_cifra_de("13183234")    # falta una
+    assert "131832334" in cotizaciones.a_una_cifra_de("131823334")   # dos al reves
+    assert all(len(v) in (9, 10, 11) and v.isdigit() for v in variantes)
+
+
+def test_un_rnc_mal_oido_ofrece_al_cliente_que_esta_a_una_cifra(catalogo):
+    respuesta = _preparar(cliente="1318323334")
+
+    assert "No hay ningun cliente con el RNC 1 3 1 8 3 2 3 3 3 4" in respuesta
+    assert "FERRETERIA ELIAM MAX EIRL (RNC 1 3 1 8 3 2 3 3 4, codigo 6177)" in respuesta
+    assert "cifra por cifra" in respuesta
+    assert "No cotices hasta que lo confirme" in respuesta
+    assert cotizaciones.borrador_de("admin") is None
+
+
+def test_un_rnc_que_no_se_parece_a_ninguno_manda_a_repetirlo(catalogo):
+    respuesta = _preparar(cliente="999-99999-9")
+
+    assert "No hay ningun cliente con el RNC 9 9 9 9 9 9 9 9 9" in respuesta
+    assert "pregunta si lo entendiste bien, o si va de contado" in respuesta
+
+
+def test_el_rnc_exacto_sigue_entrando_directo(catalogo):
+    assert "FERRETERIA ELIAM MAX EIRL" in _preparar(cliente="1-31-83233-4")

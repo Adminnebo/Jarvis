@@ -277,6 +277,17 @@ LENTES_SIN_VINCULAR = "lentes-sin-vincular"
 PISTAS = {"reloj": RELOJ_SIN_VINCULAR, "lentes": LENTES_SIN_VINCULAR}
 _PUENTE_DE_LA_PISTA = {pista: puente for puente, pista in PISTAS.items()}
 
+# Lo que se gasta probando a Jarvis fuera de una conversacion real: el banco
+# de pruebas manda `X-Jarvis-Puente: pruebas` y sale en su propia fila del
+# tablero. Solo vale para la gente de la casa, que no tiene a quien cobrarle:
+# si valiera para un cliente, bastaria ese encabezado para no pagar.
+PRUEBAS = "pruebas"
+
+
+def es_de_pruebas(pista: str, usuario) -> bool:
+    return pista == PRUEBAS and usuario is not None \
+        and not getattr(usuario, "organizacion_id", None)
+
 
 def _a_quien_se_le_anota(usuario, dispositivo: str) -> tuple:
     """A que usuario y organizacion se le cuenta esto, y desde que aparato.
@@ -698,6 +709,7 @@ ORIGENES = {
     "navegador": "Web",
     "lentes": "Puente de los lentes",
     "reloj": "Puente del reloj",
+    PRUEBAS: "Pruebas (banco de pruebas)",
 }
 
 # Un puente sin vincular es ese puente: se ve junto a los demas.

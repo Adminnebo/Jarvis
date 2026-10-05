@@ -17,6 +17,7 @@ from . import (
     conectores,
     consultas,
     consumo,
+    continuidad,
     cotizaciones,
     esquema,
     fuentes,
@@ -286,6 +287,15 @@ def es_fallo_de_conector(error: Exception) -> bool:
     return "MCP server" in str(error)
 
 
+def _anotar_para_la_voz(usuario: acceso.Usuario, mensajes: list[dict],
+                        dispositivo: str) -> None:
+    """Lo que se acaba de escribir, para que la voz sepa de que se hablaba."""
+    aparato = "reloj" if dispositivo.startswith("reloj") else "texto"
+    for mensaje in mensajes[-2:]:
+        if isinstance(mensaje.get("content"), str):
+            continuidad.anotar_turno(usuario.id, mensaje["role"], mensaje["content"], aparato)
+
+
 def responder(
     mensajes: list[dict], usuario: acceso.Usuario, extra: str = "",
     dispositivo: str = "navegador",
@@ -386,6 +396,7 @@ def responder(
                 respuesta["adjuntos"] = adjuntos_del_turno
             mensajes.append(respuesta)
             memoria.guardar_conversacion(usuario.id, mensajes)
+            _anotar_para_la_voz(usuario, mensajes, dispositivo)
             yield {"tipo": "fin", "dato": mensajes}
             return
 
@@ -541,7 +552,9 @@ def configuracion_de_sesion(usuario: acceso.Usuario) -> dict:
     return {
         "type": "realtime",
         "model": modelo,
-        "instructions": instrucciones(usuario),
+        # Las reglas de siempre y, al final, donde quedo la conversacion: sin
+        # eso cada sesion de voz arranca sin saber de que se venia hablando.
+        "instructions": instrucciones(usuario) + continuidad.para_prompt(usuario),
         # Cuanto piensa antes de hablar. 'low' es el punto recomendado para
         # agentes de voz; 'minimal' responde antes pero acierta menos con las
         # herramientas, y aqui casi todo turno lleva una consulta.
