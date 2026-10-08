@@ -431,6 +431,8 @@ function marcarQueVieneDeUnPanel() {
 LIBRES = (
     "/acceso", "/api/salud", "/api/version", "/entrar", "/acceso/supabase",
     "/acceso/cuenta", "/api/dispositivos/vincular", "/privacidad",
+    # Entra con su propia clave, no con una sesion: la revisa la ruta (costos.py).
+    "/api/costos/resumen",
 )
 
 

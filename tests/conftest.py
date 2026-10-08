@@ -19,7 +19,7 @@ def entorno_limpio(tmp_path, monkeypatch):
         # prueba podria descontar saldo de verdad en agentia.
         if nombre.startswith(("JARVIS_PASSWORD", "JARVIS_MARGEN", "JARVIS_ORGANIZACION",
                               "JARVIS_CREDITOS", "JARVIS_SOPORTE", "JARVIS_RELOJ",
-                              "JARVIS_LENTES")):
+                              "JARVIS_LENTES", "JARVIS_COSTOS")):
             monkeypatch.delenv(nombre, raising=False)
     for nombre in ("JARVIS_CLAVE_SECRETA", "JARVIS_USUARIO"):
         monkeypatch.delenv(nombre, raising=False)

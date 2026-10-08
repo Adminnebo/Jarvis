@@ -29,6 +29,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     cerebro,
     conectores,
     consumo,
+    costos,
     cotizaciones,
     creditos,
     cuentas,
@@ -656,6 +657,29 @@ def ver_consumo(
     datos = consumo.consultar(periodo=periodo, modo=modo, modelo=modelo, organizacion=organizacion)
     datos["creditos"] = creditos.resumen()
     return datos
+
+
+@app.get("/api/costos/resumen")
+def resumen_de_costos(peticion: Request, desde: str | None = None, hasta: str | None = None):
+    """Lo que cobro y lo que costo Jarvis en un rango, para el Panel Maestro.
+
+    No pasa por la guardia: quien pregunta es otro servidor y entra con su
+    propia clave (JARVIS_COSTOS_CLAVE), en Authorization: Bearer. Sin la
+    variable configurada la ruta responde como si no existiera.
+    """
+    if not costos.configurado():
+        return JSONResponse(status_code=404, content={"error": "No encontrado."})
+
+    autorizacion = peticion.headers.get("authorization", "")
+    recibida = autorizacion[7:] if autorizacion.lower().startswith("bearer ") else None
+    if not costos.clave_valida(recibida):
+        return JSONResponse(status_code=401, content={"error": "No autorizado."})
+
+    try:
+        inicio, fin = costos.rango(desde, hasta)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    return costos.resumen(inicio, fin)
 
 
 @app.post("/api/consumo/voz")

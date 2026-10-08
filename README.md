@@ -302,6 +302,27 @@ El micrófono del navegador solo funciona en contextos seguros. Railway da
 HTTPS por defecto, así que funciona; en local funciona porque `127.0.0.1`
 cuenta como seguro. Un servidor propio sin certificado se queda sin voz.
 
+
+### El resumen para el Panel Maestro
+
+`GET /api/costos/resumen?desde=…&hasta=…` devuelve, para un rango de fechas, lo que
+Jarvis cobró, lo que costó y cuántas consultas fueron. Lo lee el Panel Maestro para
+su tabla de costos y márgenes por producto; sale de lo mismo que alimenta el tablero
+de Consumo y el cobro en agentia.
+
+Se entra con `JARVIS_COSTOS_CLAVE` en `Authorization: Bearer`, no con una sesión: la
+misma clave se carga en el panel, en Productos → Configurar → Conexiones. Sin la
+variable la ruta responde 404. Solo lee, y la clave no abre nada más.
+
+| Campo | Qué es | Etiqueta |
+|---|---|---|
+| `ingreso` | lo que se descontó de verdad en agentia en ese rango | medido |
+| `costo` | todo lo gastado, también lo de la casa: tokens por la lista de precios | estimado |
+| `unidades` | consultas (sin contar sesiones ni aperturas) | |
+
+En `detalle` van lo devengado (costo con el margen, se haya descontado o no), lo que
+quedó pendiente de cobro y el gasto por origen. Sin fechas, los últimos 30 días.
+
 ## De qué habla y de qué no
 
 Jarvis habla de **los datos que consulta y del mundo en general**. De cómo
