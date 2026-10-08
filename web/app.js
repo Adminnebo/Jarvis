@@ -58,12 +58,14 @@ function burbuja(clase, texto = "") {
   nodo.className = `mensaje ${clase}`;
   nodo.textContent = texto;
   conversacion.appendChild(nodo);
-  conversacion.scrollTop = conversacion.scrollHeight;
+  aLoUltimo();
   return nodo;
 }
 
-function alFinal() {
-  conversacion.scrollTop = conversacion.scrollHeight;
+/* Lo ultimo se muestra arriba (style.css invierte el orden), asi que seguir
+   la conversacion es volver al principio de la pagina. */
+function aLoUltimo() {
+  if (window.scrollY > 0) window.scrollTo({ top: 0 });
 }
 
 /* Imagenes y fichas tecnicas que manda Jarvis. Cada una abre el archivo
@@ -88,7 +90,7 @@ function burbujaDeAdjuntos(adjuntos) {
       imagen.src = adjunto.url;
       imagen.alt = adjunto.titulo;
       imagen.loading = "lazy";
-      imagen.onload = alFinal;
+      imagen.onload = aLoUltimo;
       const pie = document.createElement("span");
       pie.textContent = adjunto.titulo;
       enlace.append(imagen, pie);
@@ -100,7 +102,7 @@ function burbujaDeAdjuntos(adjuntos) {
     }
     nodo.appendChild(enlace);
   }
-  alFinal();
+  aLoUltimo();
   return nodo;
 }
 
@@ -385,7 +387,7 @@ async function enviar(mensaje) {
           completo += evento.dato;
           porDecir += evento.dato;
           nodoRespuesta.textContent = completo;
-          alFinal();
+          aLoUltimo();
 
           // Hablamos frase por frase para no esperar a que termine todo.
           const corte = porDecir.search(/[.!?\n](?=\s|$)/);
@@ -477,7 +479,7 @@ async function abrirVozEnVivo() {
       if (!burbujaViva) burbujaViva = burbuja("jarvis");
       burbujaViva.textContent += fragmento;
       orbe.classList.add("hablando");
-      alFinal();
+      aLoUltimo();
     },
 
     onRespuestaCompleta: (texto) => {
@@ -565,7 +567,7 @@ archivoImagen.addEventListener("change", async () => {
     miniatura.src = url;
     miniatura.alt = "Imagen adjunta";
     nodo.appendChild(miniatura);
-    miniatura.onload = alFinal;
+    miniatura.onload = aLoUltimo;
 
     // El historial es texto: queda constancia, no la foto.
     guardarTurno("user", "[Imagen adjunta]");

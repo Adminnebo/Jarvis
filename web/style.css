@@ -252,12 +252,16 @@ body {
 
 /* ---------- Conversacion ---------- */
 
+/* Lo ultimo va arriba, pegado al orbe y a la entrada: la pagina crece hacia
+   abajo, y con lo nuevo al final habia que bajar a buscar cada respuesta. El
+   orden se invierte aqui y no en app.js, que sigue agregando al final. */
 .conversacion {
   flex: 1;
   overflow-y: auto;
   padding: 0 22px 28px;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
   gap: 12px;
   max-width: 780px;
   width: 100%;
