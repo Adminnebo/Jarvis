@@ -48,6 +48,19 @@ MAX_SESIONES = 200
 _ultima_rotacion = ""
 
 
+def al_log(aparato: str, que: str, texto, maximo: int = 400) -> None:
+    """Una linea en el log del servidor con lo que se dijo o se consulto.
+
+    Los lentes ya dejan su dialogo en el log de su puente; la web y el reloj
+    no dejaban nada, y sin eso no hay como revisar por que una conversacion
+    salio mal. Va recortado y en una sola linea.
+    """
+    plano = " ".join(str(texto if texto is not None else "").split())
+    if len(plano) > maximo:
+        plano = plano[:maximo] + f"... ({len(plano)} caracteres)"
+    print(f"  [dialogo] ({aparato or '?'}) {que}: {plano}", flush=True)
+
+
 def hoy() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 

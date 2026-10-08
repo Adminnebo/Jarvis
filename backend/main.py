@@ -1,6 +1,7 @@
 """Servidor local de Jarvis. Sirve la interfaz web y la API de chat."""
 
 import os
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -497,6 +498,7 @@ async def negociar_voz(peticion: Request):
         respuesta = cerebro.negociar_webrtc(oferta, peticion.state.usuario)
     except Exception as error:  # noqa: BLE001
         return JSONResponse(status_code=502, content={"error": str(error)})
+    voz_registro.al_log(peticion.state.dispositivo, "sesion de voz", "abierta")
 
     # Toda sesion de voz de la web y del reloj se abre aqui, informe despues
     # su gasto o no: con esto el tablero nota a quien deja de informarlo.
@@ -581,9 +583,17 @@ def ejecutar_herramienta(peticion_http: Request, peticion: PeticionDeHerramienta
     `adjuntos` son los archivos que la herramienta manda al chat. Los usa el
     navegador y el puente de los lentes; al modelo solo le llega `resultado`.
     """
+    inicio = time.perf_counter()
     resultado, adjuntos = herramientas.ejecutar_completo(
         peticion.nombre, peticion.argumentos, peticion_http.state.usuario.id,
         peticion_http.state.usuario, peticion_http.state.dispositivo,
+    )
+    # Que se pidio y que volvio: es lo que dice si Jarvis busco mal o si la
+    # fuente no tenia el dato.
+    voz_registro.al_log(
+        peticion_http.state.dispositivo,
+        f"herramienta {peticion.nombre} {round((time.perf_counter() - inicio) * 1000)}ms",
+        f"{peticion.argumentos} -> {resultado}",
     )
     return {"resultado": resultado, "adjuntos": adjuntos}
 
@@ -655,6 +665,9 @@ def agregar_a_conversacion(peticion: Request, mensaje: MensajeSuelto):
     mensajes.append(turno)
     memoria.guardar_conversacion(id_usuario, mensajes)
     continuidad.anotar_turno(id_usuario, mensaje.role, mensaje.content, "web")
+    voz_registro.al_log(
+        "web", "tu" if mensaje.role == "user" else "jarvis", mensaje.content,
+    )
     return {"ok": True}
 
 

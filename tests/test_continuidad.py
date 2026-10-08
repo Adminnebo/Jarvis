@@ -165,3 +165,21 @@ def test_la_voz_de_la_web_tambien_y_reiniciar_lo_borra(cliente):
 
     cliente.post("/api/conversacion/reiniciar")
     assert "Donde quedaron" not in cliente.get("/api/voz/sesion").json()["instructions"]
+
+
+def test_la_voz_de_la_web_y_sus_consultas_quedan_en_el_log(cliente, capsys):
+    cliente.post("/api/conversacion/agregar",
+                 json={"role": "user", "content": "Precio del casco\ntruper amarillo."})
+    cliente.post("/api/herramienta", json={"nombre": "hora_actual", "argumentos": "{}"})
+
+    salida = capsys.readouterr().out
+    assert "[dialogo] (web) tu: Precio del casco truper amarillo." in salida
+    assert "[dialogo] (navegador) herramienta hora_actual" in salida
+
+
+def test_el_log_recorta_lo_largo(capsys):
+    from backend import voz_registro
+
+    voz_registro.al_log("web", "jarvis", "x" * 1000)
+    linea = capsys.readouterr().out
+    assert len(linea) < 480 and "(1000 caracteres)" in linea
