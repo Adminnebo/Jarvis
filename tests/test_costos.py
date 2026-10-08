@@ -41,7 +41,7 @@ def _todo():
 def test_sin_uso_todo_esta_en_cero():
     resumen = costos.resumen(*_todo())
     assert resumen["ingreso"] == {"valor": 0, "etiqueta": "medido"}
-    assert resumen["costo"] == {"valor": 0, "etiqueta": "estimado"}
+    assert resumen["costo"] == {"valor": 0, "etiqueta": "estimado", "por_proveedor": {}}
     assert resumen["unidades"] == {"valor": 0, "nombre": "consultas"}
     assert resumen["detalle"]["cobro_activo"] is False
 
@@ -104,6 +104,27 @@ def test_el_gasto_sale_separado_por_origen(acme):
     assert origenes["navegador"]["costo"] == 2.0
 
 
+def test_el_costo_se_reparte_entre_los_proveedores_a_los_que_se_les_paga(acme):
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON, usuario=acme)
+    consumo.registrar("voz", "gpt-realtime-2.1", {"input_tokens": 1_000_000}, usuario=acme)
+    consumo.registrar_cotizacion(1000)  # creditos de PDF.co
+
+    costo = costos.resumen(*_todo())["costo"]
+    assert set(costo["por_proveedor"]) == {"openai", "pdfco"}
+    assert costo["por_proveedor"]["pdfco"] == 0.6
+    # Lo repartido suma exactamente lo informado: nada queda sin proveedor.
+    assert round(sum(costo["por_proveedor"].values()), 6) == costo["valor"]
+
+
+@pytest.mark.parametrize("modelo, proveedor", [
+    ("gpt-5.6-terra", "openai"), ("gpt-realtime-2.1-mini", "openai"), ("gpt-live-transcribe", "openai"),
+    ("gpt-4o-mini-tts", "openai"), ("pdfco", "pdfco"), ("gemini-live-2.5", "google"),
+    ("claude-haiku-4-5", "anthropic"), (None, "openai"),
+])
+def test_cada_modelo_se_le_paga_a_su_proveedor(modelo, proveedor):
+    assert costos.proveedor_de(modelo) == proveedor
+
+
 def test_el_rango_por_defecto_son_los_ultimos_30_dias():
     inicio, fin = costos.rango(None, None)
     assert fin - inicio == timedelta(days=30)
@@ -160,7 +181,7 @@ def test_con_la_clave_devuelve_el_resumen(cliente, monkeypatch):
     assert respuesta.status_code == 200
     cuerpo = respuesta.json()
     assert cuerpo["producto"] == "jarvis"
-    assert cuerpo["costo"] == {"valor": 2.0, "etiqueta": "estimado"}
+    assert cuerpo["costo"] == {"valor": 2.0, "etiqueta": "estimado", "por_proveedor": {"openai": 2.0}}
     assert cuerpo["unidades"]["valor"] == 1
 
 

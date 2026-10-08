@@ -28,6 +28,23 @@ CLAVE = "JARVIS_COSTOS_CLAVE"
 MAXIMO_DIAS = 400
 
 
+def proveedor_de(modelo: str | None) -> str:
+    """A quien se le paga ese modelo, con los nombres que usa el panel.
+
+    El panel compara lo que cada producto dice haber gastado con un proveedor
+    contra lo que ese proveedor cobro de verdad. Lo que no cierra es gasto que
+    nadie esta anotando.
+    """
+    nombre = (modelo or "").lower()
+    if nombre == consumo.MODELO_PDF:
+        return "pdfco"
+    if nombre.startswith("gemini"):
+        return "google"
+    if nombre.startswith("claude"):
+        return "anthropic"
+    return "openai"
+
+
 def clave() -> str:
     return os.getenv(CLAVE, "").strip()
 
@@ -79,11 +96,11 @@ def _hora_del_envio(fecha: datetime) -> str:
 def resumen(desde: datetime, hasta: datetime) -> dict:
     with basedatos.conexion() as con:
         usos = con.execute(
-            "SELECT organizacion_id, dispositivo, COUNT(*) AS consultas, "
+            "SELECT organizacion_id, dispositivo, modelo, COUNT(*) AS consultas, "
             "       COALESCE(SUM(costo), 0) AS costo "
             "FROM consumo "
             "WHERE cuando >= ? AND cuando < ? AND modo NOT IN ('sesion', 'apertura') "
-            "GROUP BY organizacion_id, dispositivo",
+            "GROUP BY organizacion_id, dispositivo, modelo",
             (_hora_del_consumo(desde), _hora_del_consumo(hasta)),
         ).fetchall()
         cobrado = con.execute(
@@ -101,11 +118,14 @@ def resumen(desde: datetime, hasta: datetime) -> dict:
     consultas = 0
     costo = costo_cobrable = devengado = 0.0
     por_origen: dict[str, dict] = {}
+    por_proveedor: dict[str, float] = {}
 
     for uso in usos:
         organizacion = uso["organizacion_id"]
         consultas += uso["consultas"]
         costo += uso["costo"]
+        proveedor = proveedor_de(uso["modelo"])
+        por_proveedor[proveedor] = por_proveedor.get(proveedor, 0.0) + uso["costo"]
         # Lo mismo que decide creditos.py: se cobra lo que tiene a quien.
         if creditos.cliente_de(organizacion) is not None:
             costo_cobrable += uso["costo"]
@@ -133,7 +153,13 @@ def resumen(desde: datetime, hasta: datetime) -> dict:
         # un rango corto no coincide con lo devengado: mirar el detalle.
         "ingreso": {"valor": round(cobrado["monto"], 2), "etiqueta": "medido"},
         # Todo lo que se gasto, tambien lo de la casa, que no se le cobra a nadie.
-        "costo": {"valor": round(costo, 6), "etiqueta": "estimado"},
+        # por_proveedor reparte ese mismo costo entre a quienes se les paga: el
+        # panel lo cruza con la factura de cada uno.
+        "costo": {
+            "valor": round(costo, 6),
+            "etiqueta": "estimado",
+            "por_proveedor": {nombre: round(monto, 6) for nombre, monto in sorted(por_proveedor.items())},
+        },
         "unidades": {"valor": consultas, "nombre": "consultas"},
         "detalle": {
             "cobro_activo": creditos.configurado(),

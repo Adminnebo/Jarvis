@@ -317,7 +317,7 @@ variable la ruta responde 404. Solo lee, y la clave no abre nada más.
 | Campo | Qué es | Etiqueta |
 |---|---|---|
 | `ingreso` | lo que se descontó de verdad en agentia en ese rango | medido |
-| `costo` | todo lo gastado, también lo de la casa: tokens por la lista de precios | estimado |
+| `costo` | todo lo gastado, también lo de la casa: tokens por la lista de precios. `por_proveedor` lo reparte entre OpenAI, PDF.co y los demás, para que el panel lo cruce con la factura de cada uno | estimado |
 | `unidades` | consultas (sin contar sesiones ni aperturas) | |
 
 En `detalle` van lo devengado (costo con el margen, se haya descontado o no), lo que
