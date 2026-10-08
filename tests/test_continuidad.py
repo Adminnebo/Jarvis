@@ -183,3 +183,19 @@ def test_el_log_recorta_lo_largo(capsys):
     voz_registro.al_log("web", "jarvis", "x" * 1000)
     linea = capsys.readouterr().out
     assert len(linea) < 480 and "(1000 caracteres)" in linea
+
+
+def test_la_traza_de_la_voz_queda_en_el_log(cliente, capsys):
+    respuesta = cliente.post("/api/voz/traza", json={"pasos": [
+        {"t": 3.21, "e": "habla empieza"},
+        {"t": 5.0, "e": "respuesta fin", "d": "cancelled: turn_detected"},
+    ]})
+
+    assert respuesta.json() == {"ok": True}
+    assert "[dialogo] (navegador) traza: +3.2s habla empieza | +5.0s respuesta fin (cancelled: turn_detected)" \
+        in capsys.readouterr().out
+
+
+def test_una_traza_vacia_no_ensucia_el_log(cliente, capsys):
+    cliente.post("/api/voz/traza", json={"pasos": []})
+    assert "traza" not in capsys.readouterr().out

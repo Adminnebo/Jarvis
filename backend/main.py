@@ -513,6 +513,34 @@ async def negociar_voz(peticion: Request):
     return Response(content=respuesta, media_type="application/sdp")
 
 
+class PasoDeTraza(BaseModel):
+    t: float = 0.0      # segundos desde que abrio la sesion
+    e: str = ""         # que paso
+    d: str = ""         # detalle, si lo hay
+
+
+class TrazaDeVoz(BaseModel):
+    pasos: list[PasoDeTraza] = []
+
+
+@app.post("/api/voz/traza")
+def anotar_traza_de_voz(peticion: Request, traza: TrazaDeVoz):
+    """Lo que paso por dentro de una sesion de voz de la web, al log.
+
+    El audio va directo del navegador a OpenAI, asi que el servidor no ve
+    cuando se detecto voz, cuando se corto una respuesta ni por que un turno
+    quedo sin contestar. El navegador lo cuenta aqui cada pocos segundos. Es
+    solo para diagnosticar: no se guarda ni cambia nada.
+    """
+    pasos = " | ".join(
+        f"+{paso.t:.1f}s {paso.e[:40]}" + (f" ({paso.d[:80]})" if paso.d else "")
+        for paso in traza.pasos[:120]
+    )
+    if pasos:
+        voz_registro.al_log(peticion.state.dispositivo, "traza", pasos, maximo=6000)
+    return {"ok": True}
+
+
 class EventoDeVoz(BaseModel):
     """Un turno de la conversacion de voz, tal como lo manda el puente.
 

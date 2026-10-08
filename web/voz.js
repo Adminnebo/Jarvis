@@ -19,7 +19,7 @@
    instante, una persona hablando no. Cuando Jarvis calla, el microfono queda
    siempre abierto para no perder ni una silaba. */
 
-function crearPuerta(flujo, pista, ajustes, alMedir) {
+function crearPuerta(flujo, pista, ajustes, alMedir, alCambiar) {
   const umbral = ajustes?.umbral ?? 0.045;
   const sostenido = ajustes?.sostenido_ms ?? 220;
 
@@ -32,6 +32,14 @@ function crearPuerta(flujo, pista, ajustes, alMedir) {
   let jarvisHablando = false;
   let vozDesde = 0;
   let cerradoDesde = 0;
+
+  // Solo para la traza: cuando cambia, y por que.
+  let abierto = true;
+  function avisarCambio(motivo) {
+    if (!pista || pista.enabled === abierto) return;
+    abierto = pista.enabled;
+    alCambiar?.(abierto, motivo);
+  }
 
   // Si algo va mal y nadie avisa de que Jarvis termino, el microfono se
   // quedaria cerrado para siempre y pareceria que dejo de oir. Pasado este
@@ -77,6 +85,7 @@ function crearPuerta(flujo, pista, ajustes, alMedir) {
       vozDesde = 0;
       pista.enabled = false;
     }
+    avisarCambio("voz encima de Jarvis");
   }, 40);
 
   return {
@@ -90,12 +99,14 @@ function crearPuerta(flujo, pista, ajustes, alMedir) {
       vozDesde = 0;
       cerradoDesde = performance.now();
       pista.enabled = false;
+      avisarCambio("Jarvis habla");
     },
-    jarvisTermina() {
+    jarvisTermina(motivo = "Jarvis termina") {
       jarvisHablando = false;
       vozDesde = 0;
       cerradoDesde = 0;
       if (pista) pista.enabled = true;
+      avisarCambio(motivo);
     },
     cerrar() {
       clearInterval(reloj);
@@ -156,6 +167,57 @@ export function crearSesionDeVoz(eventos) {
     eventos[nombre]?.(...argumentos);
   }
 
+  /* Traza para diagnosticar. El audio va directo a OpenAI, asi que el
+     servidor no ve cuando se detecto voz, cuando se corto una respuesta ni
+     por que un turno quedo sin contestar. Aqui se anota lo que pasa por
+     dentro y se manda al log cada pocos segundos. No cambia nada de la
+     conversacion. */
+  const traza = [];
+  const trazaDesde = performance.now();
+
+  function paso(e, d = "") {
+    traza.push({ t: (performance.now() - trazaDesde) / 1000, e, d: String(d ?? "") });
+    if (traza.length > 200) traza.shift();
+  }
+
+  function mandarTraza(alCerrar = false) {
+    if (!traza.length) return;
+    fetch("/api/voz/traza", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pasos: traza.splice(0) }),
+      keepalive: alCerrar,
+    }).catch(() => {});   // diagnosticar nunca debe estorbar la conversacion
+  }
+
+  const relojTraza = setInterval(mandarTraza, 5000);
+
+  const PASOS = {
+    "input_audio_buffer.speech_started": "habla empieza",
+    "input_audio_buffer.speech_stopped": "habla termina",
+    "response.created": "respuesta creada",
+    "output_audio_buffer.started": "audio empieza",
+    "output_audio_buffer.stopped": "audio termina",
+    "output_audio_buffer.cleared": "audio cortado",
+  };
+
+  function trazar(evento) {
+    if (PASOS[evento.type]) return paso(PASOS[evento.type]);
+    if (evento.type === "error") return paso("error", evento.error?.message);
+    if (evento.type !== "response.done") return;
+    // Como acabo y que traia: es lo que dice si Jarvis contesto, si lo
+    // cortaron o si no dijo nada.
+    const respuesta = evento.response || {};
+    const motivo = respuesta.status_details?.reason || respuesta.status_details?.type;
+    const partes = (respuesta.output || []).map((item) => {
+      if (item.type === "function_call") return `llama ${item.name}`;
+      const dicho = (item.content || []).map((c) => c.transcript || c.text || "").join(" ").trim();
+      return dicho ? `dice ${dicho.length} letras` : `${item.type} vacio`;
+    });
+    paso("respuesta fin",
+         `${respuesta.status || "?"}${motivo ? ": " + motivo : ""} · ${partes.join(", ") || "sin nada"}`);
+  }
+
   function enviar(mensaje) {
     if (canal?.readyState === "open") canal.send(JSON.stringify(mensaje));
   }
@@ -181,6 +243,7 @@ export function crearSesionDeVoz(eventos) {
   function intentarResponder() {
     if (!respuestaPendiente || respuestaActiva || herramientasEnCurso > 0) return;
     respuestaPendiente = false;
+    paso("pide respuesta");
     enviar({ type: "response.create" });
   }
 
@@ -206,7 +269,9 @@ export function crearSesionDeVoz(eventos) {
     pista = microfono.getAudioTracks()[0];
     puerta = crearPuerta(microfono, pista, datos.puerta,
                          (nivel, umbral, abierto) =>
-                           avisar("onNivel", nivel, umbral, abierto));
+                           avisar("onNivel", nivel, umbral, abierto),
+                         (abierto, motivo) =>
+                           paso(abierto ? "micro abre" : "micro cierra", motivo));
 
     // OpenAI contesta en modo ice-lite: no hace chequeos de conectividad por
     // su cuenta, asi que el navegador tiene que aportar candidatos validos.
@@ -226,7 +291,10 @@ export function crearSesionDeVoz(eventos) {
 
     canal = conexion.createDataChannel("oai-events");
     canal.addEventListener("message", (mensaje) => manejar(JSON.parse(mensaje.data)));
-    canal.addEventListener("open", () => avisar("onEstado", "listo", "Te escucho"));
+    canal.addEventListener("open", () => {
+      paso("canal abierto");
+      avisar("onEstado", "listo", "Te escucho");
+    });
 
     // Sin esto, un ICE que no cuaja deja la pantalla en "Conectando..." sin
     // decir nada. Mejor avisar que quedarse mudo.
@@ -275,6 +343,7 @@ export function crearSesionDeVoz(eventos) {
   }
 
   async function manejar(evento) {
+    try { trazar(evento); } catch { /* la traza nunca corta la conversacion */ }
     switch (evento.type) {
       // --- Lo que dice el usuario ---
       case "input_audio_buffer.speech_started":
@@ -295,7 +364,7 @@ export function crearSesionDeVoz(eventos) {
 
       case "output_audio_buffer.stopped":
       case "output_audio_buffer.cleared":
-        puerta?.jarvisTermina();
+        puerta?.jarvisTermina("termino el audio");
         break;
 
       case "response.output_audio_transcript.delta":
@@ -324,7 +393,7 @@ export function crearSesionDeVoz(eventos) {
 
       case "response.done":
         respuestaActiva = false;
-        puerta?.jarvisTermina();
+        puerta?.jarvisTermina("termino la respuesta");
         avisar("onEstado", "listo", "Te escucho");
         // El uso solo llega aqui: en voz no pasa por nuestro servidor.
         anotarConsumo(evento.response?.usage);
@@ -379,6 +448,7 @@ export function crearSesionDeVoz(eventos) {
   async function resolverFuncion(item) {
     avisar("onHerramienta", item.name);
     herramientasEnCurso++;
+    const inicio = performance.now();
 
     let resultado;
     try {
@@ -412,6 +482,7 @@ export function crearSesionDeVoz(eventos) {
           },
         });
       } finally {
+        paso("herramienta vuelve", `${item.name} ${Math.round(performance.now() - inicio)} ms`);
         herramientasEnCurso--;
         pedirRespuesta();
       }
@@ -465,6 +536,9 @@ export function crearSesionDeVoz(eventos) {
   function cerrar() {
     cerrada = true;
     anotarSesion();
+    paso("sesion cerrada");
+    clearInterval(relojTraza);
+    mandarTraza(true);
     puerta?.cerrar();
     pista?.stop();
     canal?.close();

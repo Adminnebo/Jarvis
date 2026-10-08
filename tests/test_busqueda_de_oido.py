@@ -117,3 +117,48 @@ def test_una_fuente_por_mcp_no_se_lee_entera(catalogo, monkeypatch, capsys):
 
     assert not any(sql.startswith("select Descripcion from") for sql in catalogo)
     assert fuentes.parecidas_de_oido("trooper", fuentes._vocabularios[("f1", "Productos")]) == []
+
+
+def test_la_palabra_entera_vale_mas_que_el_trozo_dentro_de_otra(catalogo):
+    # 'nado' esta dentro de CLORINADOR: coincide, pero no es lo que se pidio.
+    fuentes._vocabularios[("f1", "Productos")] = None
+    fuentes._vocabularios_en_curso.add(("f1", "Productos"))
+    fuentes.buscar_en_tabla("f1", "Productos", "jet de nado")
+
+    sql = catalogo[-1]
+    assert "case when (Descripcion like '% nado%' or Descripcion like 'nado%') then 3 else 0 end" in sql
+    assert "case when Descripcion like '%nado%' then 1 else 0 end" in sql
+
+
+def test_un_jet_de_nado_no_es_una_tarjeta_para_clorinador(monkeypatch):
+    # El caso real: 'jet' esta dentro de tarJETa y 'nado' dentro de cloriNADOr.
+    import sqlite3
+
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute("create table Productos (Codigo text, Descripcion text, DescripcionAlterna text)")
+    con.executemany("insert into Productos values (?, ?, ?)", [
+        ("307698", "PC HW TARJETA PARA CLORINADOR SAL PCBA AQRS3", "HAYWARD TARJETA PARA CLORINADOR"),
+        ("400001", "SWIM JET INVERTER SUPERFICIAL", ""),
+        ("400002", "KIT NADO CONTRACORRIENTE", ""),
+        ("400003", "TERMOMAGNETICO 2P 40A", ""),
+    ])
+
+    def motor(config, sql, limite, id_fuente=None):
+        return [dict(fila) for fila in con.execute(sql).fetchmany(limite)]
+
+    monkeypatch.setattr(fuentes, "obtener", lambda id_fuente: {"tipo": "postgres", "config": {}})
+    monkeypatch.setattr(fuentes, "columnas_de_texto", lambda id_fuente, tabla: (
+        "Productos", ["Codigo", "Descripcion", "DescripcionAlterna"]))
+    monkeypatch.setattr(fuentes, "contar_filas", lambda id_fuente, tabla: 4)
+    monkeypatch.setitem(fuentes.MOTORES, "postgres", motor)
+    fuentes._vocabularios[("f1", "Productos")] = None
+    fuentes._vocabularios_en_curso.add(("f1", "Productos"))
+
+    orden = [f["Descripcion"] for f in fuentes.buscar_en_tabla("f1", "Productos", "jet de nado")]
+    assert orden[-1] == "PC HW TARJETA PARA CLORINADOR SAL PCBA AQRS3"
+    assert set(orden[:2]) == {"SWIM JET INVERTER SUPERFICIAL", "KIT NADO CONTRACORRIENTE"}
+
+    # El trozo dentro de otra palabra sigue encontrando, cuando no hay nada mejor.
+    [fila] = fuentes.buscar_en_tabla("f1", "Productos", "magnetico")
+    assert fila["Descripcion"] == "TERMOMAGNETICO 2P 40A"

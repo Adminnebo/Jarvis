@@ -890,10 +890,24 @@ def buscar_en_tabla(id_fuente: str, tabla: str, texto: str,
     def en_alguna(termino: str) -> str:
         return "(" + " or ".join(patron(c, termino) for c in columnas) + ")"
 
-    # Coincidir en la descripcion vale el triple: el producto que se llama asi
-    # gana al que solo lo menciona de pasada en una nota larga.
+    def empieza_palabra(columna: str, termino: str) -> str:
+        formas = [termino, *de_oido.get(termino, ())]
+        return "(" + " or ".join(
+            f"{columna} like '% {forma}%' or {columna} like '{forma}%'" for forma in formas
+        ) + ")"
+
+    def empieza_en_alguna(termino: str) -> str:
+        return "(" + " or ".join(empieza_palabra(c, termino) for c in columnas) + ")"
+
+    # Lo que mas vale es la palabra que empieza en la descripcion: el producto
+    # que se llama asi gana al que solo lo menciona en una nota. El trozo
+    # metido dentro de otra palabra cuenta, pero poco: al pedir un "jet de
+    # nado" salia primero una TARJETA PARA CLORINADOR, que lleva 'jet' dentro
+    # de tarJETa y 'nado' dentro de cloriNADOr.
     puntuacion = " + ".join(
-        f"case when {patron(principal, t)} then 3 else 0 end + "
+        f"case when {empieza_palabra(principal, t)} then 3 else 0 end + "
+        f"case when {empieza_en_alguna(t)} then 2 else 0 end + "
+        f"case when {patron(principal, t)} then 1 else 0 end + "
         f"case when {en_alguna(t)} then 1 else 0 end"
         for t in terminos
     )
