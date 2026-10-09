@@ -41,7 +41,7 @@ def _todo():
 def test_sin_uso_todo_esta_en_cero():
     resumen = costos.resumen(*_todo())
     assert resumen["ingreso"] == {"valor": 0, "etiqueta": "medido"}
-    assert resumen["costo"] == {"valor": 0, "etiqueta": "estimado", "por_proveedor": {}}
+    assert resumen["costo"] == {"valor": 0, "etiqueta": "estimado", "interno": 0, "por_proveedor": {}}
     assert resumen["unidades"] == {"valor": 0, "nombre": "consultas"}
     assert resumen["detalle"]["cobro_activo"] is False
 
@@ -60,6 +60,8 @@ def test_el_costo_cuenta_todo_y_el_ingreso_solo_lo_que_se_desconto(acme):
     assert antes["detalle"]["devengado"] == 2.6
     assert antes["detalle"]["costo_cobrable"] == 2.0
     assert antes["detalle"]["costo_de_la_casa"] == 2.0
+    # Lo de la casa viaja tambien como costo interno, que es lo que entiende el panel.
+    assert antes["costo"]["interno"] == 2.0
 
     creditos.ciclo()
 
@@ -181,7 +183,8 @@ def test_con_la_clave_devuelve_el_resumen(cliente, monkeypatch):
     assert respuesta.status_code == 200
     cuerpo = respuesta.json()
     assert cuerpo["producto"] == "jarvis"
-    assert cuerpo["costo"] == {"valor": 2.0, "etiqueta": "estimado", "por_proveedor": {"openai": 2.0}}
+    # Lo consumio alguien sin organizacion: todo ese costo es de la casa.
+    assert cuerpo["costo"] == {"valor": 2.0, "etiqueta": "estimado", "interno": 2.0, "por_proveedor": {"openai": 2.0}}
     assert cuerpo["unidades"]["valor"] == 1
 
 

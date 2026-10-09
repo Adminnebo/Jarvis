@@ -155,9 +155,13 @@ def resumen(desde: datetime, hasta: datetime) -> dict:
         # Todo lo que se gasto, tambien lo de la casa, que no se le cobra a nadie.
         # por_proveedor reparte ese mismo costo entre a quienes se les paga: el
         # panel lo cruza con la factura de cada uno.
+        # interno es la parte de ese costo que no se le cobra a nadie: lo que usa
+        # la gente de la casa, sin organizacion a la que facturarle. El panel lo
+        # saca de la fila de Jarvis, para que su margen sea el de lo que se vende.
         "costo": {
             "valor": round(costo, 6),
             "etiqueta": "estimado",
+            "interno": round(costo - costo_cobrable, 6),
             "por_proveedor": {nombre: round(monto, 6) for nombre, monto in sorted(por_proveedor.items())},
         },
         "unidades": {"valor": consultas, "nombre": "consultas"},
