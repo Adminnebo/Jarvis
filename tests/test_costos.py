@@ -72,6 +72,33 @@ def test_el_costo_cuenta_todo_y_el_ingreso_solo_lo_que_se_desconto(acme):
     assert despues["detalle"]["cobro_activo"] is True
 
 
+def test_el_resumen_viene_partido_por_organizacion(acme):
+    creditos.ciclo()
+
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON, usuario=acme)
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON, usuario=acme)
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON)  # alguien de la casa
+    creditos.ciclo()
+
+    resumen = costos.resumen(*_todo())
+    # Lo de la casa no es de ningun cliente: va como interno, no como una fila.
+    assert resumen["por_cliente"] == [{
+        "clave": acme.organizacion_id,
+        "nombre": "Acme",
+        "ingreso": 5.2,
+        "costo": 4.0,
+        "unidades": 2,
+    }]
+    # Las filas cierran contra los totales: nada se cuenta dos veces ni se pierde.
+    assert resumen["por_cliente"][0]["ingreso"] == resumen["ingreso"]["valor"]
+    assert resumen["por_cliente"][0]["costo"] == resumen["detalle"]["costo_cobrable"]
+
+
+def test_sin_organizaciones_que_paguen_no_hay_filas_por_cliente():
+    consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON)
+    assert costos.resumen(*_todo())["por_cliente"] == []
+
+
 def test_las_sesiones_y_aperturas_no_son_consultas_ni_costo(acme):
     consumo.registrar("texto", "gpt-5.6-terra", UN_MILLON, usuario=acme)
     consumo.registrar_sesion("gpt-realtime-2.1", 90, usuario=acme)

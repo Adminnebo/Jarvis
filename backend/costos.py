@@ -108,6 +108,16 @@ def resumen(desde: datetime, hasta: datetime) -> dict:
             "FROM creditos_envios WHERE enviado >= ? AND enviado < ?",
             (_hora_del_envio(desde), _hora_del_envio(hasta)),
         ).fetchone()
+        cobrado_por_organizacion = con.execute(
+            "SELECT organizacion_id, COALESCE(SUM(monto), 0) AS monto "
+            "FROM creditos_envios WHERE enviado >= ? AND enviado < ? "
+            "GROUP BY organizacion_id",
+            (_hora_del_envio(desde), _hora_del_envio(hasta)),
+        ).fetchall()
+        nombres = {
+            fila["id"]: fila["nombre"]
+            for fila in con.execute("SELECT id, nombre FROM organizaciones").fetchall()
+        }
         sin_mandar = con.execute(
             "SELECT COALESCE(SUM(monto), 0) AS monto FROM creditos_envios WHERE enviado IS NULL"
         ).fetchone()["monto"]
@@ -119,6 +129,16 @@ def resumen(desde: datetime, hasta: datetime) -> dict:
     costo = costo_cobrable = devengado = 0.0
     por_origen: dict[str, dict] = {}
     por_proveedor: dict[str, float] = {}
+    # Una fila por organizacion a la que se le cobra. Lo de la casa no es de
+    # ningun cliente: ya viaja aparte, como costo interno.
+    por_cliente: dict[str, dict] = {}
+
+    def cliente(organizacion: str) -> dict:
+        return por_cliente.setdefault(organizacion, {
+            "clave": organizacion,
+            "nombre": nombres.get(organizacion, organizacion),
+            "ingreso": 0.0, "costo": 0.0, "unidades": 0,
+        })
 
     for uso in usos:
         organizacion = uso["organizacion_id"]
@@ -130,6 +150,9 @@ def resumen(desde: datetime, hasta: datetime) -> dict:
         if creditos.cliente_de(organizacion) is not None:
             costo_cobrable += uso["costo"]
             devengado += uso["costo"] * cuentas.markup(organizacion)
+            fila_cliente = cliente(organizacion)
+            fila_cliente["costo"] += uso["costo"]
+            fila_cliente["unidades"] += uso["consultas"]
 
         origen = uso["dispositivo"] or "navegador"
         fila = por_origen.setdefault(origen, {
@@ -141,6 +164,13 @@ def resumen(desde: datetime, hasta: datetime) -> dict:
         fila["costo"] += uso["costo"]
 
     for fila in por_origen.values():
+        fila["costo"] = round(fila["costo"], 6)
+
+    # El ingreso de cada una es lo que se le desconto en el rango, igual que el total.
+    for envio in cobrado_por_organizacion:
+        cliente(envio["organizacion_id"])["ingreso"] += envio["monto"]
+    for fila in por_cliente.values():
+        fila["ingreso"] = round(fila["ingreso"], 2)
         fila["costo"] = round(fila["costo"], 6)
 
     return {
@@ -165,6 +195,9 @@ def resumen(desde: datetime, hasta: datetime) -> dict:
             "por_proveedor": {nombre: round(monto, 6) for nombre, monto in sorted(por_proveedor.items())},
         },
         "unidades": {"valor": consultas, "nombre": "consultas"},
+        # Lo mismo, partido por organizacion. El panel decide a que cliente suyo
+        # corresponde cada una: aqui van con su id y su nombre, sin interpretar.
+        "por_cliente": sorted(por_cliente.values(), key=lambda f: f["ingreso"], reverse=True),
         "detalle": {
             "cobro_activo": creditos.configurado(),
             "envios": cobrado["envios"],
