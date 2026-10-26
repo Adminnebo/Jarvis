@@ -90,3 +90,31 @@ def test_las_instrucciones_usan_el_nombre_de_la_organizacion(monkeypatch):
     asistente.guardar_nombre("o1", "Sofía")
     assert cerebro.instrucciones(_usuario("o1")).startswith("Eres Sofía, el asistente personal de Ana.")
     assert cerebro.instrucciones(_usuario(None)).startswith("Eres Nebo, el asistente personal de Ana.")
+
+
+JPG = b"\xff\xd8\xff\xe0" + b"0" * 100
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+
+
+def test_guardar_la_foto_la_deja_en_su_carpeta():
+    _org()
+    archivo = asistente.guardar_foto("o1", JPG)
+    assert archivo.startswith("foto-") and archivo.endswith(".jpg")
+    assert (asistente.carpeta("o1") / archivo).read_bytes() == JPG
+    assert asistente.configuracion("o1")["foto"] == archivo
+
+
+def test_una_foto_nueva_borra_la_vieja():
+    _org()
+    vieja = asistente.guardar_foto("o1", JPG)
+    nueva = asistente.guardar_foto("o1", PNG)
+    assert nueva.endswith(".png") and nueva != vieja
+    assert not (asistente.carpeta("o1") / vieja).exists()
+
+
+def test_solo_jpg_png_o_webp_y_hasta_8_mb():
+    _org()
+    with pytest.raises(asistente.ErrorDeAsistente, match="JPG, PNG o WEBP"):
+        asistente.guardar_foto("o1", b"GIF89a" + b"0" * 10)
+    with pytest.raises(asistente.ErrorDeAsistente, match="8 MB"):
+        asistente.guardar_foto("o1", JPG + b"0" * (8 * 1024 * 1024))

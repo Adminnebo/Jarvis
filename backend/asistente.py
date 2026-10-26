@@ -8,6 +8,7 @@ los cambia: lo controla acceso.exige_admin.
 """
 
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -90,3 +91,48 @@ def configuracion(organizacion_id: str) -> dict:
             for e in ESTADOS
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Foto
+# ---------------------------------------------------------------------------
+
+MAXIMO_FOTO = 8 * 1024 * 1024
+# Por la firma del archivo, no por lo que diga el navegador.
+FIRMAS = ((b"\xff\xd8\xff", "jpg", "image/jpeg"), (b"\x89PNG", "png", "image/png"))
+
+
+def tipo_de_imagen(contenido: bytes) -> tuple[str, str] | None:
+    """(extension, content type) o None si no es una imagen aceptada."""
+    for firma, extension, tipo in FIRMAS:
+        if contenido.startswith(firma):
+            return extension, tipo
+    if contenido[:4] == b"RIFF" and contenido[8:12] == b"WEBP":
+        return "webp", "image/webp"
+    return None
+
+
+def _marca() -> str:
+    return str(int(time.time() * 1000))
+
+
+def guardar_foto(organizacion_id: str, contenido: bytes) -> str:
+    if len(contenido) > MAXIMO_FOTO:
+        raise ErrorDeAsistente("La foto puede pesar hasta 8 MB.")
+    tipo = tipo_de_imagen(contenido)
+    if not tipo:
+        raise ErrorDeAsistente("La foto tiene que ser JPG, PNG o WEBP.")
+    archivo = f"foto-{_marca()}.{tipo[0]}"
+    (carpeta(organizacion_id) / archivo).write_bytes(contenido)
+    with basedatos.conexion() as con:
+        _asegurar_fila(con, organizacion_id)
+        vieja = con.execute(
+            "SELECT foto FROM asistentes WHERE organizacion_id = ?", (organizacion_id,)
+        ).fetchone()["foto"]
+        con.execute(
+            "UPDATE asistentes SET foto = ?, actualizado = ? WHERE organizacion_id = ?",
+            (archivo, _ahora(), organizacion_id),
+        )
+    if vieja and vieja != archivo:
+        (carpeta(organizacion_id) / vieja).unlink(missing_ok=True)
+    return archivo
