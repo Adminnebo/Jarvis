@@ -6,7 +6,7 @@
    pensando, hablando): asi no hay que tocar la logica de voz. El orbe se
    esconde con CSS pero sigue recibiendo esas clases. */
 
-const W = 360, H = 450;
+const W = 480, H = 600;
 const FUNDIDO_MS = 300, EMPALME_MS = 400;
 const MEDIAPIPE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
