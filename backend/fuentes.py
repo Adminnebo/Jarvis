@@ -1307,19 +1307,44 @@ def contar_filas(id_fuente: str, tabla: str) -> int | None:
     return n
 
 
+LARGO_COLUMNA = 200
+LARGO_REGLAS = 1000
+
+
+def _nombres_de_columnas(id_fuente: str, tabla: str) -> set[str]:
+    """Las columnas reales de una tabla, para no guardar significados de columnas inventadas."""
+    try:
+        for entrada in esquema_de(id_fuente)["tablas"]:
+            if entrada["tabla"] == tabla:
+                return {c.strip().split(" ")[0] for c in entrada["columnas"].split(",") if c.strip()}
+    except Exception:  # noqa: BLE001 - sin esquema se guarda lo que venga
+        return set()
+    return set()
+
+
 def guardar_config_tablas(id_fuente: str, config_tablas: dict) -> dict:
-    """Activa/desactiva tablas y guarda su leyenda, sin tocar el resto.
+    """Activa/desactiva tablas y guarda su diccionario, sin tocar el resto.
 
     La leyenda es una pista en lenguaje natural (p. ej. "saldos y deudas de
     clientes") que va al prompt para que el modelo sepa en que tabla buscar.
+    `columnas` dice que significa cada columna que no se entiende sola ("Estado:
+    'A' = activo") y `reglas` como se cuentan o filtran las cosas habituales.
     Las desactivadas no aparecen en el prompt.
     """
     limpio = {}
     for nombre, cfg in (config_tablas or {}).items():
         cfg = cfg or {}
+        reales = _nombres_de_columnas(id_fuente, str(nombre))
+        columnas = {
+            str(col): str(texto).strip()[:LARGO_COLUMNA]
+            for col, texto in (cfg.get("columnas") or {}).items()
+            if str(texto).strip() and (not reales or str(col) in reales)
+        }
         limpio[str(nombre)] = {
             "activa": bool(cfg.get("activa", True)),
             "leyenda": (cfg.get("leyenda") or "").strip(),
+            "columnas": columnas,
+            "reglas": (cfg.get("reglas") or "").strip()[:LARGO_REGLAS],
         }
 
     with _candado:
@@ -1349,6 +1374,8 @@ def esquema_con_estado(id_fuente: str) -> dict:
             "columnas": t["columnas"],
             "activa": bool(cfg.get("activa", True)),
             "leyenda": cfg.get("leyenda", ""),
+            "columnas_significado": cfg.get("columnas", {}),
+            "reglas": cfg.get("reglas", ""),
             "filas": contar_filas(id_fuente, t["tabla"]),
         })
     return {"fuente": esq["fuente"], "tipo": esq["tipo"], "tablas": tablas}
