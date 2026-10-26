@@ -84,9 +84,11 @@ function tarjetaDeFuente(fuente) {
 
   const acciones = document.createElement("div");
   acciones.className = "fuente-acciones";
-  acciones.append(
+  acciones.append(...[
     boton("Probar", () => probarGuardada(fuente, estado)),
     boton("Tablas", () => verEsquema(fuente.id, estado)),
+    // Supabase por MCP no acepta consultas con variables: sin accesos directos.
+    fuente.tipo === "supabase" ? null : boton("Accesos directos", () => verAccesos(fuente, estado)),
     boton("Consultar", () => abrirConsola(fuente)),
     boton("Editar", () => cargarEnFormulario(fuente)),
     boton("Borrar", async () => {
@@ -94,7 +96,7 @@ function tarjetaDeFuente(fuente) {
       await fetch(`/api/fuentes/${fuente.id}`, { method: "DELETE" });
       refrescarLista();
     }, "peligro"),
-  );
+  ].filter(Boolean));
 
   const estado = document.createElement("div");
   estado.className = "fuente-estado";
@@ -578,4 +580,135 @@ function tabla(filas) {
   tabla.append(cabecera, cuerpo);
   envoltorio.appendChild(tabla);
   return envoltorio;
+}
+
+// --------------------------------------------------------------------------
+// Accesos directos
+// --------------------------------------------------------------------------
+
+async function pedirJson(url, opciones = {}) {
+  const r = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opciones });
+  const datos = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(datos.error || `Error ${r.status}`);
+  return datos;
+}
+
+async function verAccesos(fuente, nodo) {
+  nodo.className = "fuente-estado";
+  nodo.innerHTML = "";
+  const caja = document.createElement("div");
+  caja.className = "accesos";
+  caja.innerHTML = `
+    <h4>Accesos directos</h4>
+    <p class="esquema-ayuda">Escribí una pregunta frecuente. Jarvis arma la consulta, la prueba y te muestra el resultado. Si está bien, guardala.</p>
+    <div class="acceso-nuevo">
+      <input type="text" class="acceso-pregunta" placeholder="Ej.: ¿Cuántas ventas se hicieron hoy?">
+      <button class="boton-texto acceso-proponer">Proponer</button>
+    </div>
+    <div class="acceso-borrador"></div>
+    <div class="acceso-lista"></div>`;
+  nodo.appendChild(caja);
+  const pregunta = caja.querySelector(".acceso-pregunta");
+  const borrador = caja.querySelector(".acceso-borrador");
+  caja.querySelector(".acceso-proponer").onclick = () => proponerAcceso(fuente, pregunta.value, borrador, caja);
+  await listarAccesos(fuente, caja);
+}
+
+async function listarAccesos(fuente, caja) {
+  const lista = caja.querySelector(".acceso-lista");
+  const { accesos } = await pedirJson(`/api/fuentes/${fuente.id}/accesos`);
+  lista.innerHTML = accesos.length ? "" : '<p class="vacio">Todavía no hay accesos directos.</p>';
+  for (const a of accesos) {
+    const fila = document.createElement("div");
+    fila.className = "acceso" + (a.activo ? "" : " apagado");
+    const vars = Object.keys(a.parametros).join(", ");
+    fila.innerHTML = `<strong></strong> <code></code><p></p>`;
+    fila.querySelector("strong").textContent = a.id;
+    fila.querySelector("code").textContent = vars ? `(${vars})` : "";
+    fila.querySelector("p").textContent = a.descripcion + (a.ultimo_error ? ` — con error: ${a.ultimo_error}` : "");
+    if (a.ultimo_error) fila.classList.add("con-error");
+    const salida = document.createElement("div");
+    fila.append(
+      boton("Probar", async () => {
+        const valores = {};
+        for (const [n, s] of Object.entries(a.parametros)) {
+          const v = prompt(`${n} (${s.tipo}) — ${s.descripcion || ""}`, s.por_defecto ?? "");
+          if (v === null) return;
+          valores[n] = v;
+        }
+        const r = await pedirJson(`/api/accesos/${a.id}/probar`, { method: "POST", body: JSON.stringify({ parametros: valores }) });
+        salida.innerHTML = "";
+        salida.appendChild(r.error ? Object.assign(document.createElement("p"), { className: "mal", textContent: r.error }) : tabla(r.filas));
+      }),
+      // Editar: la IA la rehace partiendo de la guardada; despues se puede tocar la consulta a mano y guardar.
+      boton("Editar", () => proponerAcceso(fuente, a.pregunta || a.descripcion, caja.querySelector(".acceso-borrador"), caja,
+        "Mantene el mismo nombre y la misma idea; mejorala solo si hace falta.", a)),
+      boton(a.activo ? "Desactivar" : "Activar", async () => {
+        await pedirJson(`/api/accesos/${a.id}`, { method: "PUT", body: JSON.stringify({ activo: !a.activo }) });
+        listarAccesos(fuente, caja);
+      }),
+      boton("Borrar", async () => {
+        if (!confirm(`Borrar el acceso directo ${a.id}?`)) return;
+        await pedirJson(`/api/accesos/${a.id}`, { method: "DELETE" });
+        listarAccesos(fuente, caja);
+      }, "peligro"),
+      salida,
+    );
+    lista.appendChild(fila);
+  }
+}
+
+async function proponerAcceso(fuente, pregunta, borrador, caja, correccion = "", anterior = null) {
+  if (!pregunta.trim()) return;
+  borrador.innerHTML = '<p class="vacio">Pensando la consulta…</p>';
+  let r;
+  try {
+    r = await pedirJson(`/api/fuentes/${fuente.id}/accesos/proponer`, {
+      method: "POST", body: JSON.stringify({ pregunta, correccion, anterior }),
+    });
+  } catch (e) {
+    borrador.innerHTML = "";
+    borrador.appendChild(Object.assign(document.createElement("p"), { className: "mal", textContent: e.message }));
+    return;
+  }
+  const p = r.propuesta;
+  borrador.innerHTML = `
+    <div class="acceso-propuesta">
+      <label>Nombre <input class="ap-id"></label>
+      <label>Qué responde <textarea class="ap-desc" rows="2"></textarea></label>
+      <label>Consulta <textarea class="ap-sql" rows="5" spellcheck="false"></textarea></label>
+      <p class="ap-vars"></p>
+      <div class="ap-resultado"></div>
+      <div class="ap-acciones">
+        <input class="ap-correccion" placeholder="¿Algo para corregir? Ej.: solo las facturas no anuladas">
+        <button class="boton-texto ap-rehacer">Rehacer</button>
+        <button class="boton-texto ap-guardar">Guardar</button>
+      </div>
+    </div>`;
+  borrador.querySelector(".ap-id").value = p.id || "";
+  borrador.querySelector(".ap-desc").value = p.descripcion || "";
+  borrador.querySelector(".ap-sql").value = p.sql || "";
+  const vars = Object.entries(p.parametros || {}).map(([n, s]) => `${n} (${s.tipo}, ej. ${s.por_defecto})`).join(" · ");
+  borrador.querySelector(".ap-vars").textContent = vars ? `Variables: ${vars}` : "Sin variables";
+  const res = borrador.querySelector(".ap-resultado");
+  res.appendChild(r.error
+    ? Object.assign(document.createElement("p"), { className: "mal", textContent: r.error })
+    : tabla(r.resultado));
+  borrador.querySelector(".ap-rehacer").onclick = () => proponerAcceso(
+    fuente, pregunta, borrador, caja, borrador.querySelector(".ap-correccion").value, p);
+  const guardar = borrador.querySelector(".ap-guardar");
+  guardar.disabled = Boolean(r.error);
+  guardar.onclick = async () => {
+    try {
+      await pedirJson(`/api/fuentes/${fuente.id}/accesos`, { method: "POST", body: JSON.stringify({
+        ...p, id: borrador.querySelector(".ap-id").value.trim(),
+        descripcion: borrador.querySelector(".ap-desc").value.trim(),
+        sql: borrador.querySelector(".ap-sql").value.trim(), pregunta,
+      }) });
+      borrador.innerHTML = '<p class="bien">Guardado. Jarvis ya lo usa.</p>';
+      listarAccesos(fuente, caja);
+    } catch (e) {
+      res.prepend(Object.assign(document.createElement("p"), { className: "mal", textContent: e.message }));
+    }
+  };
 }
