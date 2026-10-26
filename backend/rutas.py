@@ -28,8 +28,10 @@ def hospedado() -> bool:
 
     Sirve para no dejar abierto en internet algo pensado para localhost.
     """
+    # JARVIS_HOSPEDADO=1 lo dice a mano donde la plataforma no deja rastro (un EC2 propio):
+    # sin esto, alli Jarvis se creeria en la maquina de casa.
     señales = (
-        "RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "RAILWAY_SERVICE_ID",
+        "JARVIS_HOSPEDADO", "RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "RAILWAY_SERVICE_ID",
         "RENDER", "FLY_APP_NAME", "DYNO", "KUBERNETES_SERVICE_HOST",
         "WEBSITE_INSTANCE_ID", "GOOGLE_CLOUD_PROJECT",
     )
