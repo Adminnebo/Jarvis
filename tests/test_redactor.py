@@ -77,3 +77,10 @@ def test_el_pedido_menciona_json(base, monkeypatch):
     monkeypatch.setattr(redactor, "_cliente", lambda: modelo)
     redactor.proponer_diccionario("erp", "List_OrdenVentasIA")
     assert "json" in modelo.pedidos[0]["input"].lower()
+
+
+def test_reglas_en_lista_quedan_como_texto(base, monkeypatch):
+    modelo = _Modelo({"leyenda": "x", "columnas": {}, "reglas": ["Un cliente activo es activo = 1.", "Suspendido = 1 no compra."]})
+    monkeypatch.setattr(redactor, "_cliente", lambda: modelo)
+    assert redactor.proponer_diccionario("erp", "List_OrdenVentasIA")["reglas"] == (
+        "Un cliente activo es activo = 1.\nSuspendido = 1 no compra.")

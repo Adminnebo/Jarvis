@@ -62,9 +62,13 @@ def proponer_diccionario(id_fuente: str, tabla: str, usuario=None) -> dict:
         usuario,
     )
     columnas = datos.get("columnas") if isinstance(datos.get("columnas"), dict) else {}
+    reglas = datos.get("reglas") or ""
+    # El modelo a veces las manda como lista: una por renglon.
+    if isinstance(reglas, list):
+        reglas = "\n".join(str(r).strip() for r in reglas if str(r).strip())
     return {"leyenda": str(datos.get("leyenda") or "").strip(),
             "columnas": {str(k): str(v).strip() for k, v in columnas.items() if str(v).strip()},
-            "reglas": str(datos.get("reglas") or "").strip()}
+            "reglas": str(reglas).strip()}
 
 
 def proponer_acceso(id_fuente: str, pregunta: str, correccion: str = "", anterior: dict | None = None,
