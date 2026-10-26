@@ -285,7 +285,7 @@ def pagina_login(error: str = "") -> str:
   </form>
   {aviso}
   <p style="margin-top:18px;">
-    <a href="/acceso/cuenta">Entrar con tu correo</a>
+    <a href="/acceso/cuenta">Entrar con tu correo (el mismo de los paneles)</a>
   </p>
   <p><a href="/privacidad">Politica de privacidad</a></p>
 </div></body></html>"""
@@ -331,6 +331,7 @@ def pagina_entrar_cuenta(error: str = "") -> str:
 <title>Jarvis - Entrar</title><style>{_ESTILO}</style></head><body>
 <div class="caja">
   <h1>Entrar</h1>
+  <p>Con tu cuenta de Jarvis o con el correo y la contrasena de los paneles.</p>
   <form method="post" action="/acceso/cuenta">
     <input type="email" name="email" placeholder="Correo" required
            autofocus autocomplete="email">

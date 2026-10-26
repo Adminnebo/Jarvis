@@ -300,6 +300,19 @@ def formulario_de_entrar_con_cuenta():
 @app.post("/acceso/cuenta")
 async def entrar_con_cuenta(email: str = Form(""), password: str = Form("")):
     usuario = cuentas.entrar(email, password)
+    if usuario is None and supabase_sesion.configurado():
+        # No es una cuenta de Jarvis: se prueba con la de los paneles. Mismas
+        # reglas que el boton del panel (rol o permiso de Jarvis).
+        token = supabase_sesion.token_con_password(email, password)
+        if token:
+            usuario = supabase_sesion.entrar(token)
+            if usuario is None:
+                motivo = supabase_sesion.diagnostico(token)
+                print(f"  Acceso con correo de panel rechazado: {motivo}")
+                return HTMLResponse(
+                    acceso.pagina_entrar_cuenta(mensaje_de_rechazo(motivo)),
+                    status_code=403,
+                )
     if usuario is None:
         return HTMLResponse(
             acceso.pagina_entrar_cuenta("Correo o contrasena incorrectos."),

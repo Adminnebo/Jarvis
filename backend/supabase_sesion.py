@@ -75,6 +75,31 @@ def id_de_token(token: str) -> str | None:
     return respuesta.json().get("id")
 
 
+def token_con_password(email: str, password: str) -> str | None:
+    """El token de sesion de Supabase con el correo y la contrasena de los paneles.
+
+    Para entrar a Jarvis sin pasar por un panel. Supabase comprueba la
+    contrasena (y limita los intentos); aqui solo se recibe el token, que
+    despues pasa por el mismo camino que el del boton del panel. None si las
+    credenciales no valen o Supabase no responde.
+    """
+    if not configurado() or not (email or "").strip() or not password:
+        return None
+    try:
+        respuesta = httpx.post(
+            f"{url_proyecto()}/auth/v1/token",
+            params={"grant_type": "password"},
+            json={"email": email.strip(), "password": password},
+            headers={"apikey": os.getenv("SUPABASE_ANON_KEY", "").strip()},
+            timeout=10,
+        )
+    except httpx.HTTPError:
+        return None
+    if respuesta.status_code != 200:
+        return None
+    return respuesta.json().get("access_token") or None
+
+
 def perfil(uuid: str) -> dict | None:
     """El perfil de esa persona en la tabla que comparten los paneles.
 
