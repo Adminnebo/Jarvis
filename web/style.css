@@ -1010,11 +1010,39 @@ body {
 .tabla-scroll td.nulo { color: var(--tenue); }
 .tabla-scroll tbody tr:hover { background: var(--superficie-2); }
 
-@media (max-width: 620px) {
-  .escena { padding-top: 22px; }
+.boton-menu { display: none; font-size: 18px; line-height: 1; }
+
+@media (max-width: 720px) {
+  .barra { padding: 10px 14px; }
+  .escena { padding-top: 16px; }
   .orbe { width: 88px; height: 88px; }
   .orbe .nucleo { width: 36px; height: 36px; }
   .interruptor span { display: none; }
+
+  /* Una sola fila: el nombre a la izquierda y "⋯" a la derecha; todo lo demas de la
+     barra (accesos de admin, version, quien entro) va dentro del menu. */
+  .barra { flex-wrap: nowrap; }
+  .marca { min-width: 0; }
+  .boton-menu { display: block; }
+  .acciones:not(.abierto) > :not(.boton-menu) { display: none; }
+  .acciones.abierto {
+    flex-direction: column; align-items: stretch; gap: 2px;
+    position: absolute; top: 6px; right: 10px; z-index: 40;
+    min-width: 200px; padding: 6px; border: 1px solid var(--borde); border-radius: var(--radio);
+    background: var(--superficie); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
+  .acciones.abierto .boton-menu { align-self: flex-end; }
+  .acciones.abierto > .boton-texto:not(.boton-menu):not([hidden]) { display: block; width: 100%; text-align: left; }
+  .acciones.abierto > .meta, .acciones.abierto > .nombre-usuario { padding: 4px 9px; margin: 0; }
+
+  /* La entrada abajo, para el pulgar. */
+  .entrada {
+    position: sticky; top: auto; bottom: 0; order: 10;
+    width: 100%; margin: 0; border-radius: 0; border-width: 1px 0 0;
+    background: var(--fondo); padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+  .entrada:focus-within { border-color: var(--borde); }
+  .panel { width: 100vw; }
 }
 
 /* Panel del asistente */
@@ -1072,3 +1100,12 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
 
 /* Subtitulos dentro de los paneles (consumo, organizacion): del tamano de los titulos. */
 .panel h3 { font-size: 13px; font-weight: 600; margin: 18px 0 8px; }
+
+/* Dentro de paneles y modales, .boton-texto es una accion: que se vea como boton. */
+.panel .boton-texto, .modal .boton-texto {
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  padding: 5px 10px;
+}
+.panel .boton-texto:hover, .modal .boton-texto:hover { border-color: var(--borde-fuerte); }
+.boton-texto:disabled, .boton-mini:disabled, .boton-primario:disabled { opacity: 0.45; cursor: not-allowed; }

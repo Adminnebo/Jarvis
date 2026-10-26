@@ -635,6 +635,14 @@ $("btn-consumo").addEventListener("click", abrirPanelConsumo);
 $("btn-dispositivos").addEventListener("click", abrirPanelDispositivos);
 $("btn-organizacion").addEventListener("click", abrirPanelOrganizacion);
 $("btn-asistente").addEventListener("click", abrirPanelAsistente);
+// Celular: los accesos de la barra se pliegan en un menu "⋯".
+$("btn-menu").addEventListener("click", (e) => {
+  const abierto = document.querySelector(".acciones").classList.toggle("abierto");
+  e.currentTarget.setAttribute("aria-expanded", String(abierto));
+});
+document.querySelector(".acciones").addEventListener("click", (e) => {
+  if (e.target.closest(".boton-texto:not(#btn-menu)")) document.querySelector(".acciones").classList.remove("abierto");
+});
 
 // --------------------------------------------------------------------------
 // Volver al panel
