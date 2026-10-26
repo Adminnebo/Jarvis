@@ -24,9 +24,7 @@ def _pedir(instrucciones: str, entrada: str, usuario=None) -> dict:
     respuesta = _cliente().responses.create(
         model=_modelo(), instructions=instrucciones,
         # La API exige la palabra JSON en el mensaje para usar json_object.
-        input=entrada + "
-
-Responde solo con el objeto JSON pedido.",
+        input=entrada + "\n\nResponde solo con el objeto JSON pedido.",
         text={"format": {"type": "json_object"}},
     )
     cerebro.anotar_consumo(_modelo(), getattr(respuesta, "usage", None), usuario)
