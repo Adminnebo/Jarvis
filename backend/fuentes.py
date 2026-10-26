@@ -1426,55 +1426,70 @@ def resumen_para_prompt() -> str:
     lista = activas()
     if not lista:
         return ""
+    return "\n".join(_bloque_de_fuente(fuente) for fuente in lista)
 
-    bloques = []
-    for fuente in lista:
-        etiqueta = CATALOGO_TIPOS[fuente["tipo"]]["etiqueta"]
-        permiso = "solo lectura" if fuente.get("solo_lectura", True) else "lectura y escritura"
-        nota = f" — {fuente['notas']}" if fuente.get("notas") else ""
-        dialecto = DIALECTO.get(fuente["tipo"], "")
-        dialecto = f"; {dialecto}" if dialecto else ""
-        cabecera = f'- id "{fuente["id"]}": {fuente["nombre"]} ({etiqueta}, {permiso}{dialecto}){nota}'
 
-        # La base principal ya va documentada aparte, con su catalogo.
-        if fuente["tipo"] == "supabase" and not fuente.get("notas", "").strip():
-            bloques.append(cabecera)
-            continue
+def resumen_de(id_fuente: str) -> str:
+    """El bloque de una sola fuente tal como lo ve el modelo (esquema activo + diccionario)."""
+    fuente = obtener(id_fuente)
+    return _bloque_de_fuente(fuente) if fuente else ""
 
-        try:
-            esquema_fuente = esquema_de(fuente["id"])
-        except Exception:  # noqa: BLE001 - sin esquema seguimos, solo mas lento
-            bloques.append(cabecera)
-            continue
 
-        # Solo las tablas activas van al prompt, con su leyenda como pista de
-        # cuando usarlas. La leyenda la pone el usuario en el panel de tablas.
-        config_tablas = fuente.get("tablas", {})
-        tablas_activas = [
-            t for t in esquema_fuente["tablas"]
-            if config_tablas.get(t["tabla"], {}).get("activa", True)
-        ]
+def _bloque_de_fuente(fuente: dict) -> str:
+    etiqueta = CATALOGO_TIPOS[fuente["tipo"]]["etiqueta"]
+    permiso = "solo lectura" if fuente.get("solo_lectura", True) else "lectura y escritura"
+    nota = f" — {fuente['notas']}" if fuente.get("notas") else ""
+    dialecto = DIALECTO.get(fuente["tipo"], "")
+    dialecto = f"; {dialecto}" if dialecto else ""
+    cabecera = f'- id "{fuente["id"]}": {fuente["nombre"]} ({etiqueta}, {permiso}{dialecto}){nota}'
 
-        def con_leyenda(nombre: str, cfg=config_tablas, fid=fuente["id"]) -> str:
-            ley = cfg.get(nombre, {}).get("leyenda", "")
-            n = contar_filas(fid, nombre)
-            partes = [nombre]
-            if n and n > UMBRAL_TABLA_GRANDE:
-                partes.append(f"[{n:,} filas: NO buscar por texto, consulta con SQL agregado y filtro de fecha]")
-            elif n and n > 10000:
-                partes.append(f"[{n:,} filas]")
-            if ley:
-                partes.append(f"({ley})")
-            return " ".join(partes)
+    # La base principal ya va documentada aparte, con su catalogo.
+    if fuente["tipo"] == "supabase" and not fuente.get("notas", "").strip():
+        return cabecera
 
+    try:
+        esquema_fuente = esquema_de(fuente["id"])
+    except Exception:  # noqa: BLE001 - sin esquema seguimos, solo mas lento
+        return cabecera
+
+    # Solo las tablas activas van al prompt, con su leyenda como pista de
+    # cuando usarlas. La leyenda la pone el usuario en el panel de tablas.
+    config_tablas = fuente.get("tablas", {})
+    tablas_activas = [
+        t for t in esquema_fuente["tablas"]
+        if config_tablas.get(t["tabla"], {}).get("activa", True)
+    ]
+
+    def con_leyenda(nombre: str) -> str:
+        ley = config_tablas.get(nombre, {}).get("leyenda", "")
+        n = contar_filas(fuente["id"], nombre)
+        partes = [nombre]
+        if n and n > UMBRAL_TABLA_GRANDE:
+            partes.append(f"[{n:,} filas: NO buscar por texto, consulta con SQL agregado y filtro de fecha]")
+        elif n and n > 10000:
+            partes.append(f"[{n:,} filas]")
+        if ley:
+            partes.append(f"({ley})")
+        return " ".join(partes)
+
+    def diccionario(nombre: str) -> str:
+        datos = config_tablas.get(nombre, {})
+        lineas = [f"      {col}: {texto}" for col, texto in (datos.get("columnas") or {}).items()]
+        if datos.get("reglas"):
+            lineas.append(f"      Reglas: {datos['reglas']}")
+        return ("\n" + "\n".join(lineas)) if lineas else ""
+
+    # Del mas completo al mas corto: con diccionario, sin el, solo nombres.
+    detalle = "\n".join(
+        f"    {con_leyenda(t['tabla'])}: {t['columnas']}{diccionario(t['tabla'])}" for t in tablas_activas
+    )
+    if len(detalle) > TOPE_ESQUEMA_EN_PROMPT:
         detalle = "\n".join(
             f"    {con_leyenda(t['tabla'])}: {t['columnas']}" for t in tablas_activas
         )
-        if len(detalle) > TOPE_ESQUEMA_EN_PROMPT:
-            detalle = "    tablas: " + ", ".join(
-                con_leyenda(t["tabla"]) for t in tablas_activas
-            ) + "\n    (usa ver_esquema_fuente para las columnas)"
+    if len(detalle) > TOPE_ESQUEMA_EN_PROMPT:
+        detalle = "    tablas: " + ", ".join(
+            con_leyenda(t["tabla"]) for t in tablas_activas
+        ) + "\n    (usa ver_esquema_fuente para las columnas)"
 
-        bloques.append(f"{cabecera}\n{detalle}")
-
-    return "\n".join(bloques)
+    return f"{cabecera}\n{detalle}"

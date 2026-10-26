@@ -43,3 +43,13 @@ def test_el_panel_recibe_el_diccionario(fuente):
     tabla = fuentes.esquema_con_estado("erp")["tablas"][0]
     assert tabla["columnas_significado"] == {"Estado": "'A' = activo"}
     assert tabla["reglas"] == "r"
+
+
+def test_el_prompt_lleva_columnas_y_reglas(fuente, monkeypatch):
+    monkeypatch.setattr(fuentes, "activas", lambda: fuente)
+    fuentes.guardar_config_tablas("erp", {"List_ClientesIA": {
+        "leyenda": "clientes", "columnas": {"Estado": "'A' = activo"}, "reglas": "Activo es Estado = 'A'."}})
+    texto = fuentes.resumen_para_prompt()
+    assert "List_ClientesIA (clientes)" in texto
+    assert "Estado: 'A' = activo" in texto
+    assert "Reglas: Activo es Estado = 'A'." in texto
