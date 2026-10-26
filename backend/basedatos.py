@@ -108,6 +108,30 @@ _ESQUEMA = """
         enviado TEXT,
         ultimo_error TEXT
     );
+
+    -- El asistente de cada organizacion: su nombre y su foto. Sin fila, o con
+    -- nombre NULL, se usa JARVIS_NOMBRE. Ver asistente.py.
+    CREATE TABLE IF NOT EXISTS asistentes (
+        organizacion_id TEXT PRIMARY KEY REFERENCES organizaciones(id) ON DELETE CASCADE,
+        nombre TEXT,
+        foto TEXT,
+        actualizado TEXT NOT NULL
+    );
+
+    -- Los tres videos del avatar. `archivo` es el que se muestra; `trabajo_*`
+    -- el que se esta generando en Higgsfield (el viejo sigue a la vista hasta
+    -- que el nuevo termina bien).
+    CREATE TABLE IF NOT EXISTS asistente_videos (
+        organizacion_id TEXT NOT NULL REFERENCES organizaciones(id) ON DELETE CASCADE,
+        estado TEXT NOT NULL CHECK (estado IN ('reposo', 'escuchando', 'hablando')),
+        archivo TEXT,
+        trabajo_id TEXT,
+        trabajo_estado TEXT CHECK (trabajo_estado IN ('generando', 'listo', 'error')),
+        trabajo_desde TEXT,
+        error TEXT,
+        actualizado TEXT NOT NULL,
+        PRIMARY KEY (organizacion_id, estado)
+    );
 """
 
 
