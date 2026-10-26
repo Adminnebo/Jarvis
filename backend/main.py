@@ -102,6 +102,21 @@ def al_arrancar():
 
 
 @app.middleware("http")
+async def sin_cache_vieja(peticion: Request, siguiente):
+    """La pagina y sus .js/.css se revalidan siempre.
+
+    Los archivos no llevan version en el nombre: sin esto, tras un despliegue el
+    navegador seguia usando el app.js viejo. Revalidar cuesta poco (responde
+    304 si no cambio). Los avatares no: esos si llevan marca de tiempo.
+    """
+    respuesta = await siguiente(peticion)
+    ruta = peticion.url.path
+    if not ruta.startswith(("/api/", "/avatares/")) and "cache-control" not in respuesta.headers:
+        respuesta.headers["Cache-Control"] = "no-cache"
+    return respuesta
+
+
+@app.middleware("http")
 async def guardia(peticion: Request, siguiente):
     """Nadie pasa sin contrasena cuando esto corre en un servidor.
 

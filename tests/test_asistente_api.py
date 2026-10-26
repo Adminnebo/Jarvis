@@ -88,3 +88,9 @@ def test_generar_sin_clave_de_higgsfield_es_400(admin, monkeypatch):
     admin.post(f"/api/asistente/{org}/foto", files={"foto": ("cara.jpg", JPG, "image/jpeg")})
     r = admin.post(f"/api/asistente/{org}/generar", json={"estados": ["reposo"]})
     assert r.status_code == 400 and "Higgsfield" in r.json()["error"]
+
+
+def test_la_web_no_queda_vieja_en_el_navegador(admin):
+    # Sin esto, tras un despliegue el navegador seguia usando el app.js viejo.
+    for ruta in ("/", "/app.js", "/avatar.js"):
+        assert admin.get(ruta).headers.get("cache-control") == "no-cache", ruta
