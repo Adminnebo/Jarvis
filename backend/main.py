@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, Request, Response
+from fastapi import FastAPI, File, Form, Request, Response, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -24,6 +24,8 @@ RAIZ = Path(__file__).resolve().parent.parent
 load_dotenv(RAIZ / ".env", override=True)
 
 from . import (  # noqa: E402 - despues de load_dotenv a proposito
+    asistente,
+    higgsfield,
     acceso,
     archivos,
     basedatos,
@@ -94,6 +96,9 @@ def al_arrancar():
     # Y mantener las conexiones calientes evita que la pague en reconectar.
     fuentes.calentar()
     fuentes.vigilar_conexiones()
+
+    # Retoma los videos del avatar que quedaron generandose en Higgsfield.
+    asistente.vigilar()
 
 
 @app.middleware("http")
@@ -355,7 +360,8 @@ def estado(peticion: Request):
     clave = os.getenv("OPENAI_API_KEY", "").strip()
     usuario = peticion.state.usuario
     return {
-        "nombre": os.getenv("JARVIS_NOMBRE", "Jarvis"),
+        "nombre": asistente.nombre(usuario),
+        "asistente": _asistente_para(usuario),
         "usuario": usuario.nombre,
         "rol": usuario.rol,
         "organizacion": cuentas.nombre_organizacion(usuario.organizacion_id),
@@ -882,6 +888,94 @@ def agregar_miembro(datos: PeticionDeMiembro, peticion: Request):
 def listar_organizaciones():
     """Cuanto lleva consumido cada organizacion. Para quien administra Jarvis."""
     return {"organizaciones": cuentas.organizaciones()}
+
+
+# --------------------------------------------------------------------------
+# Asistente de cada organizacion (nombre, foto, videos del avatar)
+# --------------------------------------------------------------------------
+
+def _organizacion_o_404(organizacion_id: str):
+    if not cuentas.nombre_organizacion(organizacion_id):
+        return JSONResponse(status_code=404, content={"error": "Esa organizacion no existe."})
+    return None
+
+
+def _publico(organizacion_id: str) -> dict:
+    """El asistente como lo ve la web: URLs en vez de nombres de archivo."""
+    datos = asistente.configuracion(organizacion_id)
+    base = f"/avatares/{organizacion_id}/"
+    return {
+        **datos,
+        "foto_url": base + datos["foto"] if datos["foto"] else None,
+        "videos": {
+            e: {**v, "url": base + v["archivo"] if v["archivo"] else None}
+            for e, v in datos["videos"].items()
+        },
+        "costo_por_video": asistente.costo_estimado(1),
+        "higgsfield": higgsfield.configurado(),
+    }
+
+
+def _asistente_para(usuario) -> dict:
+    """Lo que necesita el avatar de la web: URLs de la foto y de los tres videos."""
+    vacio = {"foto": None, "videos": {e: None for e in asistente.ESTADOS}}
+    if not usuario.organizacion_id:
+        return vacio
+    datos = _publico(usuario.organizacion_id)
+    return {"foto": datos["foto_url"], "videos": {e: v["url"] for e, v in datos["videos"].items()}}
+
+
+@app.get("/api/asistente/{organizacion_id}")
+def ver_asistente(organizacion_id: str):
+    return _organizacion_o_404(organizacion_id) or _publico(organizacion_id)
+
+
+@app.put("/api/asistente/{organizacion_id}")
+def cambiar_asistente(organizacion_id: str, datos: dict):
+    if (falta := _organizacion_o_404(organizacion_id)):
+        return falta
+    try:
+        asistente.guardar_nombre(organizacion_id, str(datos.get("nombre") or ""))
+    except asistente.ErrorDeAsistente as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    return _publico(organizacion_id)
+
+
+@app.post("/api/asistente/{organizacion_id}/foto")
+async def subir_foto_del_asistente(organizacion_id: str, foto: UploadFile = File(...)):
+    if (falta := _organizacion_o_404(organizacion_id)):
+        return falta
+    contenido = await foto.read(asistente.MAXIMO_FOTO + 1)
+    try:
+        asistente.guardar_foto(organizacion_id, contenido)
+    except asistente.ErrorDeAsistente as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    return _publico(organizacion_id)
+
+
+@app.post("/api/asistente/{organizacion_id}/generar")
+def generar_videos_del_asistente(organizacion_id: str, datos: dict):
+    if (falta := _organizacion_o_404(organizacion_id)):
+        return falta
+    try:
+        asistente.generar(organizacion_id, list(datos.get("estados") or []))
+    except (asistente.ErrorDeAsistente, higgsfield.ErrorDeHiggsfield) as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    return _publico(organizacion_id)
+
+
+@app.get("/avatares/{organizacion_id}/{archivo}")
+def archivo_del_avatar(organizacion_id: str, archivo: str, peticion: Request):
+    """Solo la gente de esa organizacion, o el super admin."""
+    usuario = peticion.state.usuario
+    if usuario.rol != "admin" and usuario.organizacion_id != organizacion_id:
+        return JSONResponse(status_code=404, content={"error": "No existe."})
+    datos = asistente.configuracion(organizacion_id)
+    validos = {datos["foto"], *(v["archivo"] for v in datos["videos"].values())} - {None}
+    if archivo not in validos:
+        return JSONResponse(status_code=404, content={"error": "No existe."})
+    return FileResponse(asistente.carpeta(organizacion_id) / archivo,
+                        headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
 @app.get("/")

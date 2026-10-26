@@ -460,6 +460,10 @@ def exige_admin(ruta: str, metodo: str) -> bool:
     # /api/organizacion (la propia) y /api/organizaciones (todas).
     if ruta.startswith("/api/organizacion"):
         return True
+    # El asistente de cada organizacion (nombre, foto, videos) lo configura
+    # solo el super admin de Nebo.
+    if ruta.startswith("/api/asistente"):
+        return True
     # Leer lo que se dijo en voz es auditoria: ahi va literal lo que hablo
     # cualquiera con los lentes. Escribirlo no, que eso lo hace el puente con
     # la clave de siempre y no tiene por que ser admin.
