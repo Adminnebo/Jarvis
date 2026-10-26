@@ -1,13 +1,24 @@
 :root {
-  --fondo: #07090e;
-  --panel: #0e1219;
-  --borde: #1c2432;
-  --texto: #e6ecf5;
-  --tenue: #7c8798;
+  /* Grafito minimal: una sola superficie oscura, bordes de 1 px y un solo acento. */
+  --fondo: #0a0a0b;
+  --superficie: #111113;
+  --superficie-2: #16161a;
+  --panel: var(--superficie);          /* nombre viejo: lo usan reglas y JS */
+  --borde: #232327;
+  --borde-fuerte: #2e2e34;
+  --texto: #ececf0;
+  --tenue: #7d7d86;
+  --muy-tenue: #55555c;
   --acento: #4da3ff;
-  --acento-suave: rgba(77, 163, 255, 0.16);
+  --acento-suave: rgba(77, 163, 255, 0.12);
   --peligro: #ff6b6b;
   --ok: #3ddc84;
+  --aviso: #f5b84d;
+  --claro: #ededf0;                    /* botones principales */
+  --radio: 8px;
+  --radio-chico: 6px;
+  --fuente: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", var(--mono);
 }
 
 * { box-sizing: border-box; }
@@ -17,10 +28,13 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at 50% 0%, #101828 0%, var(--fondo) 55%);
+  background: var(--fondo);
   color: var(--texto);
-  font: 15px/1.6 "Segoe UI", system-ui, sans-serif;
+  font: 14px/1.55 var(--fuente);
+  -webkit-font-smoothing: antialiased;
 }
+
+::selection { background: var(--acento-suave); }
 
 /* ---------- Barra superior ---------- */
 
@@ -32,9 +46,9 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 22px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--borde);
-  background: rgba(7, 9, 14, 0.92);
+  background: rgba(10, 10, 11, 0.92);
   backdrop-filter: blur(8px);
   flex-wrap: wrap;
 }
@@ -43,17 +57,15 @@ body {
 
 .marca h1 {
   margin: 0;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: -0.01em;
 }
 
 .punto {
-  width: 9px; height: 9px;
+  width: 7px; height: 7px;
   border-radius: 50%;
-  background: var(--tenue);
-  box-shadow: 0 0 10px currentColor;
+  background: var(--muy-tenue);
   transition: background 0.3s;
 }
 .punto.ok       { background: var(--ok); }
@@ -68,16 +80,13 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  margin-left: 6px;
-  border-radius: 999px;
+  padding: 3px 8px;
+  margin-left: 4px;
+  border-radius: var(--radio-chico);
   border: 1px solid var(--borde);
   background: transparent;
   color: var(--tenue);
-  font: inherit;
-  font-size: 11px;
-  font-family: ui-monospace, Consolas, monospace;
-  letter-spacing: 0.04em;
+  font: 11px var(--mono);
   cursor: default;
 }
 .bombillo.recargable { cursor: pointer; }
@@ -121,17 +130,18 @@ body {
   50% { opacity: 0.25; }
 }
 
-.acciones { display: flex; align-items: center; gap: 14px; }
+.acciones { display: flex; align-items: center; gap: 4px; }
 
-.meta { color: var(--tenue); font-size: 12.5px; }
+.meta { color: var(--tenue); font-size: 12px; margin-right: 8px; }
 
 /* Quien esta usando Jarvis, cuando lo abrio desde un panel. Con varias
    personas en la misma pantalla compartida, que se vea de un vistazo. */
 .nombre-usuario {
   color: var(--texto);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
+  margin-right: 8px;
 }
 
 #btn-volver { color: var(--acento); }
@@ -139,12 +149,14 @@ body {
 .boton-texto {
   background: none;
   border: none;
+  border-radius: var(--radio-chico);
   color: var(--tenue);
-  font-size: 13px;
+  font: 13px var(--fuente);
   cursor: pointer;
-  padding: 4px;
+  padding: 6px 9px;
+  transition: color 0.15s, background 0.15s;
 }
-.boton-texto:hover { color: var(--acento); }
+.boton-texto:hover { color: var(--texto); background: var(--superficie-2); }
 
 /* ---------- Orbe ---------- */
 
@@ -216,8 +228,10 @@ body {
 .pie-orbe {
   margin: 0;
   color: var(--tenue);
-  font-size: 13px;
-  min-height: 20px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  min-height: 18px;
   text-align: center;
 }
 
@@ -258,22 +272,23 @@ body {
 .conversacion {
   flex: 1;
   overflow-y: auto;
-  padding: 0 22px 28px;
+  padding: 0 20px 32px;
   display: flex;
   flex-direction: column-reverse;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 16px;
   max-width: 780px;
   width: 100%;
   margin: 0 auto;
 }
 
+/* Sin burbujas: tus mensajes en gris con "Tú", las respuestas en blanco con
+   una linea de acento a la izquierda. */
 .mensaje {
-  padding: 11px 15px;
-  border-radius: 14px;
-  max-width: 82%;
+  max-width: 100%;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  line-height: 1.6;
   animation: aparecer 0.25s ease;
 }
 
@@ -281,27 +296,30 @@ body {
   from { opacity: 0; transform: translateY(6px); }
 }
 
-.mensaje.usuario {
-  align-self: flex-end;
-  background: var(--acento-suave);
-  border: 1px solid rgba(77, 163, 255, 0.32);
-  border-bottom-right-radius: 4px;
+.mensaje.usuario { align-self: stretch; color: var(--tenue); }
+.mensaje.usuario::before {
+  content: "Tú";
+  display: block;
+  margin-bottom: 2px;
+  color: var(--muy-tenue);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .mensaje.jarvis {
-  align-self: flex-start;
-  background: var(--panel);
-  border: 1px solid var(--borde);
-  border-bottom-left-radius: 4px;
+  align-self: stretch;
+  color: var(--texto);
+  border-left: 2px solid var(--acento);
+  padding-left: 12px;
 }
 
 .mensaje.error {
-  align-self: center;
-  background: rgba(255, 107, 107, 0.1);
-  border: 1px solid rgba(255, 107, 107, 0.35);
+  align-self: stretch;
   color: #ffc9c9;
-  font-size: 13.5px;
-  max-width: 100%;
+  border-left: 2px solid var(--peligro);
+  padding-left: 12px;
+  font-size: 13px;
 }
 
 .mensaje.imagen { padding: 5px; }
@@ -309,7 +327,7 @@ body {
   display: block;
   max-width: min(260px, 100%);
   max-height: 260px;
-  border-radius: 10px;
+  border-radius: var(--radio);
 }
 
 .mensaje.adjuntos {
@@ -333,7 +351,7 @@ body {
   display: block;
   max-width: 100%;
   max-height: 220px;
-  border-radius: 10px;
+  border-radius: var(--radio);
   background: #fff;   /* los PNG del catalogo suelen venir sin fondo */
 }
 .adjunto-ficha {
@@ -341,7 +359,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--radio);
   border: 1px solid var(--borde);
   color: var(--texto);
   text-decoration: none;
@@ -370,50 +388,52 @@ body {
 
 /* Arriba y pegada: los controles quedan siempre a la vista aunque la
    conversacion crezca, y no hay que bajar para escribir. */
+/* Una sola caja con todo adentro: el campo de texto sin borde propio. */
 .entrada {
   position: sticky;
-  top: var(--alto-barra, 56px);
+  top: var(--alto-barra, 52px);
   z-index: 3;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 22px;
-  border-bottom: 1px solid var(--borde);
-  background: rgba(7, 9, 14, 0.92);
-  backdrop-filter: blur(8px);
+  gap: 10px;
+  margin: 14px auto 0;
+  width: min(780px, calc(100% - 32px));
+  padding: 5px 5px 5px 14px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie);
   flex-wrap: wrap;
+  transition: border-color 0.15s;
 }
+.entrada:focus-within { border-color: var(--acento); }
 
 #campo {
   flex: 1;
-  padding: 12px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--borde);
-  background: var(--panel);
+  min-width: 160px;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
   color: var(--texto);
-  font: inherit;
+  font: 14px var(--fuente);
   outline: none;
 }
-#campo:focus { border-color: var(--acento); }
+#campo::placeholder { color: var(--muy-tenue); }
 
 .boton-microfono {
-  width: 46px; height: 46px;
+  width: 32px; height: 32px;
   flex: none;
-  border-radius: 50%;
-  border: 1px solid var(--borde);
-  background: var(--panel);
-  color: var(--texto);
+  border-radius: var(--radio-chico);
+  border: none;
+  background: var(--claro);
+  color: #0a0a0b;
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  transition: background 0.15s, color 0.15s;
 }
-.boton-microfono:hover { border-color: var(--acento); color: var(--acento); }
-.boton-microfono.activo {
-  background: var(--acento);
-  border-color: var(--acento);
-  color: #04121f;
-}
+.boton-microfono:hover { background: #fff; }
+.boton-microfono.activo { background: var(--acento); color: #04121f; }
+.boton-microfono svg { width: 17px; height: 17px; }
 /* display:grid de arriba le gana al atributo hidden. */
 .boton-microfono[hidden] { display: none; }
 .boton-microfono svg path { fill: currentColor; }
@@ -422,9 +442,9 @@ body {
 .interruptor {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   color: var(--tenue);
-  font-size: 12.5px;
+  font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -437,21 +457,19 @@ body {
 
 .boton-vivo {
   flex: none;
-  padding: 11px 18px;
-  border-radius: 999px;
-  border: 1px solid var(--borde);
-  background: var(--panel);
+  padding: 6px 11px;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--borde-fuerte);
+  background: transparent;
   color: var(--texto);
-  font: inherit;
-  font-size: 13.5px;
+  font: 12.5px var(--fuente);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  transition: border-color 0.15s, color 0.15s;
 }
-.boton-vivo:hover { border-color: var(--acento); color: var(--acento); }
+.boton-vivo:hover { border-color: var(--tenue); }
 
 .boton-vivo.activo {
-  background: rgba(255, 107, 107, 0.14);
   border-color: var(--peligro);
   color: #ffc9c9;
   animation: respirar 2.2s ease-in-out infinite;
@@ -464,38 +482,32 @@ body {
 /* ---------- Insignia de conector ---------- */
 
 .insignia {
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(61, 220, 132, 0.4);
-  background: rgba(61, 220, 132, 0.1);
-  color: var(--ok);
-  font-size: 11.5px;
-  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--borde);
+  color: var(--tenue);
+  font-size: 11px;
   white-space: nowrap;
 }
+.insignia::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px;
+  border-radius: 50%; background: var(--ok); vertical-align: 1px; }
+.insignia.insignia-alerta::before { background: var(--peligro); }
 
 /* En escritura el conector deja de ser informativo y pasa a ser advertencia. */
-.insignia.insignia-alerta {
-  border-color: rgba(255, 107, 107, 0.45);
-  background: rgba(255, 107, 107, 0.1);
-  color: #ffc9c9;
-}
 
 /* ---------- Panel de memoria ---------- */
 
 .panel {
   position: fixed;
-  /* Debajo de la barra superior: si arranca en top:0 tapa el logo y los
-     botones del header y su titulo queda cortado contra el borde. */
-  top: var(--alto-barra, 56px);
+  top: var(--alto-barra, 52px);
   right: 0; bottom: 0;
   z-index: 20;
-  width: min(400px, 92vw);
-  background: var(--panel);
+  width: min(420px, 92vw);
+  background: var(--superficie);
   border-left: 1px solid var(--borde);
-  padding: 18px 20px;
+  padding: 16px 18px;
   overflow-y: auto;
-  box-shadow: -18px 0 46px rgba(0, 0, 0, 0.5);
+  box-shadow: -24px 0 48px rgba(0, 0, 0, 0.45);
 }
 
 /* La cabecera se queda pegada arriba: si hace scroll, el boton de cerrar
@@ -508,36 +520,31 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: -18px -20px 14px;
-  padding: 14px 20px;
-  background: var(--panel);
+  margin: -16px -18px 14px;
+  padding: 12px 18px;
+  background: var(--superficie);
   border-bottom: 1px solid var(--borde);
 }
-.panel-barra h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.panel-barra h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
 
 .boton-cerrar {
   flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  border: 1px solid var(--borde);
+  width: 28px; height: 28px;
+  border-radius: var(--radio-chico);
+  border: none;
   background: transparent;
   color: var(--tenue);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
   display: grid;
   place-items: center;
 }
-.boton-cerrar:hover {
-  border-color: var(--peligro);
-  color: var(--peligro);
-  background: rgba(255, 107, 107, 0.1);
-}
+.boton-cerrar:hover { color: var(--texto); background: var(--superficie-2); }
 
 .hecho {
   border: 1px solid var(--borde);
-  border-radius: 10px;
+  border-radius: var(--radio);
   padding: 10px 12px;
   margin-bottom: 9px;
 }
@@ -551,7 +558,7 @@ body {
 }
 
 .etiqueta {
-  color: var(--acento);
+  color: var(--tenue);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -576,10 +583,9 @@ body {
 
 .fuente {
   border: 1px solid var(--borde);
-  border-radius: 12px;
+  border-radius: var(--radio);
   padding: 13px 15px;
-  margin-bottom: 11px;
-  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 10px;
 }
 .fuente.inactiva { opacity: 0.55; }
 
@@ -596,24 +602,25 @@ body {
 .fuente-etiquetas { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .chip {
-  padding: 2px 9px;
-  border-radius: 999px;
+  padding: 2px 8px;
+  border-radius: var(--radio-chico);
   font-size: 11px;
-  letter-spacing: 0.03em;
   border: 1px solid var(--borde);
   color: var(--tenue);
   white-space: nowrap;
 }
-.chip-tipo    { border-color: rgba(77, 163, 255, 0.4); color: var(--acento); }
-.chip-ok      { border-color: rgba(61, 220, 132, 0.4); color: var(--ok); }
-.chip-alerta  { border-color: rgba(255, 107, 107, 0.45); color: #ffc9c9; }
-.chip-apagado { opacity: 0.7; }
+.chip-tipo    { color: var(--texto); }
+.chip-ok::before, .chip-alerta::before { content: ""; display: inline-block; width: 6px; height: 6px;
+  margin-right: 5px; border-radius: 50%; vertical-align: 1px; }
+.chip-ok::before     { background: var(--ok); }
+.chip-alerta::before { background: var(--peligro); }
+.chip-apagado { opacity: 0.6; }
 
 .fuente-destino {
   margin-top: 5px;
   color: var(--tenue);
   font-size: 12.5px;
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--mono);
   overflow-wrap: anywhere;
 }
 
@@ -625,15 +632,16 @@ body {
 }
 
 .boton-mini {
-  padding: 5px 11px;
-  border-radius: 7px;
+  padding: 5px 10px;
+  border-radius: var(--radio-chico);
   border: 1px solid var(--borde);
   background: transparent;
   color: var(--texto);
-  font-size: 12.5px;
+  font: 12.5px var(--fuente);
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
-.boton-mini:hover { border-color: var(--acento); color: var(--acento); }
+.boton-mini:hover { background: var(--superficie-2); border-color: var(--borde-fuerte); }
 .boton-mini.peligro:hover { border-color: var(--peligro); color: var(--peligro); }
 
 .fuente-estado {
@@ -650,7 +658,7 @@ body {
 
 .organizacion-consumo {
   border: 1px solid var(--borde);
-  border-radius: 10px;
+  border-radius: var(--radio);
   padding: 9px 13px;
   margin-bottom: 8px;
 }
@@ -668,13 +676,12 @@ body {
   margin-top: 14px;
   padding: 18px;
   border: 1px solid var(--borde);
-  border-radius: 12px;
+  border-radius: var(--radio);
   text-align: center;
-  background: rgba(77, 163, 255, 0.06);
 }
 
 .codigo-vinculo-texto {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 34px;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -722,7 +729,7 @@ body {
   width: 100%;
   margin-top: 5px;
   padding: 6px 9px;
-  border-radius: 7px;
+  border-radius: var(--radio-chico);
   border: 1px solid var(--borde);
   background: var(--fondo);
   color: var(--texto);
@@ -784,7 +791,7 @@ body {
 
 .tarjeta {
   border: 1px solid var(--borde);
-  border-radius: 11px;
+  border-radius: var(--radio);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -793,8 +800,8 @@ body {
 
 /* La cifra que se viene a buscar: cuanto cuesta un minuto hablando. */
 .tarjeta.destacada {
-  border-color: rgba(77, 163, 255, 0.45);
-  background: var(--acento-suave);
+  border-color: var(--borde-fuerte);
+  background: var(--superficie-2);
 }
 
 .tarjeta-etiqueta {
@@ -808,7 +815,7 @@ body {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.tarjeta.destacada .tarjeta-valor { color: var(--acento); }
+.tarjeta.destacada .tarjeta-valor { color: var(--texto); }
 
 .tarjeta-pie { font-size: 11.5px; color: var(--tenue); }
 
@@ -858,7 +865,7 @@ body {
 #consola-sql-texto {
   width: 100%;
   padding: 9px 12px;
-  border-radius: 9px;
+  border-radius: var(--radio);
   border: 1px solid var(--borde);
   background: var(--fondo);
   color: var(--texto);
@@ -904,25 +911,16 @@ body {
 }
 
 .boton-primario, .boton-secundario {
-  padding: 9px 18px;
-  border-radius: 9px;
-  font: inherit;
-  font-size: 13.5px;
+  padding: 8px 16px;
+  border-radius: var(--radio-chico);
+  font: 500 13px var(--fuente);
   cursor: pointer;
   border: 1px solid transparent;
 }
-.boton-primario {
-  background: var(--acento);
-  color: #04121f;
-  font-weight: 600;
-}
-.boton-primario:hover { filter: brightness(1.1); }
-.boton-secundario {
-  background: transparent;
-  border-color: var(--borde);
-  color: var(--texto);
-}
-.boton-secundario:hover { border-color: var(--acento); color: var(--acento); }
+.boton-primario { background: var(--claro); color: #0a0a0b; }
+.boton-primario:hover { background: #fff; }
+.boton-secundario { background: transparent; border-color: var(--borde); color: var(--texto); }
+.boton-secundario:hover { background: var(--superficie-2); }
 
 .resultado-prueba {
   margin: 14px 0 0;
@@ -955,7 +953,7 @@ body {
 .modal-caja {
   background: var(--panel);
   border: 1px solid var(--borde);
-  border-radius: 14px;
+  border-radius: var(--radio);
   padding: 18px 20px;
   width: min(940px, 100%);
   max-height: 88vh;
@@ -965,11 +963,11 @@ body {
 /* Dentro del modal la cabecera tambien se queda fija al hacer scroll. */
 .modal-caja .panel-barra {
   margin: -18px -20px 14px;
-  border-radius: 14px 14px 0 0;
+  border-radius: 12px 12px 0 0;
 }
 
 #consola-sql-texto {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--mono);
   resize: vertical;
 }
 
@@ -982,7 +980,7 @@ body {
 .tabla-scroll {
   overflow-x: auto;
   border: 1px solid var(--borde);
-  border-radius: 9px;
+  border-radius: var(--radio);
 }
 
 .tabla-scroll table {
@@ -1001,13 +999,16 @@ body {
 .tabla-scroll th {
   position: sticky;
   top: 0;
-  background: var(--panel);
-  color: var(--acento);
-  font-weight: 600;
+  background: var(--superficie);
+  color: var(--tenue);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .tabla-scroll td.nulo { color: var(--tenue); }
-.tabla-scroll tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+.tabla-scroll tbody tr:hover { background: var(--superficie-2); }
 
 @media (max-width: 620px) {
   .escena { padding-top: 22px; }
@@ -1022,14 +1023,12 @@ body {
 .asistente-foto .vacio { flex-basis: 100%; margin: 0; }
 .asistente-videos { display: grid; gap: 10px; margin: 12px 0; }
 .asistente-video { display: grid; grid-template-columns: 64px 1fr auto; gap: 4px 10px; align-items: center;
-  background: var(--panel); border: 1px solid var(--borde); border-radius: 10px; padding: 8px; }
+  background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio); padding: 8px; }
 .asistente-video video { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; grid-row: span 2; }
 .asistente-video:not(:has(video)) { grid-template-columns: 1fr auto; }
 .asistente-video .vacio { grid-column: 2; font-size: 12.5px; }
 .asistente-video:not(:has(video)) .vacio { grid-column: 1; }
 .asistente-video button { grid-column: -2; grid-row: 1 / span 2; }
-.campo select { background: var(--fondo); color: var(--texto); border: 1px solid var(--borde);
-  border-radius: 8px; padding: 8px; font-size: 14px; }
 
 /* Avatar del asistente: con el, el orbe deja su lugar pero sigue recibiendo
    las clases de estado (avatar.js las observa). */
@@ -1039,7 +1038,7 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
 .diccionario { margin: 4px 0 6px; font-size: 13px; }
 .diccionario summary { cursor: pointer; color: var(--tenue); }
 .diccionario-columnas { display: grid; grid-template-columns: max-content 1fr; gap: 4px 8px; margin: 8px 0; align-items: center; }
-.diccionario-columnas label { font-family: ui-monospace, monospace; font-size: 12px; color: var(--tenue); }
+.diccionario-columnas label { font-family: var(--mono); font-size: 12px; color: var(--tenue); }
 .diccionario input, .diccionario textarea { width: 100%; box-sizing: border-box; background: var(--fondo);
   color: var(--texto); border: 1px solid var(--borde); border-radius: 6px; padding: 6px 8px; font: inherit; }
 
@@ -1048,14 +1047,28 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
 .acceso-nuevo { display: flex; gap: 8px; margin: 8px 0; }
 .acceso-nuevo input { flex: 1; }
 .acceso-propuesta { display: grid; gap: 8px; background: var(--panel); border: 1px solid var(--borde);
-  border-radius: 10px; padding: 10px; margin: 8px 0; }
+  border-radius: var(--radio); padding: 10px; margin: 8px 0; }
 .acceso-propuesta label { display: grid; gap: 4px; font-size: 13px; color: var(--tenue); }
 .acceso-propuesta textarea, .acceso-propuesta input, .acceso-nuevo input { background: var(--fondo); color: var(--texto);
   border: 1px solid var(--borde); border-radius: 6px; padding: 6px 8px; font: inherit; }
-.ap-sql { font-family: ui-monospace, monospace; font-size: 12px; }
+.ap-sql { font-family: var(--mono); font-size: 12px; }
 .ap-acciones { display: flex; gap: 8px; }
 .ap-acciones input { flex: 1; }
 .acceso { border-top: 1px solid var(--borde); padding: 8px 0; font-size: 13px; }
 .acceso p { margin: 4px 0; color: var(--tenue); }
 .acceso.apagado { opacity: 0.55; }
 .acceso.con-error p { color: var(--peligro); }
+
+/* Grafito: foco comun de los campos, modal mas suave y numeros tabulares. */
+.campo input:focus, .campo select:focus, #consola-sql-texto:focus, .leyenda-tabla:focus,
+.filtros select:focus, .diccionario input:focus, .diccionario textarea:focus,
+.acceso-propuesta input:focus, .acceso-propuesta textarea:focus, .acceso-nuevo input:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+.modal { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(2px); }
+.tabla-scroll table { font-variant-numeric: tabular-nums; }
+
+/* Subtitulos dentro de los paneles (consumo, organizacion): del tamano de los titulos. */
+.panel h3 { font-size: 13px; font-weight: 600; margin: 18px 0 8px; }
