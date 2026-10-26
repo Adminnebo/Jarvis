@@ -246,26 +246,24 @@ def avisar_de_contrasenas_repetidas() -> None:
 # --------------------------------------------------------------------------
 
 _ESTILO = """
-  body { margin:0; min-height:100vh; display:grid; place-items:center;
-         background:radial-gradient(circle at 50% 0%,#101828 0%,#07090e 55%);
-         color:#e6ecf5; font:15px/1.6 "Segoe UI",system-ui,sans-serif; }
-  .caja { width:min(420px,92vw); padding:32px; border:1px solid #1c2432;
-          border-radius:16px; background:#0e1219; }
-  h1 { margin:0 0 6px; font-size:17px; letter-spacing:.14em;
-       text-transform:uppercase; }
-  p { color:#7c8798; font-size:13.5px; }
-  input { width:100%; box-sizing:border-box; margin-top:16px; padding:12px 15px;
-          border-radius:10px; border:1px solid #1c2432; background:#07090e;
-          color:#e6ecf5; font:inherit; outline:none; }
-  input:focus { border-color:#4da3ff; }
-  button { width:100%; margin-top:12px; padding:12px; border:none;
-           border-radius:10px; background:#4da3ff; color:#04121f;
-           font:inherit; font-weight:600; cursor:pointer; }
-  code { background:#07090e; padding:2px 7px; border-radius:6px;
-         color:#9ecbff; font-size:13px; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#0a0a0b;
+         color:#ececf0; font:14px/1.55 "Inter",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  .caja { width:min(360px,92vw); padding:28px; border:1px solid #232327; border-radius:12px; background:#111113; }
+  h1 { margin:0 0 4px; font-size:15px; font-weight:600; }
+  p { color:#7d7d86; font-size:13px; }
+  a { color:#4da3ff; text-decoration:none; } a:hover { text-decoration:underline; }
+  input { width:100%; box-sizing:border-box; margin-top:12px; padding:9px 12px; border-radius:6px;
+          border:1px solid #232327; background:#0a0a0b; color:#ececf0; font:inherit; outline:none; }
+  input:focus { border-color:#4da3ff; box-shadow:0 0 0 3px rgba(77,163,255,.12); }
+  button { width:100%; margin-top:14px; padding:9px; border:none; border-radius:6px; background:#ededf0;
+           color:#0a0a0b; font:inherit; font-weight:500; cursor:pointer; }
+  button:hover { background:#fff; }
+  code { background:#0a0a0b; padding:2px 6px; border:1px solid #232327; border-radius:4px; color:#ececf0;
+         font:12.5px "JetBrains Mono",ui-monospace,monospace; }
   .mal { color:#ffc9c9; font-size:13px; margin-top:14px; }
   .bien { color:#9be9a8; font-size:13px; margin-top:14px; }
-  ol { color:#7c8798; font-size:13.5px; padding-left:20px; }
+  ol { color:#7d7d86; font-size:13px; padding-left:20px; }
   li { margin-bottom:8px; }
 """
 
