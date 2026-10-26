@@ -137,3 +137,23 @@ def test_borrar_la_fuente_borra_sus_accesos_desde_fuentes(motor, monkeypatch):
     monkeypatch.setattr(fuentes, "_escribir", lambda lista: None)
     fuentes.borrar("erp")
     assert accesos.listar("erp") == []
+
+
+def test_la_herramienta_usa_el_acceso(motor):
+    from backend import herramientas
+
+    accesos.guardar("erp", VENTAS)
+    texto = herramientas.usar_acceso_directo("ventas_por_periodo", '{"desde": "2026-10-20"}')
+    assert json.loads(texto) == [{"n": 1}]
+    assert "JSON" in herramientas.usar_acceso_directo("ventas_por_periodo", "{no es json")
+
+
+def test_las_instrucciones_listan_los_accesos(motor, monkeypatch):
+    from backend import acceso, cerebro
+
+    monkeypatch.setattr(fuentes, "activas", lambda: [{"id": "erp", "nombre": "ERP"}])
+    monkeypatch.setattr(fuentes, "resumen_para_prompt", lambda: "- id \"erp\": ERP")
+    accesos.guardar("erp", VENTAS)
+    texto = cerebro.instrucciones(acceso.Usuario("u", "Ana", "usuario"))
+    assert "- acceso ventas_por_periodo(desde, hasta)" in texto
+    assert "usar_acceso_directo" in texto

@@ -234,6 +234,31 @@ def consultar_fuente(fuente: str, sql: str) -> str:
 
 
 @herramienta(
+    "Responde una pregunta frecuente con un acceso directo: una consulta ya "
+    "escrita y probada para una fuente. Es la via mas rapida: si la pregunta "
+    "encaja con uno de los accesos directos de tus instrucciones, usalo antes "
+    "de escribir SQL. Pasa solo las variables (fechas AAAA-MM-DD, numeros, textos).",
+    nombre="El nombre del acceso directo, tal como aparece en tus instrucciones",
+    parametros='Las variables en JSON, por ejemplo {"desde": "2026-10-26", "hasta": "2026-10-27"}. Omitelo para usar las de por defecto.',
+)
+def usar_acceso_directo(nombre: str, parametros: str = "{}") -> str:
+    from . import accesos
+
+    try:
+        valores = json.loads(parametros) if parametros else {}
+    except json.JSONDecodeError:
+        return "Error: 'parametros' no es JSON valido."
+    if not isinstance(valores, dict):
+        return "Error: 'parametros' debe ser un objeto JSON."
+    resultado = accesos.ejecutar(nombre, valores)
+    if "error" in resultado:
+        return resultado["error"]
+    if not resultado["filas"]:
+        return "El acceso directo no devolvio resultados."
+    return json.dumps(resultado["filas"], ensure_ascii=False, default=str)[:6000]
+
+
+@herramienta(
     "Busca filas por texto en una tabla de una fuente conectada. Es tu via "
     "preferida para encontrar un producto, un cliente o cualquier registro a "
     "partir de como lo nombra el usuario: exige que aparezcan todas las "
