@@ -1030,3 +1030,8 @@ body {
 .asistente-video button { grid-column: -2; grid-row: 1 / span 2; }
 .campo select { background: var(--fondo); color: var(--texto); border: 1px solid var(--borde);
   border-radius: 8px; padding: 8px; font-size: 14px; }
+
+/* Avatar del asistente: con el, el orbe deja su lugar pero sigue recibiendo
+   las clases de estado (avatar.js las observa). */
+.avatar { width: min(240px, 60vw); height: auto; aspect-ratio: 360 / 450; }
+body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

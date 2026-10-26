@@ -11,6 +11,7 @@ import { prepararImagen } from "./imagen.js";
 import { abrirPanelDispositivos } from "./dispositivos.js";
 import { abrirPanelOrganizacion } from "./organizacion.js";
 import { abrirPanelAsistente } from "./asistente.js";
+import { configurarAvatar } from "./avatar.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -789,6 +790,7 @@ async function cargarEstado() {
 
     $("titulo").textContent = estado.nombre;
     document.title = estado.nombre;
+    configurarAvatar(estado.asistente);
 
     // Las funciones de arriba son solo del super admin (rol "admin"). Esto es
     // comodidad, no seguridad: lo que importa -consumo, fuentes,
