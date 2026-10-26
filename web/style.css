@@ -1035,3 +1035,27 @@ body {
    las clases de estado (avatar.js las observa). */
 .avatar { width: min(240px, 60vw); height: auto; aspect-ratio: 360 / 450; }
 body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+/* Diccionario por tabla */
+.diccionario { margin: 4px 0 6px; font-size: 13px; }
+.diccionario summary { cursor: pointer; color: var(--tenue); }
+.diccionario-columnas { display: grid; grid-template-columns: max-content 1fr; gap: 4px 8px; margin: 8px 0; align-items: center; }
+.diccionario-columnas label { font-family: ui-monospace, monospace; font-size: 12px; color: var(--tenue); }
+.diccionario input, .diccionario textarea { width: 100%; box-sizing: border-box; background: var(--fondo);
+  color: var(--texto); border: 1px solid var(--borde); border-radius: 6px; padding: 6px 8px; font: inherit; }
+
+/* Accesos directos */
+.accesos h4 { margin: 8px 0 4px; }
+.acceso-nuevo { display: flex; gap: 8px; margin: 8px 0; }
+.acceso-nuevo input { flex: 1; }
+.acceso-propuesta { display: grid; gap: 8px; background: var(--panel); border: 1px solid var(--borde);
+  border-radius: 10px; padding: 10px; margin: 8px 0; }
+.acceso-propuesta label { display: grid; gap: 4px; font-size: 13px; color: var(--tenue); }
+.acceso-propuesta textarea, .acceso-propuesta input, .acceso-nuevo input { background: var(--fondo); color: var(--texto);
+  border: 1px solid var(--borde); border-radius: 6px; padding: 6px 8px; font: inherit; }
+.ap-sql { font-family: ui-monospace, monospace; font-size: 12px; }
+.ap-acciones { display: flex; gap: 8px; }
+.ap-acciones input { flex: 1; }
+.acceso { border-top: 1px solid var(--borde); padding: 8px 0; font-size: 13px; }
+.acceso p { margin: 4px 0; color: var(--tenue); }
+.acceso.apagado { opacity: 0.55; }
+.acceso.con-error p { color: var(--peligro); }

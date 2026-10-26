@@ -264,6 +264,8 @@ def borrar(id_fuente: str) -> bool:
 
     soltar_conexion(id_fuente)
     olvidar_esquema(id_fuente)
+    from . import accesos   # import tardio: accesos importa fuentes
+    accesos.borrar_de_fuente(id_fuente)
     return True
 
 
@@ -417,7 +419,7 @@ def _con_reintento(id_fuente: str | None, abrir, ejecutar):
 
 
 def consultar_postgres(config: dict, sql: str, limite: int,
-                       id_fuente: str | None = None) -> list[dict]:
+                       id_fuente: str | None = None, parametros: dict | None = None) -> list[dict]:
     import psycopg
     from psycopg.rows import dict_row
 
@@ -429,7 +431,10 @@ def consultar_postgres(config: dict, sql: str, limite: int,
 
     def ejecutar(conexion):
         with conexion.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(sql)
+            if parametros is None:
+                cursor.execute(sql)
+            else:
+                cursor.execute(sql, parametros)
             return [dict(f) for f in cursor.fetchmany(limite)]
 
     return _con_reintento(id_fuente, abrir, ejecutar)
@@ -446,7 +451,7 @@ def _login_fallido(error: Exception) -> bool:
 
 
 def consultar_mssql(config: dict, sql: str, limite: int,
-                    id_fuente: str | None = None) -> list[dict]:
+                    id_fuente: str | None = None, parametros: dict | None = None) -> list[dict]:
     import pymssql
 
     def abrir():
@@ -482,17 +487,22 @@ def consultar_mssql(config: dict, sql: str, limite: int,
 
     def ejecutar(conexion):
         with conexion.cursor(as_dict=True) as cursor:
-            cursor.execute(sql)
+            if parametros is None:
+                cursor.execute(sql)
+            else:
+                cursor.execute(sql, parametros)
             return [dict(f) for f in cursor.fetchmany(limite)]
 
     return _con_reintento(id_fuente, abrir, ejecutar)
 
 
 def consultar_supabase(config: dict, sql: str, limite: int,
-                       id_fuente: str | None = None) -> list[dict]:
+                       id_fuente: str | None = None, parametros: dict | None = None) -> list[dict]:
     # Con cadena directa vamos por Postgres, que es mucho mas rapido.
     if config.get("url"):
-        return consultar_postgres({"url": config["url"]}, sql, limite, id_fuente)
+        return consultar_postgres({"url": config["url"]}, sql, limite, id_fuente, parametros=parametros)
+    if parametros is not None:
+        raise ValueError("Esta fuente (Supabase por MCP) no acepta consultas con variables.")
 
     from . import esquema
 
@@ -509,7 +519,7 @@ MOTORES = {
 }
 
 
-def consultar(id_fuente: str, sql: str, limite: int = 200) -> list[dict]:
+def consultar(id_fuente: str, sql: str, limite: int = 200, parametros: dict | None = None) -> list[dict]:
     fuente = obtener(id_fuente)
     if fuente is None:
         raise ValueError(f"No existe la fuente '{id_fuente}'.")
@@ -519,7 +529,7 @@ def consultar(id_fuente: str, sql: str, limite: int = 200) -> list[dict]:
     if fuente.get("solo_lectura", True):
         validar_solo_lectura(sql)
 
-    return MOTORES[fuente["tipo"]](fuente["config"], sql, limite, id_fuente)
+    return MOTORES[fuente["tipo"]](fuente["config"], sql, limite, id_fuente, parametros=parametros)
 
 
 # --------------------------------------------------------------------------
@@ -1307,19 +1317,44 @@ def contar_filas(id_fuente: str, tabla: str) -> int | None:
     return n
 
 
+LARGO_COLUMNA = 200
+LARGO_REGLAS = 1000
+
+
+def _nombres_de_columnas(id_fuente: str, tabla: str) -> set[str]:
+    """Las columnas reales de una tabla, para no guardar significados de columnas inventadas."""
+    try:
+        for entrada in esquema_de(id_fuente)["tablas"]:
+            if entrada["tabla"] == tabla:
+                return {c.strip().split(" ")[0] for c in entrada["columnas"].split(",") if c.strip()}
+    except Exception:  # noqa: BLE001 - sin esquema se guarda lo que venga
+        return set()
+    return set()
+
+
 def guardar_config_tablas(id_fuente: str, config_tablas: dict) -> dict:
-    """Activa/desactiva tablas y guarda su leyenda, sin tocar el resto.
+    """Activa/desactiva tablas y guarda su diccionario, sin tocar el resto.
 
     La leyenda es una pista en lenguaje natural (p. ej. "saldos y deudas de
     clientes") que va al prompt para que el modelo sepa en que tabla buscar.
+    `columnas` dice que significa cada columna que no se entiende sola ("Estado:
+    'A' = activo") y `reglas` como se cuentan o filtran las cosas habituales.
     Las desactivadas no aparecen en el prompt.
     """
     limpio = {}
     for nombre, cfg in (config_tablas or {}).items():
         cfg = cfg or {}
+        reales = _nombres_de_columnas(id_fuente, str(nombre))
+        columnas = {
+            str(col): str(texto).strip()[:LARGO_COLUMNA]
+            for col, texto in (cfg.get("columnas") or {}).items()
+            if str(texto).strip() and (not reales or str(col) in reales)
+        }
         limpio[str(nombre)] = {
             "activa": bool(cfg.get("activa", True)),
             "leyenda": (cfg.get("leyenda") or "").strip(),
+            "columnas": columnas,
+            "reglas": (cfg.get("reglas") or "").strip()[:LARGO_REGLAS],
         }
 
     with _candado:
@@ -1349,6 +1384,8 @@ def esquema_con_estado(id_fuente: str) -> dict:
             "columnas": t["columnas"],
             "activa": bool(cfg.get("activa", True)),
             "leyenda": cfg.get("leyenda", ""),
+            "columnas_significado": cfg.get("columnas", {}),
+            "reglas": cfg.get("reglas", ""),
             "filas": contar_filas(id_fuente, t["tabla"]),
         })
     return {"fuente": esq["fuente"], "tipo": esq["tipo"], "tablas": tablas}
@@ -1399,55 +1436,70 @@ def resumen_para_prompt() -> str:
     lista = activas()
     if not lista:
         return ""
+    return "\n".join(_bloque_de_fuente(fuente) for fuente in lista)
 
-    bloques = []
-    for fuente in lista:
-        etiqueta = CATALOGO_TIPOS[fuente["tipo"]]["etiqueta"]
-        permiso = "solo lectura" if fuente.get("solo_lectura", True) else "lectura y escritura"
-        nota = f" — {fuente['notas']}" if fuente.get("notas") else ""
-        dialecto = DIALECTO.get(fuente["tipo"], "")
-        dialecto = f"; {dialecto}" if dialecto else ""
-        cabecera = f'- id "{fuente["id"]}": {fuente["nombre"]} ({etiqueta}, {permiso}{dialecto}){nota}'
 
-        # La base principal ya va documentada aparte, con su catalogo.
-        if fuente["tipo"] == "supabase" and not fuente.get("notas", "").strip():
-            bloques.append(cabecera)
-            continue
+def resumen_de(id_fuente: str) -> str:
+    """El bloque de una sola fuente tal como lo ve el modelo (esquema activo + diccionario)."""
+    fuente = obtener(id_fuente)
+    return _bloque_de_fuente(fuente) if fuente else ""
 
-        try:
-            esquema_fuente = esquema_de(fuente["id"])
-        except Exception:  # noqa: BLE001 - sin esquema seguimos, solo mas lento
-            bloques.append(cabecera)
-            continue
 
-        # Solo las tablas activas van al prompt, con su leyenda como pista de
-        # cuando usarlas. La leyenda la pone el usuario en el panel de tablas.
-        config_tablas = fuente.get("tablas", {})
-        tablas_activas = [
-            t for t in esquema_fuente["tablas"]
-            if config_tablas.get(t["tabla"], {}).get("activa", True)
-        ]
+def _bloque_de_fuente(fuente: dict) -> str:
+    etiqueta = CATALOGO_TIPOS[fuente["tipo"]]["etiqueta"]
+    permiso = "solo lectura" if fuente.get("solo_lectura", True) else "lectura y escritura"
+    nota = f" — {fuente['notas']}" if fuente.get("notas") else ""
+    dialecto = DIALECTO.get(fuente["tipo"], "")
+    dialecto = f"; {dialecto}" if dialecto else ""
+    cabecera = f'- id "{fuente["id"]}": {fuente["nombre"]} ({etiqueta}, {permiso}{dialecto}){nota}'
 
-        def con_leyenda(nombre: str, cfg=config_tablas, fid=fuente["id"]) -> str:
-            ley = cfg.get(nombre, {}).get("leyenda", "")
-            n = contar_filas(fid, nombre)
-            partes = [nombre]
-            if n and n > UMBRAL_TABLA_GRANDE:
-                partes.append(f"[{n:,} filas: NO buscar por texto, consulta con SQL agregado y filtro de fecha]")
-            elif n and n > 10000:
-                partes.append(f"[{n:,} filas]")
-            if ley:
-                partes.append(f"({ley})")
-            return " ".join(partes)
+    # La base principal ya va documentada aparte, con su catalogo.
+    if fuente["tipo"] == "supabase" and not fuente.get("notas", "").strip():
+        return cabecera
 
+    try:
+        esquema_fuente = esquema_de(fuente["id"])
+    except Exception:  # noqa: BLE001 - sin esquema seguimos, solo mas lento
+        return cabecera
+
+    # Solo las tablas activas van al prompt, con su leyenda como pista de
+    # cuando usarlas. La leyenda la pone el usuario en el panel de tablas.
+    config_tablas = fuente.get("tablas", {})
+    tablas_activas = [
+        t for t in esquema_fuente["tablas"]
+        if config_tablas.get(t["tabla"], {}).get("activa", True)
+    ]
+
+    def con_leyenda(nombre: str) -> str:
+        ley = config_tablas.get(nombre, {}).get("leyenda", "")
+        n = contar_filas(fuente["id"], nombre)
+        partes = [nombre]
+        if n and n > UMBRAL_TABLA_GRANDE:
+            partes.append(f"[{n:,} filas: NO buscar por texto, consulta con SQL agregado y filtro de fecha]")
+        elif n and n > 10000:
+            partes.append(f"[{n:,} filas]")
+        if ley:
+            partes.append(f"({ley})")
+        return " ".join(partes)
+
+    def diccionario(nombre: str) -> str:
+        datos = config_tablas.get(nombre, {})
+        lineas = [f"      {col}: {texto}" for col, texto in (datos.get("columnas") or {}).items()]
+        if datos.get("reglas"):
+            lineas.append(f"      Reglas: {datos['reglas']}")
+        return ("\n" + "\n".join(lineas)) if lineas else ""
+
+    # Del mas completo al mas corto: con diccionario, sin el, solo nombres.
+    detalle = "\n".join(
+        f"    {con_leyenda(t['tabla'])}: {t['columnas']}{diccionario(t['tabla'])}" for t in tablas_activas
+    )
+    if len(detalle) > TOPE_ESQUEMA_EN_PROMPT:
         detalle = "\n".join(
             f"    {con_leyenda(t['tabla'])}: {t['columnas']}" for t in tablas_activas
         )
-        if len(detalle) > TOPE_ESQUEMA_EN_PROMPT:
-            detalle = "    tablas: " + ", ".join(
-                con_leyenda(t["tabla"]) for t in tablas_activas
-            ) + "\n    (usa ver_esquema_fuente para las columnas)"
+    if len(detalle) > TOPE_ESQUEMA_EN_PROMPT:
+        detalle = "    tablas: " + ", ".join(
+            con_leyenda(t["tabla"]) for t in tablas_activas
+        ) + "\n    (usa ver_esquema_fuente para las columnas)"
 
-        bloques.append(f"{cabecera}\n{detalle}")
-
-    return "\n".join(bloques)
+    return f"{cabecera}\n{detalle}"

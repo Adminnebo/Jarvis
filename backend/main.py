@@ -26,6 +26,8 @@ load_dotenv(RAIZ / ".env", override=True)
 from . import (  # noqa: E402 - despues de load_dotenv a proposito
     asistente,
     higgsfield,
+    accesos,
+    redactor,
     acceso,
     archivos,
     basedatos,
@@ -497,6 +499,69 @@ def consultar_fuente(id_fuente: str, datos: dict):
         return JSONResponse(status_code=400, content={"error": str(error)})
     except Exception as error:  # noqa: BLE001
         return JSONResponse(status_code=400, content={"error": fuentes.explicar(error)})
+
+
+# --------------------------------------------------------------------------
+# Accesos directos y borradores con IA (solo super admin: acceso.exige_admin)
+# --------------------------------------------------------------------------
+
+@app.get("/api/fuentes/{id_fuente}/accesos")
+def listar_accesos(id_fuente: str):
+    return {"accesos": accesos.listar(id_fuente)}
+
+
+@app.post("/api/fuentes/{id_fuente}/accesos")
+def guardar_acceso(id_fuente: str, datos: dict):
+    if fuentes.obtener(id_fuente) is None:
+        return JSONResponse(status_code=404, content={"error": "No existe esa fuente."})
+    try:
+        return accesos.guardar(id_fuente, datos)
+    except accesos.ErrorDeAcceso as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+
+
+@app.post("/api/fuentes/{id_fuente}/accesos/proponer")
+def proponer_acceso(id_fuente: str, datos: dict, peticion: Request):
+    try:
+        return redactor.proponer_acceso(id_fuente, str(datos.get("pregunta") or ""),
+                                        str(datos.get("correccion") or ""), datos.get("anterior"),
+                                        peticion.state.usuario)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+
+
+@app.post("/api/fuentes/{id_fuente}/tablas/{tabla}/proponer")
+def proponer_diccionario(id_fuente: str, tabla: str, peticion: Request):
+    try:
+        return redactor.proponer_diccionario(id_fuente, tabla, peticion.state.usuario)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+
+
+@app.put("/api/accesos/{id_acceso}")
+def editar_acceso(id_acceso: str, datos: dict):
+    actual = accesos.obtener(id_acceso)
+    if actual is None:
+        return JSONResponse(status_code=404, content={"error": "No existe ese acceso directo."})
+    if "activo" in datos and len(datos) == 1:
+        accesos.activar(id_acceso, bool(datos["activo"]))
+        return accesos.obtener(id_acceso)
+    try:
+        if datos.get("id", id_acceso) != id_acceso:
+            accesos.borrar(id_acceso)
+        return accesos.guardar(actual["fuente_id"], {**actual, **datos})
+    except accesos.ErrorDeAcceso as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+
+
+@app.post("/api/accesos/{id_acceso}/probar")
+def probar_acceso(id_acceso: str, datos: dict):
+    return accesos.ejecutar(id_acceso, datos.get("parametros") or {}, limite=50)
+
+
+@app.delete("/api/accesos/{id_acceso}")
+def borrar_acceso(id_acceso: str):
+    return {"ok": accesos.borrar(id_acceso)}
 
 
 @app.get("/api/voz/config")

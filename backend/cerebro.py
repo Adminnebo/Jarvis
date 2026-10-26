@@ -13,6 +13,7 @@ from openai import OpenAI
 
 from . import (
     acceso,
+    accesos,
     archivos,
     asistente,
     conectores,
@@ -211,6 +212,15 @@ Como consultar estas fuentes:
   pidan.
 - Nunca leas en voz alta el nombre tecnico de una columna. Di "cuesta 164.44",
   no "el P1 es 164.44"."""
+
+    directos = accesos.catalogo_para_prompt()
+    if directos:
+        texto += f"""
+
+Accesos directos (preguntas frecuentes ya resueltas; usalos con `usar_acceso_directo`
+antes de escribir SQL si la pregunta encaja; "hoy", "ayer", "este mes" se pasan como
+fechas desde/hasta, con hasta excluida):
+{directos}"""
 
     if archivos.configurado():
         texto += f"""
