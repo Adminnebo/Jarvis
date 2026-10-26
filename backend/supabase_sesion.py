@@ -198,6 +198,27 @@ def nombres_de_perfiles(uuids: list[str]) -> dict[str, str]:
     return {fila["id"]: _nombre_de_perfil(fila) for fila in respuesta.json()}
 
 
+EXCLUIDOS = "JARVIS_PANELES_EXCLUIDOS"
+
+
+def excluido(correo: str | None) -> bool:
+    """Si ese correo no entra a Jarvis aunque su rol o sus permisos lo dejen.
+
+    El directorio de los paneles es compartido: tambien estan los de otras
+    empresas (JDL), que no usan Jarvis y cuyo consumo se cobraria a esta
+    organizacion. JARVIS_PANELES_EXCLUIDOS lleva correos o dominios separados
+    por coma: "@jdlferreteria.com,alguien@gmail.com".
+    """
+    correo = (correo or "").strip().lower()
+    if not correo:
+        return False
+    for entrada in os.getenv(EXCLUIDOS, "").split(","):
+        entrada = entrada.strip().lower()
+        if entrada and (correo == entrada or (entrada.startswith("@") and correo.endswith(entrada))):
+            return True
+    return False
+
+
 def usuario_de_perfil(datos: dict | None):
     """El usuario de Jarvis que corresponde a ese perfil, o None si no entra.
 
@@ -209,6 +230,8 @@ def usuario_de_perfil(datos: dict | None):
     from . import acceso, cuentas
 
     if not datos:
+        return None
+    if excluido(datos.get("email")):
         return None
 
     rol_plataforma = (datos.get("role") or "").strip()

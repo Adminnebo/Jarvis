@@ -343,3 +343,27 @@ def test_el_detalle_nunca_lleva_la_service_role_key(configurado, monkeypatch, ca
 
     assert SERVICE not in motivo
     assert SERVICE not in capsys.readouterr().out
+
+
+def test_los_excluidos_no_entran_aunque_sean_admin(monkeypatch):
+    monkeypatch.setenv("JARVIS_PANELES_EXCLUIDOS", "@jdlferreteria.com, JonasDeLeon@gmail.com")
+    admin_jdl = {"id": "u1", "email": "cuentaxpagar@jdlferreteria.com", "role": "admin", "permissions": []}
+    con_permiso = {"id": "u2", "email": "baruc@jdlferreteria.com", "role": "agent", "permissions": ["jarvis.usar"]}
+    por_correo = {"id": "u3", "email": "jonasdeleon@gmail.com", "role": "admin", "permissions": []}
+    de_jh = {"id": "u4", "email": "jmorel@jhelectroalambres.com", "role": "admin", "permissions": []}
+    assert supabase_sesion.usuario_de_perfil(admin_jdl) is None
+    assert supabase_sesion.usuario_de_perfil(con_permiso) is None
+    assert supabase_sesion.usuario_de_perfil(por_correo) is None
+    assert supabase_sesion.usuario_de_perfil(de_jh).rol == "usuario"
+
+
+def test_un_dominio_no_excluye_a_otro_que_termina_parecido(monkeypatch):
+    monkeypatch.setenv("JARVIS_PANELES_EXCLUIDOS", "@jdl.com")
+    assert supabase_sesion.excluido("alguien@jdl.com") is True
+    assert supabase_sesion.excluido("alguien@otrojdl.com") is False
+    assert supabase_sesion.excluido("") is False
+
+
+def test_sin_la_variable_no_se_excluye_a_nadie(monkeypatch):
+    monkeypatch.delenv("JARVIS_PANELES_EXCLUIDOS", raising=False)
+    assert supabase_sesion.excluido("cuentaxpagar@jdlferreteria.com") is False
