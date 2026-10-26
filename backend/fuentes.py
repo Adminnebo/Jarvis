@@ -435,6 +435,16 @@ def consultar_postgres(config: dict, sql: str, limite: int,
     return _con_reintento(id_fuente, abrir, ejecutar)
 
 
+# Servidores (host, puerto) que solo hablan TDS 7.0: SQL Server 2008 R2 sin
+# parches. Con la version por defecto de FreeTDS el puerto abre pero el login
+# falla con el error 20002; se recuerda para no pagar dos logins cada vez.
+_tds_viejo: set[tuple[str, str]] = set()
+
+
+def _login_fallido(error: Exception) -> bool:
+    return "20002" in str(error)
+
+
 def consultar_mssql(config: dict, sql: str, limite: int,
                     id_fuente: str | None = None) -> list[dict]:
     import pymssql
@@ -443,9 +453,10 @@ def consultar_mssql(config: dict, sql: str, limite: int,
         servidor = config["host"]
         if config.get("instancia"):
             servidor = f"{servidor}\\{config['instancia']}"
-        conexion = pymssql.connect(
+        puerto = str(config.get("puerto") or 1433)
+        datos = dict(
             server=servidor,
-            port=str(config.get("puerto") or 1433),
+            port=puerto,
             user=config["usuario"],
             password=config.get("password", ""),
             database=config["base"],
@@ -453,6 +464,16 @@ def consultar_mssql(config: dict, sql: str, limite: int,
             login_timeout=15,
             as_dict=True,
         )
+        if (servidor, puerto) in _tds_viejo:
+            conexion = pymssql.connect(**datos, tds_version="7.0")
+        else:
+            try:
+                conexion = pymssql.connect(**datos)
+            except pymssql.OperationalError as error:
+                if not _login_fallido(error):
+                    raise
+                conexion = pymssql.connect(**datos, tds_version="7.0")
+                _tds_viejo.add((servidor, puerto))
         cursor = conexion.cursor()
         # Evita bloquear al resto de la base mientras leemos.
         cursor.execute("SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;")
