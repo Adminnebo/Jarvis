@@ -108,6 +108,21 @@ _ESQUEMA = """
         enviado TEXT,
         ultimo_error TEXT
     );
+
+    -- Accesos directos: preguntas frecuentes con su consulta lista, por fuente.
+    -- fuente_id apunta a fuentes.json (no a una tabla). Ver accesos.py.
+    CREATE TABLE IF NOT EXISTS accesos_directos (
+        id TEXT PRIMARY KEY,
+        fuente_id TEXT NOT NULL,
+        pregunta TEXT NOT NULL,
+        descripcion TEXT NOT NULL,
+        sql TEXT NOT NULL,
+        parametros TEXT NOT NULL,
+        activo INTEGER NOT NULL DEFAULT 1,
+        ultimo_error TEXT,
+        creado TEXT NOT NULL,
+        actualizado TEXT NOT NULL
+    );
 """
 
 
