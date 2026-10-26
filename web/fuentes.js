@@ -340,7 +340,12 @@ async function verEsquema(id, nodo) {
     estado.className = "guardado-estado guardando";
     const tablas = {};
     for (const c of controles) {
-      tablas[c.tabla] = { activa: c.check.checked, leyenda: c.leyenda.value.trim() };
+      tablas[c.tabla] = {
+        activa: c.check.checked,
+        leyenda: c.leyenda.value.trim(),
+        columnas: c.columnas(),
+        reglas: c.reglas.value.trim(),
+      };
     }
     try {
       const r = await fetch(`/api/fuentes/${id}/tablas`, {
@@ -410,9 +415,65 @@ async function verEsquema(id, nodo) {
     const columnas = document.createElement("span");
     columnas.textContent = tabla.columnas;
 
-    fila.append(cab, leyenda, columnas);
+    const dicc = document.createElement("details");
+    dicc.className = "diccionario";
+    const tieneAlgo = Object.keys(tabla.columnas_significado || {}).length || tabla.reglas;
+    dicc.innerHTML = `<summary>Diccionario${tieneAlgo ? " ✓" : ""}</summary>`;
+
+    const nombresColumnas = String(tabla.columnas).split(",").map((c) => c.trim().split(" ")[0]).filter(Boolean);
+    const filasCol = document.createElement("div");
+    filasCol.className = "diccionario-columnas";
+    const camposCol = {};
+    for (const col of nombresColumnas) {
+      const etiqueta = document.createElement("label");
+      etiqueta.textContent = col;
+      const campo = document.createElement("input");
+      campo.type = "text";
+      campo.placeholder = "Qué significa (opcional)";
+      campo.value = (tabla.columnas_significado || {})[col] || "";
+      campo.addEventListener("input", guardarPronto);
+      campo.addEventListener("blur", guardarTablas);
+      camposCol[col] = campo;
+      filasCol.append(etiqueta, campo);
+    }
+
+    const reglas = document.createElement("textarea");
+    reglas.rows = 3;
+    reglas.placeholder = "Reglas: cómo se cuenta o filtra (ej. un cliente activo es Estado = 'A')";
+    reglas.value = tabla.reglas || "";
+    reglas.addEventListener("input", guardarPronto);
+    reglas.addEventListener("blur", guardarTablas);
+
+    const proponer = boton("Proponer con IA", async () => {
+      proponer.disabled = true;
+      proponer.textContent = "Pensando…";
+      try {
+        const r = await fetch(`/api/fuentes/${id}/tablas/${encodeURIComponent(tabla.tabla)}/proponer`, { method: "POST" });
+        const b = await r.json();
+        if (!r.ok) throw new Error(b.error || "No se pudo proponer");
+        if (!leyenda.value) leyenda.value = b.leyenda;
+        for (const [col, texto] of Object.entries(b.columnas || {})) {
+          if (camposCol[col] && !camposCol[col].value) camposCol[col].value = texto;
+        }
+        if (!reglas.value) reglas.value = b.reglas;
+        estado.textContent = " · borrador de la IA: revisalo; se guarda al salir de un campo";
+      } catch (e) {
+        estado.textContent = " · " + e.message;
+      } finally {
+        proponer.disabled = false;
+        proponer.textContent = "Proponer con IA";
+      }
+    });
+
+    dicc.append(proponer, filasCol, reglas);
+
+    fila.append(cab, leyenda, dicc, columnas);
     cuerpo.appendChild(fila);
-    controles.push({ tabla: tabla.tabla, check, leyenda });
+    controles.push({
+      tabla: tabla.tabla, check, leyenda, reglas,
+      columnas: () => Object.fromEntries(
+        Object.entries(camposCol).map(([c, campo]) => [c, campo.value.trim()]).filter(([, v]) => v)),
+    });
   }
   detalle.appendChild(cuerpo);
 
