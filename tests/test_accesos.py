@@ -157,3 +157,28 @@ def test_las_instrucciones_listan_los_accesos(motor, monkeypatch):
     texto = cerebro.instrucciones(acceso.Usuario("u", "Ana", "usuario"))
     assert "- acceso ventas_por_periodo(desde, hasta)" in texto
     assert "usar_acceso_directo" in texto
+
+
+def test_rutas_de_accesos_solo_admin(motor, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from backend import cuentas
+    from backend.main import app
+
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    monkeypatch.setenv("JARVIS_CLAVE_SECRETA", "clave-de-pruebas-larga")
+    admin = TestClient(app)
+    admin.post("/acceso", data={"clave": "la-del-admin"}, follow_redirects=False)
+    r = admin.post("/api/fuentes/erp/accesos", json=VENTAS)
+    assert r.status_code == 200 and r.json()["id"] == "ventas_por_periodo"
+    assert [a["id"] for a in admin.get("/api/fuentes/erp/accesos").json()["accesos"]] == ["ventas_por_periodo"]
+    assert admin.post("/api/accesos/ventas_por_periodo/probar", json={"parametros": {}}).json()["filas"] == [{"n": 1}]
+    assert admin.put("/api/accesos/ventas_por_periodo", json={"activo": False}).status_code == 200
+    assert admin.post("/api/fuentes/erp/accesos", json={**VENTAS, "sql": "drop table x"}).status_code == 400
+
+    cuentas.crear_organizacion("JH", "Ana", "ana@jh.com", "una-clave-larga")
+    ana = TestClient(app)
+    ana.post("/acceso/cuenta", data={"email": "ana@jh.com", "password": "una-clave-larga"}, follow_redirects=False)
+    assert ana.get("/api/fuentes/erp/accesos").status_code == 403
+    assert ana.delete("/api/accesos/ventas_por_periodo").status_code == 403
+    assert admin.delete("/api/accesos/ventas_por_periodo").json() == {"ok": True}

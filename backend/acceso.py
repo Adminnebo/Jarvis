@@ -460,6 +460,10 @@ def exige_admin(ruta: str, metodo: str) -> bool:
     # /api/organizacion (la propia) y /api/organizaciones (todas).
     if ruta.startswith("/api/organizacion"):
         return True
+    # Accesos directos: los carga y edita solo el super admin (los de
+    # /api/fuentes/*/accesos ya los cubre la regla de /api/fuentes).
+    if ruta.startswith("/api/accesos"):
+        return True
     # Leer lo que se dijo en voz es auditoria: ahi va literal lo que hablo
     # cualquiera con los lentes. Escribirlo no, que eso lo hace el puente con
     # la clave de siempre y no tiene por que ser admin.
