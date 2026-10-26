@@ -96,3 +96,10 @@ def test_otro_error_no_se_disfraza(pymssql_falso, monkeypatch):
     monkeypatch.setattr(sys.modules["pymssql"], "connect", connect)
     with pytest.raises(_ErrorOperacional, match="18456"):
         fuentes.consultar_mssql(CONFIG, "select 1", 10)
+
+
+def test_en_sql_server_tambien_se_ven_las_vistas():
+    # El usuario del ERP de JH solo tiene SELECT sobre vistas (List_*IA): sin
+    # ellas Jarvis veia la base vacia.
+    sql = fuentes.SQL_TABLAS["mssql"].lower()
+    assert "'view'" in sql and "'base table'" in sql

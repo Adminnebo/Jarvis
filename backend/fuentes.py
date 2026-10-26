@@ -1209,10 +1209,12 @@ SQL_TABLAS = {
           )
         order by table_schema, table_name;
     """,
+    # Con vistas: los ERP suelen dar acceso de solo lectura a traves de ellas
+    # (el de JH solo deja ver vistas List_*IA), y sin esto la base se veia vacia.
     "mssql": """
         select table_schema as esquema, table_name as tabla
         from information_schema.tables
-        where table_type = 'BASE TABLE'
+        where table_type in ('BASE TABLE', 'VIEW')
         order by table_schema, table_name;
     """,
 }
