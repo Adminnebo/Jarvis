@@ -244,3 +244,18 @@ def test_un_rechazo_al_crear_queda_como_error_de_ese_video(hf):
     asistente.generar("o1", ["reposo"])
     v = asistente.configuracion("o1")["videos"]["reposo"]
     assert v["trabajo_estado"] == "error" and "402" in v["error"]
+
+
+def test_sin_organizacion_se_ve_el_asistente_de_los_paneles(monkeypatch):
+    # El admin de la contrasena no tiene organizacion: ve el de JH (los paneles).
+    from backend import cuentas
+
+    monkeypatch.setenv("JARVIS_NOMBRE", "Nebo")
+    monkeypatch.setenv("JARVIS_ORGANIZACION_PANELES", "JH Electroalambres")
+    cuentas.asegurar_organizacion_de_paneles()
+    asistente.guardar_nombre(cuentas.ID_PANELES, "Camila Reyes")
+    assert asistente.organizacion_de(_usuario(None)) == cuentas.ID_PANELES
+    assert asistente.nombre(_usuario(None)) == "Camila Reyes"
+    # Quien si tiene organizacion sigue con la suya.
+    _org()
+    assert asistente.nombre(_usuario("o1")) == "Nebo"

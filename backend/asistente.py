@@ -31,8 +31,19 @@ def por_defecto() -> str:
     return os.getenv("JARVIS_NOMBRE", "").strip() or "Jarvis"
 
 
+def organizacion_de(usuario: acceso.Usuario | None) -> str | None:
+    """De que organizacion es el asistente que ve esta persona.
+
+    La suya; y quien no tiene (el admin de la contrasena) ve el de los paneles,
+    que es la empresa principal de esta instalacion (hoy JH).
+    """
+    from . import cuentas
+
+    return getattr(usuario, "organizacion_id", None) or cuentas.organizacion_de_paneles()
+
+
 def nombre(usuario: acceso.Usuario | None) -> str:
-    organizacion_id = getattr(usuario, "organizacion_id", None)
+    organizacion_id = organizacion_de(usuario)
     if organizacion_id:
         with basedatos.conexion() as con:
             fila = con.execute(

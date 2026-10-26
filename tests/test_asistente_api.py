@@ -94,3 +94,13 @@ def test_la_web_no_queda_vieja_en_el_navegador(admin):
     # Sin esto, tras un despliegue el navegador seguia usando el app.js viejo.
     for ruta in ("/", "/app.js", "/avatar.js"):
         assert admin.get(ruta).headers.get("cache-control") == "no-cache", ruta
+
+
+def test_el_admin_sin_organizacion_ve_el_avatar_de_los_paneles(admin, monkeypatch):
+    monkeypatch.setenv("JARVIS_ORGANIZACION_PANELES", "JH Electroalambres")
+    cuentas.asegurar_organizacion_de_paneles()
+    asistente.guardar_nombre(cuentas.ID_PANELES, "Camila Reyes")
+    archivo = asistente.guardar_foto(cuentas.ID_PANELES, JPG)
+    estado = admin.get("/api/estado").json()
+    assert estado["nombre"] == "Camila Reyes"
+    assert estado["asistente"]["foto"] == f"/avatares/{cuentas.ID_PANELES}/{archivo}"

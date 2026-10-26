@@ -934,9 +934,10 @@ def _publico(organizacion_id: str) -> dict:
 def _asistente_para(usuario) -> dict:
     """Lo que necesita el avatar de la web: URLs de la foto y de los tres videos."""
     vacio = {"foto": None, "videos": {e: None for e in asistente.ESTADOS}}
-    if not usuario.organizacion_id:
+    organizacion_id = asistente.organizacion_de(usuario)
+    if not organizacion_id:
         return vacio
-    datos = _publico(usuario.organizacion_id)
+    datos = _publico(organizacion_id)
     return {"foto": datos["foto_url"], "videos": {e: v["url"] for e, v in datos["videos"].items()}}
 
 
