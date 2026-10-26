@@ -30,6 +30,7 @@
       <button id="btn-consumo" class="boton-texto" hidden data-super-admin>Consumo</button>
       <button id="btn-fuentes" class="boton-texto" hidden data-super-admin>Fuentes</button>
       <button id="btn-organizacion" class="boton-texto" hidden>Organización</button>
+      <button id="btn-asistente" class="boton-texto" hidden data-super-admin>Asistente</button>
       <button id="btn-dispositivos" class="boton-texto" hidden data-super-admin>Dispositivos</button>
       <button id="btn-memoria" class="boton-texto" hidden data-super-admin>Memoria</button>
       <button id="btn-reiniciar" class="boton-texto" hidden data-super-admin>Reiniciar</button>
@@ -209,6 +210,39 @@
     <div id="codigo-vinculo" class="codigo-vinculo" hidden>
       <div id="codigo-vinculo-texto" class="codigo-vinculo-texto"></div>
       <p id="codigo-vinculo-vence" class="ayuda-tipo"></p>
+    </div>
+  </aside>
+
+  <aside class="panel panel-ancho" id="panel-asistente" hidden>
+    <div class="panel-barra">
+      <h2>Asistente</h2>
+      <button id="btn-cerrar-asistente" class="boton-cerrar"
+              title="Cerrar" aria-label="Cerrar">&times;</button>
+    </div>
+
+    <div class="formulario">
+      <div class="campo">
+        <label for="asistente-org">Organización</label>
+        <select id="asistente-org"></select>
+      </div>
+      <div class="campo">
+        <label for="asistente-nombre">Nombre del asistente</label>
+        <input id="asistente-nombre" type="text" maxlength="40"
+               placeholder="Vacío: el nombre de siempre">
+      </div>
+      <button id="asistente-guardar-nombre" class="boton-texto" type="button">Guardar nombre</button>
+
+      <div class="asistente-foto">
+        <img id="asistente-foto" alt="" hidden>
+        <label class="boton-texto">Subir foto
+          <input id="asistente-archivo" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+        </label>
+        <p class="vacio">De frente, cara bien visible, boca cerrada. JPG, PNG o WEBP, hasta 8 MB.</p>
+      </div>
+
+      <div id="asistente-videos" class="asistente-videos"></div>
+      <button id="asistente-generar-todo" class="boton-texto" type="button">Generar los tres videos</button>
+      <p id="asistente-aviso" class="vacio"></p>
     </div>
   </aside>
 

@@ -1015,3 +1015,18 @@ body {
   .orbe .nucleo { width: 36px; height: 36px; }
   .interruptor span { display: none; }
 }
+
+/* Panel del asistente */
+.asistente-foto { display: flex; align-items: center; gap: 12px; margin: 14px 0; flex-wrap: wrap; }
+.asistente-foto img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 1px solid var(--borde); }
+.asistente-foto .vacio { flex-basis: 100%; margin: 0; }
+.asistente-videos { display: grid; gap: 10px; margin: 12px 0; }
+.asistente-video { display: grid; grid-template-columns: 64px 1fr auto; gap: 4px 10px; align-items: center;
+  background: var(--panel); border: 1px solid var(--borde); border-radius: 10px; padding: 8px; }
+.asistente-video video { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; grid-row: span 2; }
+.asistente-video:not(:has(video)) { grid-template-columns: 1fr auto; }
+.asistente-video .vacio { grid-column: 2; font-size: 12.5px; }
+.asistente-video:not(:has(video)) .vacio { grid-column: 1; }
+.asistente-video button { grid-column: -2; grid-row: 1 / span 2; }
+.campo select { background: var(--fondo); color: var(--texto); border: 1px solid var(--borde);
+  border-radius: 8px; padding: 8px; font-size: 14px; }

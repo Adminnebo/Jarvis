@@ -10,6 +10,7 @@ import { abrirPanelConsumo } from "./consumo.js";
 import { prepararImagen } from "./imagen.js";
 import { abrirPanelDispositivos } from "./dispositivos.js";
 import { abrirPanelOrganizacion } from "./organizacion.js";
+import { abrirPanelAsistente } from "./asistente.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -632,6 +633,7 @@ $("btn-fuentes").addEventListener("click", abrirPanelFuentes);
 $("btn-consumo").addEventListener("click", abrirPanelConsumo);
 $("btn-dispositivos").addEventListener("click", abrirPanelDispositivos);
 $("btn-organizacion").addEventListener("click", abrirPanelOrganizacion);
+$("btn-asistente").addEventListener("click", abrirPanelAsistente);
 
 // --------------------------------------------------------------------------
 // Volver al panel
