@@ -264,6 +264,8 @@ def borrar(id_fuente: str) -> bool:
 
     soltar_conexion(id_fuente)
     olvidar_esquema(id_fuente)
+    from . import accesos   # import tardio: accesos importa fuentes
+    accesos.borrar_de_fuente(id_fuente)
     return True
 
 

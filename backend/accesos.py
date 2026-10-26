@@ -7,6 +7,7 @@ viajan como parametros del driver (%(nombre)s): nunca se pegan en el SQL.
 
 import json
 import re
+import time
 from datetime import date, datetime, timezone
 
 from . import basedatos, fuentes
@@ -129,4 +130,60 @@ def borrar_de_fuente(fuente_id: str) -> None:
         con.execute("DELETE FROM accesos_directos WHERE fuente_id = ?", (fuente_id,))
 
 
+# (id, valores) -> (momento, filas). Se vacia al guardar.
 _cache: dict = {}
+
+
+VIGENCIA = 30  # segundos
+
+
+def _valores(acceso: dict, recibidos: dict) -> dict:
+    valores = {}
+    for nombre, spec in acceso["parametros"].items():
+        crudo = recibidos.get(nombre, spec.get("por_defecto"))
+        if crudo is None:
+            raise ErrorDeAcceso(f"Falta la variable {nombre}: {spec.get('descripcion', '')}.")
+        valores[nombre] = valor(spec, crudo)
+    return valores
+
+
+def _anotar_error(id_acceso: str, texto: str | None) -> None:
+    with basedatos.conexion() as con:
+        con.execute("UPDATE accesos_directos SET ultimo_error = ? WHERE id = ?",
+                    (texto[:300] if texto else None, id_acceso))
+
+
+def ejecutar(id_acceso: str, recibidos: dict | None = None, limite: int = 100) -> dict:
+    """{'filas': [...]} o {'error': texto para el modelo}."""
+    acceso = obtener(id_acceso)
+    if not acceso or not acceso["activo"]:
+        return {"error": f"No hay un acceso directo activo llamado '{id_acceso}'. Usa consultar_fuente."}
+    try:
+        valores = _valores(acceso, recibidos or {})
+    except ErrorDeAcceso as error:
+        return {"error": str(error)}
+    clave = (id_acceso, json.dumps(valores, sort_keys=True))
+    guardado = _cache.get(clave)
+    if guardado and time.monotonic() - guardado[0] < VIGENCIA:
+        return {"filas": guardado[1]}
+    try:
+        filas = fuentes.consultar(acceso["fuente_id"], acceso["sql"], limite, parametros=valores or None)
+    except Exception as error:  # noqa: BLE001 - p. ej. cambio la vista
+        explicacion = fuentes.explicar(error)
+        _anotar_error(id_acceso, explicacion)
+        return {"error": f"El acceso directo fallo ({explicacion}). Responde con consultar_fuente."}
+    if acceso["ultimo_error"]:
+        _anotar_error(id_acceso, None)
+    _cache[clave] = (time.monotonic(), filas)
+    return {"filas": filas}
+
+
+def catalogo_para_prompt() -> str:
+    """Una linea por acceso activo de una fuente activa. Prefijo fijo: el puente lo busca."""
+    ids_activas = {f["id"] for f in fuentes.activas()}
+    lineas = []
+    for a in listar():
+        if a["activo"] and a["fuente_id"] in ids_activas:
+            variables = ", ".join(a["parametros"])
+            lineas.append(f"- acceso {a['id']}({variables}) [fuente {a['fuente_id']}]: {a['descripcion']}")
+    return "\n".join(lineas)
