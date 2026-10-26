@@ -417,7 +417,7 @@ def _con_reintento(id_fuente: str | None, abrir, ejecutar):
 
 
 def consultar_postgres(config: dict, sql: str, limite: int,
-                       id_fuente: str | None = None) -> list[dict]:
+                       id_fuente: str | None = None, parametros: dict | None = None) -> list[dict]:
     import psycopg
     from psycopg.rows import dict_row
 
@@ -429,7 +429,10 @@ def consultar_postgres(config: dict, sql: str, limite: int,
 
     def ejecutar(conexion):
         with conexion.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(sql)
+            if parametros is None:
+                cursor.execute(sql)
+            else:
+                cursor.execute(sql, parametros)
             return [dict(f) for f in cursor.fetchmany(limite)]
 
     return _con_reintento(id_fuente, abrir, ejecutar)
@@ -446,7 +449,7 @@ def _login_fallido(error: Exception) -> bool:
 
 
 def consultar_mssql(config: dict, sql: str, limite: int,
-                    id_fuente: str | None = None) -> list[dict]:
+                    id_fuente: str | None = None, parametros: dict | None = None) -> list[dict]:
     import pymssql
 
     def abrir():
@@ -482,17 +485,22 @@ def consultar_mssql(config: dict, sql: str, limite: int,
 
     def ejecutar(conexion):
         with conexion.cursor(as_dict=True) as cursor:
-            cursor.execute(sql)
+            if parametros is None:
+                cursor.execute(sql)
+            else:
+                cursor.execute(sql, parametros)
             return [dict(f) for f in cursor.fetchmany(limite)]
 
     return _con_reintento(id_fuente, abrir, ejecutar)
 
 
 def consultar_supabase(config: dict, sql: str, limite: int,
-                       id_fuente: str | None = None) -> list[dict]:
+                       id_fuente: str | None = None, parametros: dict | None = None) -> list[dict]:
     # Con cadena directa vamos por Postgres, que es mucho mas rapido.
     if config.get("url"):
-        return consultar_postgres({"url": config["url"]}, sql, limite, id_fuente)
+        return consultar_postgres({"url": config["url"]}, sql, limite, id_fuente, parametros=parametros)
+    if parametros is not None:
+        raise ValueError("Esta fuente (Supabase por MCP) no acepta consultas con variables.")
 
     from . import esquema
 
@@ -509,7 +517,7 @@ MOTORES = {
 }
 
 
-def consultar(id_fuente: str, sql: str, limite: int = 200) -> list[dict]:
+def consultar(id_fuente: str, sql: str, limite: int = 200, parametros: dict | None = None) -> list[dict]:
     fuente = obtener(id_fuente)
     if fuente is None:
         raise ValueError(f"No existe la fuente '{id_fuente}'.")
@@ -519,7 +527,7 @@ def consultar(id_fuente: str, sql: str, limite: int = 200) -> list[dict]:
     if fuente.get("solo_lectura", True):
         validar_solo_lectura(sql)
 
-    return MOTORES[fuente["tipo"]](fuente["config"], sql, limite, id_fuente)
+    return MOTORES[fuente["tipo"]](fuente["config"], sql, limite, id_fuente, parametros=parametros)
 
 
 # --------------------------------------------------------------------------
