@@ -68,3 +68,12 @@ def test_la_correccion_viaja_al_modelo(base, monkeypatch):
     monkeypatch.setattr(redactor, "_cliente", lambda: modelo)
     redactor.proponer_acceso("erp", "p", correccion="solo las no anuladas", anterior={"sql": "select 2"})
     assert "solo las no anuladas" in modelo.pedidos[0]["input"] and "select 2" in modelo.pedidos[0]["input"]
+
+
+def test_el_pedido_menciona_json(base, monkeypatch):
+    # La API exige la palabra JSON en el mensaje (no basta en las instrucciones)
+    # para responder con text.format json_object.
+    modelo = _Modelo({"leyenda": "", "columnas": {}, "reglas": ""})
+    monkeypatch.setattr(redactor, "_cliente", lambda: modelo)
+    redactor.proponer_diccionario("erp", "List_OrdenVentasIA")
+    assert "json" in modelo.pedidos[0]["input"].lower()
