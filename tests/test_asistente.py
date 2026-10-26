@@ -80,3 +80,13 @@ def test_configuracion_de_una_organizacion_sin_nada():
         "videos": {e: {"archivo": None, "trabajo_estado": None, "error": None}
                    for e in asistente.ESTADOS},
     }
+
+
+def test_las_instrucciones_usan_el_nombre_de_la_organizacion(monkeypatch):
+    from backend import cerebro
+
+    monkeypatch.setenv("JARVIS_NOMBRE", "Nebo")
+    _org()
+    asistente.guardar_nombre("o1", "Sofía")
+    assert cerebro.instrucciones(_usuario("o1")).startswith("Eres Sofía, el asistente personal de Ana.")
+    assert cerebro.instrucciones(_usuario(None)).startswith("Eres Nebo, el asistente personal de Ana.")

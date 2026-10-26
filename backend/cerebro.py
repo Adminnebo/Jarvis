@@ -14,6 +14,7 @@ from openai import OpenAI
 from . import (
     acceso,
     archivos,
+    asistente,
     conectores,
     consultas,
     consumo,
@@ -56,7 +57,7 @@ def clave_openai() -> str:
 
 
 def instrucciones(usuario: acceso.Usuario, extra: str = "") -> str:
-    nombre = os.getenv("JARVIS_NOMBRE", "Jarvis")
+    nombre = asistente.nombre(usuario)
     nombre_usuario = usuario.nombre
     ciudad = os.getenv("JARVIS_CIUDAD", "")
 
@@ -435,7 +436,7 @@ def leer_foto(
     aqui: el puente mete la foto directo en su sesion de Realtime.
     """
     modelo = os.getenv("OPENAI_MODEL", "gpt-5.6-terra")
-    nombre = os.getenv("JARVIS_NOMBRE", "Jarvis")
+    nombre = asistente.nombre(usuario)
 
     respuesta = cliente().responses.create(
         model=modelo,
