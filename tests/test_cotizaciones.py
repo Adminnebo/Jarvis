@@ -413,3 +413,13 @@ def test_leer_utilidad_valida_el_rango():
         cotizaciones._leer_utilidad("99")      # > MAX_UTILIDAD
     with pytest.raises(cotizaciones.ErrorCotizacion):
         cotizaciones._leer_utilidad("abc")
+
+
+def test_encontrada_se_guarda_y_vence(catalogo):
+    cotizaciones._encontradas.clear()
+    cotizaciones._encontradas["admin"] = cotizaciones.Encontrada(
+        cliente={"nombre": "X"}, productos=[], numero="JV-00007", total=10.0,
+    )
+    assert cotizaciones.encontrada_de("admin").numero == "JV-00007"
+    cotizaciones._encontradas["admin"].creado -= cotizaciones.VIGENCIA_BORRADOR + 1
+    assert cotizaciones.encontrada_de("admin") is None

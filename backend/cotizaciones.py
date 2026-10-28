@@ -269,6 +269,27 @@ _borradores: dict[str, Borrador] = {}
 _candado = threading.Lock()
 
 
+@dataclass
+class Encontrada:
+    """La ultima cotizacion emitida que se busco, para recotizarla despues."""
+    cliente: dict
+    productos: list[dict]
+    numero: str
+    total: float
+    creado: float = field(default_factory=time.time)
+
+
+_encontradas: dict[str, Encontrada] = {}
+
+
+def encontrada_de(id_usuario: str) -> Encontrada | None:
+    with _candado:
+        encontrada = _encontradas.get(id_usuario)
+    if encontrada and time.time() - encontrada.creado > VIGENCIA_BORRADOR:
+        return None
+    return encontrada
+
+
 def _leer_productos(productos) -> list[tuple[str, float]]:
     import json
 
