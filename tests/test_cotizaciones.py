@@ -476,3 +476,35 @@ def test_varios_clientes_pide_elegir(emitidas):
 
 def test_sin_cotizaciones_lo_dice(emitidas):
     assert "No encontr" in _buscar("4926")   # cliente existe pero sin cotizaciones
+
+
+def _recotizar(nivel, utilidad="", usuario="admin"):
+    return herramientas.ejecutar(
+        "recotizar", json.dumps({"nivel": nivel, "utilidad": utilidad}), usuario
+    )
+
+
+def test_recotizar_usa_el_nivel_sin_factor(emitidas):
+    _buscar("6177")
+    texto = _recotizar("7")
+    borrador = cotizaciones.borrador_de("admin")
+    assert borrador.lineas[0]["precio_unitario"] == 11.5     # P7 crudo, sin factor
+    assert borrador.totales["total"] == 1150.0
+    assert "aun NO emitido" in texto and "precio P7" in texto
+
+
+def test_recotizar_con_utilidad(emitidas):
+    _buscar("6177")
+    _recotizar("5", "6")
+    borrador = cotizaciones.borrador_de("admin")
+    assert borrador.lineas[0]["precio_unitario"] == 13.30    # P5=12.5 / 0.94
+
+
+def test_recotizar_sin_encontrada_lo_dice(emitidas):
+    cotizaciones._encontradas.clear()
+    assert "usca" in _recotizar("7")
+
+
+def test_recotizar_nivel_invalido(emitidas):
+    _buscar("6177")
+    assert "P1 a P7" in _recotizar("banana")

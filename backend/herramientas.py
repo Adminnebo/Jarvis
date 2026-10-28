@@ -460,6 +460,24 @@ def buscar_cotizacion(consulta: str, usuario: str = "") -> str:
         return str(error)
 
 
+@herramienta(
+    "Recotiza los productos de la ultima cotizacion encontrada con buscar_cotizacion, "
+    "a un nivel de precio que elige el usuario. Arma un BORRADOR (no lo emite): mismos "
+    "productos y cantidades, precio del nivel pedido (P1..P7) y, si lo piden, un % de "
+    "utilidad encima. Despues emite con emitir_cotizacion solo si el usuario confirma.",
+    disponible=_cotizaciones_disponibles,
+    nivel="El nivel de precio que pidieron, P1 a P7 ('a precio 7' es P7)",
+    utilidad="Opcional: % de utilidad encima del nivel ('precio 5 con 6' es 6). Vacio o 0 = el nivel pelado.",
+)
+def recotizar(nivel: str, utilidad: str = "", usuario: str = "") -> str:
+    from . import cotizaciones
+
+    try:
+        return cotizaciones.recotizar(usuario, nivel, utilidad or 0)
+    except cotizaciones.ErrorCotizacion as error:
+        return str(error)
+
+
 # --------------------------------------------------------------------------
 # WhatsApp
 # --------------------------------------------------------------------------

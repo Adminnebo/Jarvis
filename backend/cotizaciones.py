@@ -825,6 +825,63 @@ def buscar(id_usuario: str, consulta: str) -> str:
     return _guardar_y_resumir(id_usuario, filas[0], nota)
 
 
+def _normalizar_nivel(texto: str) -> str:
+    """"7", "P7", "precio 7" -> "P7". Error si no es P1..P7."""
+    encontrado = re.search(r"[1-7]", str(texto or ""))
+    if not encontrado:
+        raise ErrorCotizacion("El nivel tiene que ser de P1 a P7. ¿A que nivel la quieres?")
+    return f"P{encontrado.group(0)}"
+
+
+def recotizar(id_usuario: str, nivel: str, utilidad=0) -> str:
+    """Rearma un borrador con los productos de la cotizacion encontrada, al nivel pedido."""
+    encontrada = encontrada_de(id_usuario)
+    if encontrada is None:
+        raise ErrorCotizacion(
+            "No hay una cotizacion encontrada (o paso media hora). Busca primero con buscar_cotizacion."
+        )
+    nivel_elegido = _normalizar_nivel(nivel)
+    por_ciento = _leer_utilidad(utilidad)
+
+    pedidos = [(_texto(l["codigo"]).upper(), float(l["cantidad"])) for l in encontrada.productos]
+    catalogo = productos_del_catalogo([codigo for codigo, _ in pedidos])
+    faltan = [codigo for codigo, _ in pedidos if codigo not in catalogo]
+    if faltan:
+        raise ErrorCotizacion(
+            f"Ya no estan en el catalogo: {', '.join(faltan)}. No puedo recotizar esos productos."
+        )
+
+    lineas = [
+        calcular_linea(catalogo[codigo], cantidad, nivel_elegido, 1.0,
+                       coste=None, utilidad_nivel=por_ciento)
+        for codigo, cantidad in pedidos
+    ]
+    sin_precio = [l["descripcion"] or l["codigo"] for l in lineas if l["precio_unitario"] <= 0]
+    if sin_precio:
+        raise ErrorCotizacion(
+            f"Sin precio {nivel_elegido} en el catalogo: {', '.join(sin_precio)}. "
+            "No se puede cotizar asi; dilo."
+        )
+
+    totales = totalizar(lineas)
+    with _candado:
+        _borradores[id_usuario] = Borrador(encontrada.cliente, lineas, totales)
+
+    detalle = "; ".join(
+        f"{_cantidad(l['cantidad'])} {l['unidad'] or 'UND'} de {l['descripcion']} "
+        f"a {_num(l['precio_unitario'])} = {_num(l['subtotal_linea'])}"
+        for l in lineas
+    )
+    extra = f" con {_cantidad(por_ciento)}% de utilidad" if por_ciento else ""
+    return (
+        f"Borrador listo (aun NO emitido). Cliente: {encontrada.cliente['nombre']} "
+        f"(precio {nivel_elegido}{extra}). {len(lineas)} producto(s): {detalle}. "
+        f"Total RD$ {_num(totales['total'])}, ITBIS incluido RD$ {_num(totales['itbis'])}. "
+        "Resume cliente, cantidad de productos y total, y pregunta si la emite. "
+        "Llama a emitir_cotizacion solo si dice que si."
+    )
+
+
 # Como toLocaleDateString('en-GB') en n8n: septiembre es "Sept".
 _MESES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec")
 
