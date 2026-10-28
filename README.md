@@ -593,8 +593,12 @@ Siempre en dos pasos:
 Además puede **retomar una cotización ya emitida** y re-cotizarla a otro precio:
 
 1. **`buscar_cotizacion`**: "dame la última cotización de Ferretería Eliam" / "del
-   cliente 6177" / "del RNC 131…" / "la JV-12". Resuelve el cliente contra la Base
-   JH y trae la última emitida (número, cliente, fecha, total y productos).
+   cliente 6177" / "del RNC 131…" / "la JV-12" / "la 3807". Busca en **las dos
+   fuentes**: las de Jarvis (`jarvis_cotizaciones`, número `JV-…`) y las **reales
+   de JH** (vistas `iCotizacionesWebIA`/`dCotizacionesWebIA`, número tipo 3807).
+   Resuelve el cliente contra la Base JH y trae la última emitida (número, cliente,
+   fecha, total y estado). Si el cliente tiene en ambas, muestra la última de cada
+   una y pregunta con cuál seguir.
 2. **`recotizar`**: "ahora los quiero a precio 7" o "precio 5 con un 6%". Toma los
    mismos productos y cantidades y los re-cotiza al nivel elegido (Pn crudo del
    catálogo, sin factor del cliente) con la utilidad opcional encima

@@ -22,6 +22,18 @@ CLIENTES = [
      "email": "f@x.com", "telefono1": "8095551234", "Celular": "", "NivelPrecio": "P4", "factor": 1.0},
     {"codigo": 4926, "nombre": "FERRETERIA OTRA", "rnc": "", "direccion": "", "email": None,
      "telefono1": "", "Celular": "809", "NivelPrecio": "P2", "factor": 1.1},
+    {"codigo": 7000, "nombre": "FERRETERIA SOLO JV", "rnc": "", "direccion": "", "email": None,
+     "telefono1": "", "Celular": "", "NivelPrecio": "P1", "factor": 1.0},
+]
+# Cotizacion real de JH (vistas iCotizacionesWebIA / dCotizacionesWebIA).
+HEADER_JH = {
+    "nfactura": 3807, "cliente": 6177, "clientenombre": "FERRETERIA ELIAM MAX EIRL",
+    "RNC": "131832334", "Telefono": "8095551234", "Direccion": "C/ 1", "Correo": "f@x.com",
+    "Ciudad": "", "Sector": "", "Contacto": "", "fecha": "2026-10-28T10:00:00",
+    "total": 28582.40, "confirmada": 1, "pago": 0,
+}
+DETALLE_JH = [
+    {"codigo": "9681", "cantidad": 100.0, "Descripcion": "KEYARD ALAMBRE THHN #12 ROJO", "Und": "PIES"},
 ]
 
 
@@ -42,10 +54,18 @@ def catalogo(entorno_limpio, monkeypatch):
         consultas.append(sql)
         if "List_ProductosIA" in sql:
             return [f for c, f in PRODUCTOS.items() if f"'{c}'" in sql]
+        if "iCotizacionesWebIA" in sql:            # cabecera de JH
+            if "nfactura = 3807" in sql or "cliente = 6177" in sql:
+                return [HEADER_JH]
+            return []
+        if "dCotizacionesWebIA" in sql:            # lineas de JH
+            return DETALLE_JH if "nfactura = 3807" in sql else []
         if "codigo = 6177" in sql or "131832334" in sql or "ELIAM" in sql:
             return [CLIENTES[0]]
         if "codigo = 4926" in sql:
             return [CLIENTES[1]]
+        if "codigo = 7000" in sql:
+            return [CLIENTES[2]]
         if "FERRETERIA" in sql:
             return CLIENTES
         return []
@@ -433,6 +453,15 @@ FILA_EMITIDA = {
     "productos": [{"codigo": "9681", "descripcion": "KEYARD ALAMBRE THHN #12 ROJO",
                    "unidad": "PIES", "cantidad": 100, "precio_unitario": 13.0}],
 }
+# Una JV de un cliente que NO tiene nada en JH (cliente 7000), para el camino
+# en que la busqueda por cliente devuelve solo la de Jarvis.
+FILA_JV_SOLO = {
+    "numero": 11, "creada_at": "2026-10-19T09:00:00+00:00", "total": 1150.0,
+    "cliente": {"codigo": "7000", "nombre": "FERRETERIA SOLO JV", "rnc": "",
+                "nivel": "P1", "factor": 1.0},
+    "productos": [{"codigo": "9681", "descripcion": "KEYARD ALAMBRE THHN #12 ROJO",
+                   "unidad": "PIES", "cantidad": 100, "precio_unitario": 13.0}],
+}
 
 
 @pytest.fixture
@@ -444,6 +473,8 @@ def emitidas(catalogo, monkeypatch):
             return [FILA_EMITIDA] if params["numero"] == "eq.12" else []
         if params.get("cliente->>codigo") == "eq.6177":
             return [FILA_EMITIDA]
+        if params.get("cliente->>codigo") == "eq.7000":
+            return [FILA_JV_SOLO]
         if "cliente->>nombre" in params:
             return [FILA_EMITIDA] if "ELIAM" in params["cliente->>nombre"].upper() else []
         return []
@@ -455,18 +486,24 @@ def _buscar(consulta, usuario="admin"):
     return herramientas.ejecutar("buscar_cotizacion", json.dumps({"consulta": consulta}), usuario)
 
 
-def test_busca_por_codigo_y_la_guarda(emitidas):
-    texto = _buscar("6177")
-    assert "JV-00012" in texto and "KEYARD" in texto
-    assert cotizaciones.encontrada_de("admin").numero == "JV-00012"
+def test_busca_por_codigo_solo_jv_la_guarda(emitidas):
+    # 7000 solo tiene JV: la trae directo y la guarda.
+    texto = _buscar("7000")
+    assert "JV-00011" in texto and "KEYARD" in texto
+    enc = cotizaciones.encontrada_de("admin")
+    assert enc.numero == "JV-00011" and enc.fuente == "jv"
 
 
-def test_busca_por_numero_jv(emitidas):
+def test_busca_por_numero_jv_la_guarda(emitidas):
     assert "JV-00012" in _buscar("la JV-12")
+    enc = cotizaciones.encontrada_de("admin")
+    assert enc.numero == "JV-00012" and enc.fuente == "jv"
 
 
-def test_busca_por_rnc(emitidas):
-    assert "JV-00012" in _buscar("131832334")
+def test_busca_por_rnc_resuelve_el_cliente(emitidas):
+    # RNC -> cliente 6177, que tiene en ambas fuentes: pide elegir.
+    texto = _buscar("131832334")
+    assert "3807" in texto and "JV-00012" in texto
 
 
 def test_varios_clientes_pide_elegir(emitidas):
@@ -486,7 +523,7 @@ def _recotizar(nivel, utilidad="", usuario="admin"):
 
 
 def test_recotizar_usa_el_nivel_sin_factor(emitidas):
-    _buscar("6177")
+    _buscar("7000")
     texto = _recotizar("7")
     borrador = cotizaciones.borrador_de("admin")
     assert borrador.lineas[0]["precio_unitario"] == 11.5     # P7 crudo, sin factor
@@ -495,7 +532,7 @@ def test_recotizar_usa_el_nivel_sin_factor(emitidas):
 
 
 def test_recotizar_con_utilidad(emitidas):
-    _buscar("6177")
+    _buscar("7000")
     _recotizar("5", "6")
     borrador = cotizaciones.borrador_de("admin")
     assert borrador.lineas[0]["precio_unitario"] == 13.30    # P5=12.5 / 0.94
@@ -507,7 +544,7 @@ def test_recotizar_sin_encontrada_lo_dice(emitidas):
 
 
 def test_recotizar_nivel_invalido(emitidas):
-    _buscar("6177")
+    _buscar("7000")
     assert "P1 a P7" in _recotizar("banana")
 
 
@@ -517,13 +554,41 @@ def servicios_y_emitidas(servicios, emitidas):
 
 
 def test_recotizar_y_emitir_saca_una_jv_nueva(servicios_y_emitidas):
-    _buscar("6177")
+    _buscar("7000")
     _recotizar("7")
     texto, adjuntos = herramientas.ejecutar_completo("emitir_cotizacion", "{}", "admin")
     assert "JV-00007" in texto                      # _insertar mock devuelve 7
     fila = servicios_y_emitidas["insertar"][0]
-    assert fila["cliente"]["codigo"] == "6177"
+    assert fila["cliente"]["codigo"] == "7000"
     assert fila["productos"][0]["codigo"] == "9681"
     assert fila["productos"][0]["precio_unitario"] == 11.5   # el nivel P7 recotizado
     assert fila["total"] == 1150.0
     assert adjuntos[0]["numero"] == "JV-00007"
+
+
+# --- Cotizaciones reales de JH ---
+
+def test_busca_cotizacion_jh_por_numero(emitidas):
+    texto = _buscar("la 3807")
+    assert "3807" in texto and "FERRETERIA ELIAM MAX EIRL" in texto
+    encontrada = cotizaciones.encontrada_de("admin")
+    assert encontrada.fuente == "jh"
+    assert encontrada.productos[0]["codigo"] == "9681"
+
+
+def test_busca_por_cliente_con_ambas_pregunta(emitidas):
+    # 6177 tiene JV (FILA_EMITIDA) y JH (HEADER_JH): debe pedir elegir.
+    texto = _buscar("6177")
+    assert "3807" in texto and "JV-00012" in texto
+    assert cotizaciones.encontrada_de("admin") is None
+
+
+def test_recotizar_desde_jh_emite_jv(servicios_y_emitidas):
+    _buscar("la 3807")                       # cotizacion de JH
+    _recotizar("7")
+    texto, adjuntos = herramientas.ejecutar_completo("emitir_cotizacion", "{}", "admin")
+    assert "JV-00007" in texto               # la nueva es JV, no toca la 3807
+    fila = servicios_y_emitidas["insertar"][0]
+    assert fila["cliente"]["nombre"] == "FERRETERIA ELIAM MAX EIRL"
+    assert fila["productos"][0]["codigo"] == "9681"
+    assert fila["productos"][0]["precio_unitario"] == 11.5

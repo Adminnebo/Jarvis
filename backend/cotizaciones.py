@@ -276,6 +276,7 @@ class Encontrada:
     productos: list[dict]
     numero: str
     total: float
+    fuente: str = "jv"          # "jv" (jarvis_cotizaciones) o "jh" (Base JH)
     creado: float = field(default_factory=time.time)
 
 
@@ -755,44 +756,145 @@ def _fecha_corta(iso) -> str:
         return ""
 
 
-def _guardar_y_resumir(id_usuario: str, fila: dict, nota: str = "") -> str:
-    cliente = fila["cliente"]
-    productos = fila["productos"]
-    numero = formato(int(fila["numero"]))
+def _resumen(id_usuario: str, encontrada: Encontrada, fecha: str = "",
+             estado: str = "", nota: str = "") -> str:
     with _candado:
-        _encontradas[id_usuario] = Encontrada(cliente, productos, numero, float(fila["total"]))
+        _encontradas[id_usuario] = encontrada
     detalle = "; ".join(
         f"{_cantidad(float(l['cantidad']))} {l.get('unidad') or 'UND'} de "
         f"{l.get('descripcion') or l.get('codigo')} (cod {l.get('codigo')})"
-        for l in productos
+        for l in encontrada.productos
     )
-    fecha = _fecha_corta(fila.get("creada_at"))
     return (
-        f"{nota}Cotizacion {numero} de {cliente.get('nombre')}"
+        f"{nota}Cotizacion {encontrada.numero} de {encontrada.cliente.get('nombre')}"
         + (f" ({fecha})" if fecha else "")
-        + f", total RD$ {_num(float(fila['total']))}. {len(productos)} producto(s): {detalle}. "
+        + f", total RD$ {_num(encontrada.total)}"
+        + (f", {estado}" if estado else "")
+        + f". {len(encontrada.productos)} producto(s): {detalle}. "
         "Para recotizarla a otro nivel, di el nivel (P1 a P7) y, si quieres, el % de utilidad. "
         "No leas el numero completo ni los precios salvo que lo pidan."
     )
 
 
+def _guardar_y_resumir(id_usuario: str, fila: dict, nota: str = "") -> str:
+    encontrada = Encontrada(
+        cliente=fila["cliente"], productos=fila["productos"],
+        numero=formato(int(fila["numero"])), total=float(fila["total"]), fuente="jv",
+    )
+    return _resumen(id_usuario, encontrada, _fecha_corta(fila.get("creada_at")), nota=nota)
+
+
+# --- Cotizaciones reales de JH (solo lectura, vistas iCotizacionesWebIA / dCotizacionesWebIA) ---
+
+_COLUMNAS_COTIZ_JH = (
+    "nfactura, cliente, clientenombre, RTRIM(RNC) AS RNC, Telefono, Direccion, "
+    "Correo, Ciudad, Sector, Contacto, fecha, total, confirmada, pago"
+)
+
+
+def _cotiz_jh_por_numero(nfactura: int) -> dict | None:
+    filas = _consultar(
+        f"SELECT TOP 1 {_COLUMNAS_COTIZ_JH} FROM dbo.iCotizacionesWebIA "
+        f"WHERE nfactura = {int(nfactura)}"
+    )
+    return filas[0] if filas else None
+
+
+def _cotiz_jh_de_cliente(codigo: int, limite: int = 5) -> list[dict]:
+    return _consultar(
+        f"SELECT TOP {int(limite)} {_COLUMNAS_COTIZ_JH} FROM dbo.iCotizacionesWebIA "
+        f"WHERE cliente = {int(codigo)} ORDER BY fecha DESC, nfactura DESC"
+    )
+
+
+def _detalle_jh(nfactura: int) -> list[dict]:
+    return _consultar(
+        "SELECT LTRIM(RTRIM(codigo)) AS codigo, cantidad, Descripcion, Und "
+        f"FROM dbo.dCotizacionesWebIA WHERE nfactura = {int(nfactura)}"
+    )
+
+
+def _encontrada_desde_jh(header: dict) -> Encontrada:
+    """Normaliza una cabecera de JH + sus lineas a la forma de Encontrada."""
+    nivel = f"P{int(header.get('nivel') or 0)}"
+    cliente = {
+        "codigo": _texto(header.get("cliente")),
+        "nombre": _texto(header.get("clientenombre")),
+        "rnc": _texto(header.get("RNC")),
+        "direccion": _texto(header.get("Direccion")),
+        "email": _texto(header.get("Correo")),
+        "telefono": _texto(header.get("Telefono")),
+        "nivel": nivel if nivel in NIVELES else "P1",
+        "factor": 1.0,
+        "ciudad": _texto(header.get("Ciudad")),
+        "contacto": _texto(header.get("Contacto")),
+        "sector": _texto(header.get("Sector")),
+    }
+    productos = [
+        {"codigo": _texto(l.get("codigo")), "cantidad": float(l.get("cantidad") or 0),
+         "descripcion": _texto(l.get("Descripcion")), "unidad": _texto(l.get("Und"))}
+        for l in _detalle_jh(int(header["nfactura"]))
+    ]
+    return Encontrada(cliente, productos, str(int(header["nfactura"])),
+                      float(header.get("total") or 0), fuente="jh")
+
+
+def _estado_jh(header: dict) -> str:
+    partes = ["confirmada" if header.get("confirmada") else "sin confirmar"]
+    partes.append("pagada" if header.get("pago") else "no pagada")
+    return ", ".join(partes)
+
+
+# Palabras de relleno al pedir "la cotizacion numero X": si al quitarlas solo
+# queda un numero, ese numero es el de una cotizacion (no el codigo de un cliente).
+_FILLER = {
+    "la", "el", "los", "las", "de", "del", "por", "favor", "dame", "muestra",
+    "cotizacion", "cotización", "numero", "número", "nro", "factura", "orden",
+    "nota", "ver", "y", "jv", "jarvis", "n", "cliente", "clienta",
+}
+
+
+def _numero_suelto(texto: str) -> int | None:
+    """El numero, si el texto es solo un numero con palabras de relleno."""
+    tokens = re.findall(r"[0-9]+|[a-záéíóúñ#]+", texto.lower())
+    numeros = [t for t in tokens if t.isdigit()]
+    letras = [t for t in tokens if not t.isdigit() and t.strip("#") not in _FILLER]
+    return int(numeros[0]) if len(numeros) == 1 and not letras else None
+
+
+def _jv_por_numero(id_usuario: str, numero: str) -> str:
+    filas = _filas_emitidas({
+        "numero": f"eq.{int(numero[len(PREFIJO):])}",
+        "estado": "eq.emitida", "select": _SELECT_ENCONTRADA,
+    })
+    if not filas:
+        raise ErrorCotizacion(f"No encontre la cotizacion {numero} emitida.")
+    return _guardar_y_resumir(id_usuario, filas[0])
+
+
 def buscar(id_usuario: str, consulta: str) -> str:
-    """Encuentra la ultima cotizacion emitida para mostrarla y recordarla."""
+    """Encuentra la ultima cotizacion (JH o JV) para mostrarla y recordarla."""
     texto = (consulta or "").strip()
     if not texto:
-        raise ErrorCotizacion("Dime de que cliente o que numero JV busco la cotizacion.")
+        raise ErrorCotizacion("Dime de que cliente o que numero de cotizacion busco.")
 
-    numero = _normalizar_jv(texto)
-    if numero:
-        filas = _filas_emitidas({
-            "numero": f"eq.{int(numero[len(PREFIJO):])}",
-            "estado": "eq.emitida", "select": _SELECT_ENCONTRADA,
-        })
-        if not filas:
-            raise ErrorCotizacion(f"No encontre la cotizacion {numero} emitida.")
-        return _guardar_y_resumir(id_usuario, filas[0])
+    # 1. Numero JV explicito -> cotizaciones de Jarvis.
+    numero_jv = _normalizar_jv(texto)
+    if numero_jv:
+        return _jv_por_numero(id_usuario, numero_jv)
 
-    clientes = buscar_cliente(texto)
+    # 2. Numero suelto -> cotizacion real de JH por su nfactura.
+    consulta_cliente = texto
+    numero = _numero_suelto(texto)
+    if numero is not None:
+        header = _cotiz_jh_por_numero(numero)
+        if header:
+            enc = _encontrada_desde_jh(header)
+            return _resumen(id_usuario, enc, _fecha_corta(header.get("fecha")), _estado_jh(header))
+        consulta_cliente = str(numero)   # no es una cotizacion; pruebalo como codigo
+
+    # 3. Resolver el cliente y buscar en AMBAS fuentes.
+    clientes = buscar_cliente(consulta_cliente)
     if len(clientes) > 1:
         opciones = "; ".join(f"{_texto(c['nombre'])} (codigo {c['codigo']})" for c in clientes[:5])
         raise ErrorCotizacion(
@@ -800,19 +902,33 @@ def buscar(id_usuario: str, consulta: str) -> str:
         )
     if clientes:
         codigo = _texto(clientes[0].get("codigo"))
-        filas = _filas_emitidas({
+        nombre_cli = _texto(clientes[0].get("nombre"))
+        jh = _cotiz_jh_de_cliente(int(codigo)) if codigo.isdigit() else []
+        jv = _filas_emitidas({
             "cliente->>codigo": f"eq.{codigo}", "estado": "eq.emitida",
             "order": "numero.desc", "limit": "5", "select": _SELECT_ENCONTRADA,
         })
-        if filas:
-            nota = f"(hay {len(filas)} de este cliente; esta es la ultima) " if len(filas) > 1 else ""
-            return _guardar_y_resumir(id_usuario, filas[0], nota)
+        if jh and jv:
+            h, v = jh[0], jv[0]
+            raise ErrorCotizacion(
+                f"{nombre_cli} tiene cotizaciones en los dos lados: la {int(h['nfactura'])} de JH "
+                f"({_fecha_corta(h.get('fecha'))}, RD$ {_num(float(h.get('total') or 0))}) y la "
+                f"{formato(int(v['numero']))} de Jarvis ({_fecha_corta(v.get('creada_at'))}, "
+                f"RD$ {_num(float(v['total']))}). Dime con cual sigo, por el numero."
+            )
+        if jh:
+            header = jh[0]
+            nota = f"(hay {len(jh)} de JH de este cliente; esta es la ultima) " if len(jh) > 1 else ""
+            enc = _encontrada_desde_jh(header)
+            return _resumen(id_usuario, enc, _fecha_corta(header.get("fecha")), _estado_jh(header), nota)
+        if jv:
+            nota = f"(hay {len(jv)} de Jarvis de este cliente; esta es la ultima) " if len(jv) > 1 else ""
+            return _guardar_y_resumir(id_usuario, jv[0], nota)
         raise ErrorCotizacion(
-            f"No encontre cotizaciones de {_texto(clientes[0].get('nombre'))}. "
-            "Si quieres, preparo una nueva con preparar_cotizacion."
+            f"No encontre cotizaciones de {nombre_cli}. Si quieres, preparo una nueva con preparar_cotizacion."
         )
 
-    # Respaldo: por nombre dentro de las emitidas (sirve para clientes de contado).
+    # 4. Respaldo: por nombre dentro de las JV (sirve para clientes de contado).
     filas = _filas_emitidas({
         "cliente->>nombre": f"ilike.*{texto}*", "estado": "eq.emitida",
         "order": "numero.desc", "limit": "5", "select": _SELECT_ENCONTRADA,
