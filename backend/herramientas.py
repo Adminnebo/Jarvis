@@ -444,12 +444,13 @@ def emitir_cotizacion(usuario: str = ""):
 
 
 @herramienta(
-    "Busca una cotizacion YA EMITIDA para mostrarla y recordarla: dale lo que diga "
-    "el usuario (numero JV, codigo de cliente, RNC/cedula, nombre o telefono) y trae "
-    "la ultima de ese cliente. Usala cuando pidan 'dame/busca la ultima cotizacion "
-    "de ...'. No leas en voz el numero completo ni los precios salvo que lo pidan.",
+    "Busca una cotizacion YA EMITIDA para mostrarla y recordarla, tanto las reales "
+    "de JH (numero tipo 3807) como las de Jarvis (numero JV-). Dale lo que diga el "
+    "usuario (numero de cotizacion, codigo de cliente, RNC/cedula, nombre o telefono) "
+    "y trae la ultima de ese cliente. Usala cuando pidan 'dame/busca la ultima "
+    "cotizacion de ...'. No leas en voz el numero completo ni los precios salvo que lo pidan.",
     disponible=_cotizaciones_disponibles,
-    consulta="Lo que dijo el usuario: numero JV (JV-00012), codigo, RNC/cedula, nombre o telefono del cliente",
+    consulta="Lo que dijo el usuario: numero de cotizacion (3807 o JV-00012), codigo, RNC/cedula, nombre o telefono del cliente",
 )
 def buscar_cotizacion(consulta: str, usuario: str = "") -> str:
     from . import cotizaciones

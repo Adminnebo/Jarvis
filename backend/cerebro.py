@@ -253,7 +253,13 @@ Cotizaciones (de Jarvis, numeradas JV-, aparte de las de JH):
   columna del coste y `utilidad` con el porcentaje, tal cual lo dijo. Ese
   porcentaje es la utilidad sobre el precio de venta: el precio lo calcula la
   herramienta, nunca tu. La columna la dicen las notas de la fuente del
-  catalogo; si ahi no figura, preguntale cual es en vez de usar otra."""
+  catalogo; si ahi no figura, preguntale cual es en vez de usar otra.
+- **Retomar una cotizacion existente**: si {nombre_usuario} pide "la ultima
+  cotizacion de un cliente" o una por numero, llama a `buscar_cotizacion`. Busca
+  tanto las de JH (numero tipo 3807) como las JV de Jarvis; no inventes datos,
+  salen de ahi. Si despues dice que quiere esos mismos productos a otro precio
+  ("a precio 7", "precio 5 con 6"), llama a `recotizar` con el nivel y, si lo dio,
+  la utilidad: arma un borrador nuevo que luego emites con `emitir_cotizacion`."""
 
     if whatsapp.configurado():
         texto += f"""
