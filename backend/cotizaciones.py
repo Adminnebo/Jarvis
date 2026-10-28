@@ -442,10 +442,8 @@ def _cantidad(valor: float) -> str:
     return f"{valor:g}"
 
 
-def _leer_coste(columna: str, utilidad) -> dict | None:
-    """Los datos para cotizar desde el coste, o None para usar los niveles."""
-    if not (columna or "").strip():
-        return None
+def _leer_utilidad(utilidad) -> float:
+    """El porcentaje de utilidad, validado. Es la parte del precio de venta."""
     try:
         por_ciento = float(utilidad or 0)
     except (TypeError, ValueError):
@@ -455,7 +453,14 @@ def _leer_coste(columna: str, utilidad) -> dict | None:
             f"El porcentaje de utilidad tiene que estar entre 0 y {MAX_UTILIDAD:g}. "
             "Es la parte del precio de venta, no lo que se le suma al coste."
         )
-    return {"columna": columna.strip(), "utilidad": por_ciento}
+    return por_ciento
+
+
+def _leer_coste(columna: str, utilidad) -> dict | None:
+    """Los datos para cotizar desde el coste, o None para usar los niveles."""
+    if not (columna or "").strip():
+        return None
+    return {"columna": columna.strip(), "utilidad": _leer_utilidad(utilidad)}
 
 
 def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,

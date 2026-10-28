@@ -404,3 +404,12 @@ def test_calcular_linea_nivel_elegido_sin_factor_con_utilidad(catalogo):
     # P5 (12.5) con 6% de utilidad: 12.5 / (1 - 0.06) = 13.2978 -> 13.30
     con_util = cotizaciones.calcular_linea(fila, 100, "P5", 1.0, utilidad_nivel=6)
     assert con_util["precio_unitario"] == 13.30
+
+
+def test_leer_utilidad_valida_el_rango():
+    assert cotizaciones._leer_utilidad("6") == 6.0
+    assert cotizaciones._leer_utilidad("") == 0.0
+    with pytest.raises(cotizaciones.ErrorCotizacion):
+        cotizaciones._leer_utilidad("99")      # > MAX_UTILIDAD
+    with pytest.raises(cotizaciones.ErrorCotizacion):
+        cotizaciones._leer_utilidad("abc")
