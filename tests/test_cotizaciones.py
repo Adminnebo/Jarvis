@@ -392,3 +392,15 @@ def test_un_rnc_que_no_se_parece_a_ninguno_manda_a_repetirlo(catalogo):
 
 def test_el_rnc_exacto_sigue_entrando_directo(catalogo):
     assert "FERRETERIA ELIAM MAX EIRL" in _preparar(cliente="1-31-83233-4")
+
+
+# --- Recotizar desde una cotizacion existente ---
+
+def test_calcular_linea_nivel_elegido_sin_factor_con_utilidad(catalogo):
+    fila = PRODUCTOS["9681"]
+    # P7 pelado, sin factor: 11.5 tal cual
+    linea = cotizaciones.calcular_linea(fila, 100, "P7", 1.0)
+    assert linea["precio_unitario"] == 11.5
+    # P5 (12.5) con 6% de utilidad: 12.5 / (1 - 0.06) = 13.2978 -> 13.30
+    con_util = cotizaciones.calcular_linea(fila, 100, "P5", 1.0, utilidad_nivel=6)
+    assert con_util["precio_unitario"] == 13.30

@@ -381,7 +381,7 @@ def _resolver_cliente(texto: str, contado: bool, ciudad: str, contacto: str) -> 
 
 
 def calcular_linea(fila: dict, cantidad: float, nivel: str, factor: float,
-                   coste: dict | None = None) -> dict:
+                   coste: dict | None = None, utilidad_nivel: float = 0.0) -> dict:
     """Una linea con los mismos calculos que la plantilla de n8n.
 
     Los precios del catalogo ya incluyen ITBIS: el bruto se despeja.
@@ -395,7 +395,11 @@ def calcular_linea(fila: dict, cantidad: float, nivel: str, factor: float,
         tasa = 0.0
 
     if coste is None:
+        # Precio del nivel. Con utilidad_nivel (recotizar a un nivel elegido) se
+        # le aplica el mismo margen que al coste: PV = base / (1 - %/100).
         precio = round(float(fila.get(nivel) or 0) * factor, 2)
+        if utilidad_nivel:
+            precio = round(precio / (1 - utilidad_nivel / 100), 2)
         base = 0.0
     else:
         # El coste de este catalogo ya trae el ITBIS adentro, igual que los
