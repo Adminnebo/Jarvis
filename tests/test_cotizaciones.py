@@ -423,3 +423,56 @@ def test_encontrada_se_guarda_y_vence(catalogo):
     assert cotizaciones.encontrada_de("admin").numero == "JV-00007"
     cotizaciones._encontradas["admin"].creado -= cotizaciones.VIGENCIA_BORRADOR + 1
     assert cotizaciones.encontrada_de("admin") is None
+
+
+FILA_EMITIDA = {
+    "numero": 12, "creada_at": "2026-10-20T14:00:00+00:00", "total": 1150.0,
+    "cliente": {"codigo": "6177", "nombre": "FERRETERIA ELIAM MAX EIRL",
+                "rnc": "131832334", "nivel": "P4", "factor": 1.0},
+    "productos": [{"codigo": "9681", "descripcion": "KEYARD ALAMBRE THHN #12 ROJO",
+                   "unidad": "PIES", "cantidad": 100, "precio_unitario": 13.0}],
+}
+
+
+@pytest.fixture
+def emitidas(catalogo, monkeypatch):
+    cotizaciones._encontradas.clear()
+
+    def filas(params):
+        if "numero" in params:
+            return [FILA_EMITIDA] if params["numero"] == "eq.12" else []
+        if params.get("cliente->>codigo") == "eq.6177":
+            return [FILA_EMITIDA]
+        if "cliente->>nombre" in params:
+            return [FILA_EMITIDA] if "ELIAM" in params["cliente->>nombre"].upper() else []
+        return []
+
+    monkeypatch.setattr(cotizaciones, "_filas_emitidas", filas)
+
+
+def _buscar(consulta, usuario="admin"):
+    return herramientas.ejecutar("buscar_cotizacion", json.dumps({"consulta": consulta}), usuario)
+
+
+def test_busca_por_codigo_y_la_guarda(emitidas):
+    texto = _buscar("6177")
+    assert "JV-00012" in texto and "KEYARD" in texto
+    assert cotizaciones.encontrada_de("admin").numero == "JV-00012"
+
+
+def test_busca_por_numero_jv(emitidas):
+    assert "JV-00012" in _buscar("la JV-12")
+
+
+def test_busca_por_rnc(emitidas):
+    assert "JV-00012" in _buscar("131832334")
+
+
+def test_varios_clientes_pide_elegir(emitidas):
+    texto = _buscar("FERRETERIA")
+    assert "varios clientes" in texto.lower()
+    assert cotizaciones.encontrada_de("admin") is None
+
+
+def test_sin_cotizaciones_lo_dice(emitidas):
+    assert "No encontr" in _buscar("4926")   # cliente existe pero sin cotizaciones

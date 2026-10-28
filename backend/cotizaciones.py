@@ -723,6 +723,108 @@ def buscar_emitida(texto_numero: str) -> dict | None:
     return {"pdf_ruta": filas[0]["pdf_ruta"], "cliente": filas[0].get("nombre") or ""}
 
 
+# --------------------------------------------------------------------------
+# Buscar una cotizacion emitida para recotizarla
+# --------------------------------------------------------------------------
+
+_SELECT_ENCONTRADA = "numero,creada_at,cliente,productos,total"
+
+
+def _filas_emitidas(params: dict) -> list[dict]:
+    """Filas de jarvis_cotizaciones segun los filtros de PostgREST que se pasen."""
+    respuesta = httpx.get(
+        f"{_supabase()}/rest/v1/jarvis_cotizaciones",
+        headers=_cabeceras(), params=params, timeout=20,
+    )
+    respuesta.raise_for_status()
+    return respuesta.json()
+
+
+def _normalizar_jv(texto: str) -> str | None:
+    """"JV-12", "la jv 12" -> "JV-00012". None si no se dijo un numero JV."""
+    limpio = texto.strip().upper().replace(" ", "")
+    encontrado = re.search(r"JV-?(\d+)", limpio)
+    return formato(int(encontrado.group(1))) if encontrado else None
+
+
+def _fecha_corta(iso) -> str:
+    try:
+        momento = datetime.fromisoformat(str(iso).replace("Z", "+00:00")).astimezone(ZONA)
+        return fecha_de_documento(momento)
+    except Exception:  # noqa: BLE001 - sin fecha legible, mejor no decir nada
+        return ""
+
+
+def _guardar_y_resumir(id_usuario: str, fila: dict, nota: str = "") -> str:
+    cliente = fila["cliente"]
+    productos = fila["productos"]
+    numero = formato(int(fila["numero"]))
+    with _candado:
+        _encontradas[id_usuario] = Encontrada(cliente, productos, numero, float(fila["total"]))
+    detalle = "; ".join(
+        f"{_cantidad(float(l['cantidad']))} {l.get('unidad') or 'UND'} de "
+        f"{l.get('descripcion') or l.get('codigo')} (cod {l.get('codigo')})"
+        for l in productos
+    )
+    fecha = _fecha_corta(fila.get("creada_at"))
+    return (
+        f"{nota}Cotizacion {numero} de {cliente.get('nombre')}"
+        + (f" ({fecha})" if fecha else "")
+        + f", total RD$ {_num(float(fila['total']))}. {len(productos)} producto(s): {detalle}. "
+        "Para recotizarla a otro nivel, di el nivel (P1 a P7) y, si quieres, el % de utilidad. "
+        "No leas el numero completo ni los precios salvo que lo pidan."
+    )
+
+
+def buscar(id_usuario: str, consulta: str) -> str:
+    """Encuentra la ultima cotizacion emitida para mostrarla y recordarla."""
+    texto = (consulta or "").strip()
+    if not texto:
+        raise ErrorCotizacion("Dime de que cliente o que numero JV busco la cotizacion.")
+
+    numero = _normalizar_jv(texto)
+    if numero:
+        filas = _filas_emitidas({
+            "numero": f"eq.{int(numero[len(PREFIJO):])}",
+            "estado": "eq.emitida", "select": _SELECT_ENCONTRADA,
+        })
+        if not filas:
+            raise ErrorCotizacion(f"No encontre la cotizacion {numero} emitida.")
+        return _guardar_y_resumir(id_usuario, filas[0])
+
+    clientes = buscar_cliente(texto)
+    if len(clientes) > 1:
+        opciones = "; ".join(f"{_texto(c['nombre'])} (codigo {c['codigo']})" for c in clientes[:5])
+        raise ErrorCotizacion(
+            f"Hay varios clientes que coinciden: {opciones}. Dime cual es y busco su ultima cotizacion."
+        )
+    if clientes:
+        codigo = _texto(clientes[0].get("codigo"))
+        filas = _filas_emitidas({
+            "cliente->>codigo": f"eq.{codigo}", "estado": "eq.emitida",
+            "order": "numero.desc", "limit": "5", "select": _SELECT_ENCONTRADA,
+        })
+        if filas:
+            nota = f"(hay {len(filas)} de este cliente; esta es la ultima) " if len(filas) > 1 else ""
+            return _guardar_y_resumir(id_usuario, filas[0], nota)
+        raise ErrorCotizacion(
+            f"No encontre cotizaciones de {_texto(clientes[0].get('nombre'))}. "
+            "Si quieres, preparo una nueva con preparar_cotizacion."
+        )
+
+    # Respaldo: por nombre dentro de las emitidas (sirve para clientes de contado).
+    filas = _filas_emitidas({
+        "cliente->>nombre": f"ilike.*{texto}*", "estado": "eq.emitida",
+        "order": "numero.desc", "limit": "5", "select": _SELECT_ENCONTRADA,
+    })
+    if not filas:
+        raise ErrorCotizacion(
+            f"No encontre cotizaciones de '{texto}'. Si quieres, preparo una nueva con preparar_cotizacion."
+        )
+    nota = f"(hay {len(filas)}; esta es la ultima) " if len(filas) > 1 else ""
+    return _guardar_y_resumir(id_usuario, filas[0], nota)
+
+
 # Como toLocaleDateString('en-GB') en n8n: septiembre es "Sept".
 _MESES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec")
 

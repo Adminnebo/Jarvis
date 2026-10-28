@@ -443,6 +443,23 @@ def emitir_cotizacion(usuario: str = ""):
     )
 
 
+@herramienta(
+    "Busca una cotizacion YA EMITIDA para mostrarla y recordarla: dale lo que diga "
+    "el usuario (numero JV, codigo de cliente, RNC/cedula, nombre o telefono) y trae "
+    "la ultima de ese cliente. Usala cuando pidan 'dame/busca la ultima cotizacion "
+    "de ...'. No leas en voz el numero completo ni los precios salvo que lo pidan.",
+    disponible=_cotizaciones_disponibles,
+    consulta="Lo que dijo el usuario: numero JV (JV-00012), codigo, RNC/cedula, nombre o telefono del cliente",
+)
+def buscar_cotizacion(consulta: str, usuario: str = "") -> str:
+    from . import cotizaciones
+
+    try:
+        return cotizaciones.buscar(usuario, consulta)
+    except cotizaciones.ErrorCotizacion as error:
+        return str(error)
+
+
 # --------------------------------------------------------------------------
 # WhatsApp
 # --------------------------------------------------------------------------
