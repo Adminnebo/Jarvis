@@ -299,6 +299,74 @@ formulario.addEventListener("submit", async (evento) => {
 $$("btn-cancelar-edicion").addEventListener("click", limpiarFormulario);
 $$("btn-cerrar-fuentes").addEventListener("click", () => { panel.hidden = true; });
 
+// Muestra de datos de una tabla, en grilla horizontal como en SQL. Se carga la
+// primera vez que se abre, no antes: no tiene sentido traer filas de todas las
+// tablas al desplegar el esquema.
+function bloqueDatos(id, tabla, columnasFallback) {
+  const det = document.createElement("details");
+  det.className = "datos-muestra";
+  det.innerHTML = "<summary>Ver datos</summary>";
+  const cont = document.createElement("div");
+  cont.className = "datos-scroll";
+  det.appendChild(cont);
+
+  let cargado = false;
+  det.addEventListener("toggle", async () => {
+    if (!det.open || cargado) return;
+    cargado = true;
+    cont.textContent = "Cargando…";
+    try {
+      const url = `/api/fuentes/${id}/muestra?tabla=${encodeURIComponent(tabla)}&limite=20`;
+      const r = await fetch(url);
+      const b = await r.json();
+      if (!r.ok) throw new Error(b.error || "No se pudieron leer los datos.");
+      cont.innerHTML = "";
+      cont.appendChild(gridDatos(b.columnas || columnasFallback, b.filas || []));
+    } catch (e) {
+      cont.className = "datos-scroll mal";
+      cont.textContent = e.message;
+      cargado = false; // permite reintentar cerrando y abriendo
+    }
+  });
+  return det;
+}
+
+// Tabla HTML con las columnas como encabezado y las filas debajo, igual que el
+// resultado de una consulta. Scrollea en horizontal si hay muchas columnas.
+function gridDatos(columnas, filas) {
+  const cols = filas[0] ? Object.keys(filas[0]) : (columnas || []);
+  const t = document.createElement("table");
+  t.className = "grid-sql";
+
+  const thead = t.createTHead();
+  const trh = thead.insertRow();
+  for (const c of cols) {
+    const th = document.createElement("th");
+    th.textContent = c;
+    trh.appendChild(th);
+  }
+
+  const tb = t.createTBody();
+  if (!filas.length) {
+    const tr = tb.insertRow();
+    const td = tr.insertCell();
+    td.colSpan = cols.length || 1;
+    td.className = "grid-vacio";
+    td.textContent = "(sin filas)";
+    return t;
+  }
+  for (const fila of filas) {
+    const tr = tb.insertRow();
+    for (const c of cols) {
+      const td = tr.insertCell();
+      const v = fila[c];
+      if (v == null) { td.textContent = "NULL"; td.className = "grid-nulo"; }
+      else td.textContent = typeof v === "object" ? JSON.stringify(v) : String(v);
+    }
+  }
+  return t;
+}
+
 async function verEsquema(id, nodo) {
   nodo.className = "fuente-estado";
   nodo.textContent = "Leyendo esquema...";
@@ -414,9 +482,6 @@ async function verEsquema(id, nodo) {
     leyenda.addEventListener("blur", guardarTablas);
     leyenda.addEventListener("input", guardarPronto);
 
-    const columnas = document.createElement("span");
-    columnas.textContent = tabla.columnas;
-
     const dicc = document.createElement("details");
     dicc.className = "diccionario";
     const tieneAlgo = Object.keys(tabla.columnas_significado || {}).length || tabla.reglas;
@@ -469,7 +534,9 @@ async function verEsquema(id, nodo) {
 
     dicc.append(proponer, filasCol, reglas);
 
-    fila.append(cab, leyenda, dicc, columnas);
+    const datos = bloqueDatos(id, tabla.tabla, nombresColumnas);
+
+    fila.append(cab, leyenda, dicc, datos);
     cuerpo.appendChild(fila);
     controles.push({
       tabla: tabla.tabla, check, leyenda, reglas,

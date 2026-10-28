@@ -489,6 +489,17 @@ def guardar_tablas_de_fuente(id_fuente: str, datos: dict):
         return JSONResponse(status_code=400, content={"error": fuentes.explicar(error)})
 
 
+@app.get("/api/fuentes/{id_fuente}/muestra")
+def muestra_de_fuente(id_fuente: str, tabla: str, limite: int = 20):
+    """Primeras filas de una tabla, para verlas como en SQL (columnas + filas)."""
+    try:
+        return fuentes.muestra_de_tabla(id_fuente, tabla, limite)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    except Exception as error:  # noqa: BLE001
+        return JSONResponse(status_code=400, content={"error": fuentes.explicar(error)})
+
+
 @app.post("/api/fuentes/{id_fuente}/consultar")
 def consultar_fuente(id_fuente: str, datos: dict):
     """Consola de SQL de la interfaz. Respeta el modo solo lectura."""

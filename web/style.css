@@ -747,6 +747,46 @@ body {
   white-space: nowrap;
 }
 .tabla-filas.grande { color: var(--peligro); font-weight: 600; }
+
+/* Muestra de datos de una tabla, como una grilla de SQL. */
+.datos-muestra { margin: 4px 0 6px; font-size: 13px; }
+.datos-muestra > summary { cursor: pointer; color: var(--acento); }
+.datos-scroll {
+  margin-top: 8px;
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+.datos-scroll.mal { color: var(--peligro); padding: 10px; }
+.grid-sql {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 12.5px;
+}
+.grid-sql th,
+.grid-sql td {
+  border: 1px solid var(--borde);
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.grid-sql thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--superficie-2);
+  color: var(--texto);
+  font-weight: 600;
+}
+.grid-sql tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+.grid-sql td { color: var(--tenue); }
+.grid-nulo { color: var(--muy-tenue); font-style: italic; }
+.grid-vacio { color: var(--tenue); text-align: center; padding: 14px; }
 .guardado-estado { font-size: 11px; font-weight: 400; }
 .guardado-estado.guardando { color: var(--tenue); }
 .guardado-estado.ok { color: var(--ok); }

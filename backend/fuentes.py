@@ -532,6 +532,36 @@ def consultar(id_fuente: str, sql: str, limite: int = 200, parametros: dict | No
     return MOTORES[fuente["tipo"]](fuente["config"], sql, limite, id_fuente, parametros=parametros)
 
 
+def muestra_de_tabla(id_fuente: str, tabla: str, limite: int = 20) -> dict:
+    """Primeras filas de una tabla, para verlas como en SQL.
+
+    El nombre de tabla se valida contra el esquema real antes de armar el SQL:
+    asi no se puede colar nada por el parametro. Devuelve las columnas en orden
+    y las filas tal cual para pintarlas en una grilla.
+    """
+    fuente = obtener(id_fuente)
+    if fuente is None:
+        raise ValueError(f"No existe la fuente '{id_fuente}'.")
+
+    esquema_fuente = esquema_de(id_fuente)
+    buscada = tabla.strip().lower()
+    entrada = next((t for t in esquema_fuente["tablas"] if t["tabla"].lower() == buscada), None)
+    if entrada is None:
+        disponibles = ", ".join(t["tabla"] for t in esquema_fuente["tablas"])
+        raise ValueError(f"No existe la tabla '{tabla}'. Las que hay: {disponibles}")
+
+    nombre = entrada["tabla"]
+    n = max(1, min(100, int(limite or 20)))
+    if fuente["tipo"] == "mssql":
+        sql = f"select top {n} * from {nombre}"
+    else:
+        sql = f"select * from {nombre} limit {n}"
+
+    filas = consultar(id_fuente, sql, limite=n)
+    columnas = [d.rsplit(" ", 1)[0] for d in entrada["columnas"].split(", ") if d.strip()]
+    return {"tabla": nombre, "columnas": columnas, "filas": filas}
+
+
 # --------------------------------------------------------------------------
 # Busqueda por texto
 # --------------------------------------------------------------------------
