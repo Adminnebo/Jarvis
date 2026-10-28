@@ -508,3 +508,21 @@ def test_recotizar_sin_encontrada_lo_dice(emitidas):
 def test_recotizar_nivel_invalido(emitidas):
     _buscar("6177")
     assert "P1 a P7" in _recotizar("banana")
+
+
+@pytest.fixture
+def servicios_y_emitidas(servicios, emitidas):
+    return servicios
+
+
+def test_recotizar_y_emitir_saca_una_jv_nueva(servicios_y_emitidas):
+    _buscar("6177")
+    _recotizar("7")
+    texto, adjuntos = herramientas.ejecutar_completo("emitir_cotizacion", "{}", "admin")
+    assert "JV-00007" in texto                      # _insertar mock devuelve 7
+    fila = servicios_y_emitidas["insertar"][0]
+    assert fila["cliente"]["codigo"] == "6177"
+    assert fila["productos"][0]["codigo"] == "9681"
+    assert fila["productos"][0]["precio_unitario"] == 11.5   # el nivel P7 recotizado
+    assert fila["total"] == 1150.0
+    assert adjuntos[0]["numero"] == "JV-00007"
