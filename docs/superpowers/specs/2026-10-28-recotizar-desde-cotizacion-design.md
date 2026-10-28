@@ -1,0 +1,156 @@
+# Recotizar desde una cotización existente — diseño
+
+Fecha: 2026-10-28
+Repo: Adminnebo/Jarvis (rama `feat/rediseno-grafito`)
+
+## Qué se quiere
+
+Que el usuario pueda, por voz o texto:
+
+1. Pedir **la última cotización de un cliente** dando cualquier identificador
+   ("dame la última cotización de Ferretería Eliam", "del cliente 6177", "del
+   RNC 131-xxxxx", "la JV-12"), y que Jarvis le diga **cuál es** (número,
+   cliente, fecha, total y la lista de productos).
+2. Luego **re-cotizar esos mismos productos** a un nivel de precio que el
+   usuario elige ("ahora los quiero a precio 7", "precio 5 con un 6%"),
+   generando una **cotización nueva** (nuevo JV + PDF) para el mismo cliente,
+   sin tocar la vieja.
+
+La cotización vieja sirve sobre todo como **fuente de la lista de productos**:
+el usuario no la vuelve a dictar.
+
+## Contexto del código actual
+
+- Las cotizaciones emitidas se guardan completas en Supabase
+  `jarvis_cotizaciones`: `numero`, `creada_at`, `usuario`, `cliente` (jsonb:
+  nombre, rnc, codigo, direccion, email, telefono, nivel, factor, ciudad,
+  contacto…), `productos` (jsonb: líneas con codigo, referencia, descripcion,
+  unidad, cantidad, coste, precio_unitario, TipoItbis, precio_bruto,
+  itbis_linea, subtotal_linea), `subtotal`, `itbis`, `total`, `pdf_ruta`,
+  `estado`.
+- Flujo de emisión en `backend/cotizaciones.py`: `preparar()` arma un
+  `Borrador` en memoria (por usuario, vigencia 30 min) y `emitir()` lo numera,
+  genera el PDF (pdfjh) y lo sube al bucket privado.
+- Cálculo de precios (`calcular_linea`): dos modos.
+  - **Nivel del cliente:** `precio = round(Pn * factor, 2)` (sin utilidad).
+  - **Coste:** `precio = round(coste / (1 - utilidad/100), 2)` (margen sobre
+    precio de venta, no recargo; no usa factor).
+- Recuperación hoy: solo `buscar_emitida(numero)` por número exacto (para
+  reenviar por WhatsApp). **No** hay búsqueda por cliente ni "la última de X".
+- Búsqueda de clientes en la Base JH: `buscar_cliente(texto)` acepta código,
+  RNC/cédula o nombre y corrige un RNC mal oído por una cifra
+  (`clientes_con_rnc_parecido`). Solo lectura.
+
+## Alcance
+
+Dos herramientas nuevas que reusan el mecanismo de borrador/emisión existente.
+**No** cambia el esquema de `jarvis_cotizaciones`, **no** cambia el cálculo
+actual de `preparar`/`emitir`, y la Base JH sigue siendo solo lectura.
+
+### 1. `buscar_cotizacion(consulta)` — encontrar la cotización
+
+Entrada: texto libre (lo que dijo el usuario).
+
+Detección del identificador, en este orden:
+
+1. **Número JV** (`JV-\d+` o algo que normalice a eso): va directo a esa fila
+   por `numero`, `estado = emitida`.
+2. **Cualquier otro** (código, RNC/cédula, teléfono, nombre): se resuelve
+   primero contra la Base JH con `buscar_cliente` para obtener el **código**
+   del cliente; luego se consulta `jarvis_cotizaciones` por
+   `cliente->>codigo = <código>`, `estado = emitida`, orden `numero` desc.
+   - Teléfono: `buscar_cliente` hoy no busca por teléfono. Si el texto parece
+     teléfono y `buscar_cliente` no lo resuelve, se cae al paso de nombre /
+     o se avisa que no se encontró. (El teléfono se marcó como aceptable pero
+     "puede no ser único"; no es la vía principal.)
+   - Si `buscar_cliente` devuelve varios clientes, se le muestran al usuario
+     para que elija, igual que hace `preparar` hoy.
+3. **Contado** (cotizaciones con `codigo = ""`): no se pueden resolver por
+   Base JH. Se buscan por nombre dentro de `jarvis_cotizaciones`
+   (`cliente->>nombre ilike`) como respaldo.
+
+Resultado: la última emitida (o una lista corta de candidatas si hay
+ambigüedad real, ej. varias cotizaciones del mismo cliente o varios clientes).
+Se devuelve un resumen legible: **número JV, cliente, fecha, total y la lista
+de productos** (código, descripción, cantidad, precio actual de esa cotización).
+
+Estado: la fila encontrada (su `cliente` y sus `productos`) se guarda en un
+estado por usuario `_encontradas[id_usuario]` con vigencia 30 min, para que
+`recotizar` la use sin que el modelo vuelva a cargar nada.
+
+### 2. `recotizar(nivel, utilidad="")` — re-cotizar a un nivel elegido
+
+Precondición: que exista una cotización encontrada vigente para ese usuario
+(si no, se pide buscarla primero).
+
+Pasos:
+
+1. Toma los **códigos y cantidades** de la cotización encontrada (mismos
+   productos, mismas cantidades).
+2. Re-consulta el **catálogo actual** (`productos_del_catalogo`) para leer el
+   precio del nivel pedido — precios frescos, no los guardados.
+3. Calcula cada línea:
+   - `nivel` = el que pidió el usuario (P1…P7), validado contra `NIVELES`.
+   - Base = **Pn crudo del catálogo, SIN factor del cliente**
+     (decisión tomada: "precio 7" = el número de la columna P7 tal cual).
+   - Con `utilidad` (>0): `precio = round(base / (1 - utilidad/100), 2)` —
+     misma fórmula de margen que hoy. Sin utilidad: `precio = base`.
+   - Tope de utilidad reusa el actual (`MAX_UTILIDAD = 95`).
+   - Si algún producto no tiene precio en ese nivel (Pn vacío/0), se dice cuáles
+     y no se cotiza, igual que hoy en `preparar`.
+4. Cliente = el mismo de la cotización encontrada (se reusa el jsonb `cliente`
+   guardado; no hace falta re-buscar en Base JH).
+5. Arma un `Borrador` (mismo dataclass y estado que `preparar`) y devuelve el
+   resumen para confirmar, indicando el nivel usado y, si hubo, el % de
+   utilidad.
+6. `emitir_cotizacion` (sin cambios) emite una **JV nueva** y su PDF tras el
+   "sí". La cotización vieja no se toca.
+
+### Cambios internos previstos
+
+- `calcular_linea`: admitir un tercer caso — base desde un nivel elegido (Pn
+  sin factor) con utilidad opcional. Se puede generalizar el parámetro `coste`
+  actual a un "origen de precio" {tipo: nivel|coste, nombre, utilidad} o
+  agregar un caso paralelo; lo decide el plan de implementación.
+- Nuevo estado `_encontradas: dict[str, <fila>]` con su candado y vigencia,
+  espejo de `_borradores`.
+- Funciones de consulta a Supabase para buscar por `cliente->>codigo`,
+  `cliente->>nombre` y por `numero`, reusando `_supabase()`/`_cabeceras()`.
+- Tools nuevas en `backend/herramientas.py`: `buscar_cotizacion` y `recotizar`,
+  ambas con `disponible=_cotizaciones_disponibles`. Descripciones que dejen
+  claro al modelo: no inventar precios ni productos, no leer en voz el número
+  completo salvo que lo pidan.
+
+## Casos de borde
+
+- No existe cotización para ese cliente → se dice, y se ofrece prepararla
+  desde cero con `preparar_cotizacion`.
+- Identificador ambiguo (varios clientes, o teléfono repetido) → se listan las
+  opciones para elegir.
+- La cotización encontrada venció (>30 min) al llamar `recotizar` → se pide
+  buscarla de nuevo.
+- Producto de la cotización vieja que ya no está en el catálogo, o sin precio
+  en el nivel pedido → se nombra y no se cotiza.
+- Nivel inválido (no P1…P7) → error claro pidiendo un nivel válido.
+
+## Pruebas
+
+En `tests/test_cotizaciones.py`, con el catálogo y Supabase ya mockeados:
+
+- `buscar_cotizacion` por número JV, por código, por RNC (incluida la
+  corrección a una cifra), por nombre; y el caso de varias candidatas.
+- `recotizar` reusa productos y cantidades, aplica el nivel pedido sin factor,
+  aplica la utilidad con la fórmula de margen, y rechaza nivel inválido o
+  producto sin precio en ese nivel.
+- El borrador de `recotizar` lo emite `emitir_cotizacion` como una JV nueva,
+  dejando la vieja intacta.
+- Sin configurar (`configurado()` falso), las dos herramientas no se ofrecen.
+
+## Fuera de alcance (YAGNI)
+
+- Editar la lista de productos (quitar/agregar/cambiar cantidades) dentro de
+  `recotizar`: si hace falta, se ajusta en otra vuelta con `preparar_cotizacion`.
+- Re-cotizar a un cliente distinto del de la cotización encontrada.
+- Darle a `preparar_cotizacion` un nivel explícito para cotizaciones desde
+  cero (se puede sumar después si se quiere; el cálculo del nivel elegido
+  queda compartido y listo para ello).
