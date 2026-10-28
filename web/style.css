@@ -590,9 +590,26 @@ body {
   width: auto;
 }
 .panel-ampliado > *:not(.panel-barra) {
-  max-width: 1180px;
+  max-width: 1600px;
   margin-inline: auto;
 }
+/* En ampliado, la lista de tablas usa todo el alto (el panel ya scrollea): sin
+   la cajita de 320px, abrir el diccionario o los datos deja de apretar. */
+.panel-ampliado .esquema-tablas {
+  max-height: none;
+  overflow: visible;
+  border-left: none;
+  padding-left: 0;
+}
+/* Cada tabla como una tarjeta, con su muestra de datos grande. */
+.panel-ampliado .esquema-tabla {
+  font-size: 13px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico, 8px);
+  padding: 12px 14px;
+}
+.panel-ampliado .datos-scroll { max-height: 65vh; }
+.panel-ampliado .grid-sql { font-size: 13px; }
 
 .fuente {
   border: 1px solid var(--borde);
