@@ -154,3 +154,50 @@ En `tests/test_cotizaciones.py`, con el catálogo y Supabase ya mockeados:
 - Darle a `preparar_cotizacion` un nivel explícito para cotizaciones desde
   cero (se puede sumar después si se quiere; el cálculo del nivel elegido
   queda compartido y listo para ello).
+
+## Ampliación (2026-10-28): también las cotizaciones reales de JH
+
+Pedido: que `buscar_cotizacion` no solo vea las JV de Jarvis, sino también las
+cotizaciones reales de JH (las de Camila, numeradas tipo 3807).
+
+**Fuente (ya existe, solo lectura).** La Base JH ya le expone a Jarvis dos vistas
+`…IA` (el login de Jarvis solo ve vistas `List_*IA`/`*WebIA`, no las tablas
+crudas):
+
+- `dbo.iCotizacionesWebIA` — cabecera, una fila por cotización. Columnas que se
+  usan: `nfactura` (número), `cliente` (código del cliente, entero),
+  `clientenombre`, `RNC`, `Telefono`, `Direccion`, `Correo`, `Ciudad`, `Sector`,
+  `Contacto`, `fecha`, `total`, `confirmada` (bit), `pago` (bit).
+- `dbo.dCotizacionesWebIA` — líneas. Columnas que se usan: `nfactura` (une con la
+  cabecera), `codigo` (del producto, coincide con `List_ProductosIA.Codigo`),
+  `cantidad`, `Descripcion`, `Und`. Algunas líneas son `ProductoManual` (código
+  que no está en el catálogo): esas no se pueden re-preciar; se nombran y se avisa.
+
+**`buscar_cotizacion` ampliada.** Detección:
+
+1. `JV-…` → `jarvis_cotizaciones` (como ya está).
+2. Número pelado (ej. 3807) → se prueba como `iCotizacionesWebIA.nfactura`; si
+   existe, es esa de JH. Si no existe, se sigue como identificador de cliente.
+3. Código / RNC / nombre / teléfono → se resuelve el cliente contra la Base JH
+   (`buscar_cliente`) para sacar su **código** (entero), y se consulta **las dos
+   fuentes**: JH (`iCotizacionesWebIA where cliente = <código>`) y JV
+   (`jarvis_cotizaciones where cliente->>codigo = <código>`).
+   - Si solo una fuente tiene → se devuelve la última de esa y se guarda.
+   - Si ambas tienen → se muestra la última de cada una (número, fecha, total,
+     fuente) y se pide elegir; el usuario responde con el número (3807 o JV-…),
+     que entra por los caminos 1/2. No se guarda ninguna hasta que elija.
+   - Si ninguna → se dice y se ofrece preparar una nueva.
+
+Todo se resuelve a **enteros** (código, nfactura) antes de armar el SQL, así que
+no entra texto crudo del usuario a la consulta.
+
+**Estado `Encontrada`** gana un campo `fuente` ("jh" | "jv") para el texto del
+resumen; el número se muestra como `nfactura` (JH) o `JV-xxxxx` (JV).
+
+**`recotizar` no cambia**: ya opera sobre `encontrada.productos`
+(`[{codigo, cantidad, descripcion, unidad}]`), que se arma igual desde las líneas
+de JH que desde las de JV. Emite una **JV nueva**; las de JH no se tocan.
+
+**Límite:** la lista de líneas de una cotización de JH se lee con el mismo tope
+`MAX_LINEAS` (60) que ya rige las cotizaciones; una de JH con más de 60 líneas
+quedaría recortada (caso raro, se asume fuera de alcance).
