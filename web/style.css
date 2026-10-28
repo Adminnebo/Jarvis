@@ -581,6 +581,19 @@ body {
 
 .panel-ancho { width: min(620px, 96vw); }
 
+.panel-barra-acciones { display: flex; align-items: center; gap: 6px; }
+
+/* Vista ampliada: el panel toma todo el ancho bajo la barra superior y el
+   contenido se centra para que las tablas y sus datos respiren. */
+.panel-ampliado {
+  left: 0;
+  width: auto;
+}
+.panel-ampliado > *:not(.panel-barra) {
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
 .fuente {
   border: 1px solid var(--borde);
   border-radius: var(--radio);

@@ -299,6 +299,24 @@ formulario.addEventListener("submit", async (evento) => {
 $$("btn-cancelar-edicion").addEventListener("click", limpiarFormulario);
 $$("btn-cerrar-fuentes").addEventListener("click", () => { panel.hidden = true; });
 
+// Vista ampliada: el panel ocupa casi toda la pantalla, con el contenido
+// centrado, para trabajar las tablas y los datos con holgura. Se recuerda.
+const botonAmpliar = $$("btn-ampliar-fuentes");
+function aplicarAmpliado(ampliado) {
+  panel.classList.toggle("panel-ampliado", ampliado);
+  botonAmpliar.textContent = ampliado ? "⤡" : "⤢";
+  botonAmpliar.title = ampliado ? "Reducir" : "Ampliar (pantalla completa)";
+  botonAmpliar.setAttribute("aria-label", ampliado ? "Reducir" : "Ampliar");
+}
+try {
+  if (localStorage.getItem("fuentes-ampliado") === "1") aplicarAmpliado(true);
+} catch { /* sin localStorage, arranca reducido */ }
+botonAmpliar.addEventListener("click", () => {
+  const ampliado = !panel.classList.contains("panel-ampliado");
+  aplicarAmpliado(ampliado);
+  try { localStorage.setItem("fuentes-ampliado", ampliado ? "1" : "0"); } catch { /* da igual */ }
+});
+
 // Muestra de datos de una tabla, en grilla horizontal como en SQL. Se carga la
 // primera vez que se abre, no antes: no tiene sentido traer filas de todas las
 // tablas al desplegar el esquema.
