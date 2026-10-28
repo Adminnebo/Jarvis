@@ -845,6 +845,49 @@ def _estado_jh(header: dict) -> str:
     return ", ".join(partes)
 
 
+def _ultima_jh() -> dict | None:
+    filas = _consultar(
+        f"SELECT TOP 1 {_COLUMNAS_COTIZ_JH} FROM dbo.iCotizacionesWebIA "
+        "ORDER BY fecha DESC, nfactura DESC"
+    )
+    return filas[0] if filas else None
+
+
+def _ultima_jv() -> dict | None:
+    filas = _filas_emitidas({
+        "estado": "eq.emitida", "order": "creada_at.desc", "limit": "1",
+        "select": _SELECT_ENCONTRADA,
+    })
+    return filas[0] if filas else None
+
+
+def _momento(iso) -> datetime:
+    """La fecha como datetime con zona, para comparar JH (naive) con JV (UTC)."""
+    try:
+        m = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        return m if m.tzinfo else m.replace(tzinfo=ZONA)
+    except Exception:  # noqa: BLE001
+        return datetime.min.replace(tzinfo=ZONA)
+
+
+def _ultima_general(id_usuario: str) -> str:
+    """La cotizacion mas reciente de todas, sea de JH o de Jarvis."""
+    header = _ultima_jh()
+    jv = _ultima_jv()
+    if not header and not jv:
+        raise ErrorCotizacion("No encontre ninguna cotizacion emitida todavia.")
+    usar_jh = bool(header) and (
+        not jv or _momento(header.get("fecha")) >= _momento(jv.get("creada_at"))
+    )
+    if usar_jh:
+        otra = f" (la mas reciente de Jarvis es la {formato(int(jv['numero']))})" if jv else ""
+        enc = _encontrada_desde_jh(header)
+        return _resumen(id_usuario, enc, _fecha_corta(header.get("fecha")), _estado_jh(header),
+                        nota=f"La ultima en general es de JH.{otra} ")
+    otra = f" (la mas reciente de JH es la {int(header['nfactura'])})" if header else ""
+    return _guardar_y_resumir(id_usuario, jv, nota=f"La ultima en general es de Jarvis.{otra} ")
+
+
 # Palabras de relleno al pedir "la cotizacion numero X": si al quitarlas solo
 # queda un numero, ese numero es el de una cotizacion (no el codigo de un cliente).
 _FILLER = {
@@ -860,6 +903,23 @@ def _numero_suelto(texto: str) -> int | None:
     numeros = [t for t in tokens if t.isdigit()]
     letras = [t for t in tokens if not t.isdigit() and t.strip("#") not in _FILLER]
     return int(numeros[0]) if len(numeros) == 1 and not letras else None
+
+
+# Palabras de "la ultima/en general": si al quitarlas no queda ni cliente ni
+# numero, se pide la cotizacion mas reciente de todas.
+_FILLER_GENERAL = _FILLER | {
+    "ultima", "último", "última", "ultimas", "últimas", "general", "reciente",
+    "recientes", "que", "hicieron", "hizo", "hicimos", "generada", "generadas",
+    "genero", "generó", "generaron", "se", "en", "mas", "más", "nueva", "nuevas",
+    "cual", "cuál", "fue", "todas", "todos", "hecha", "hechas", "cotizaciones",
+}
+
+
+def _es_general(texto: str) -> bool:
+    """True si el texto pide 'la ultima en general', sin cliente ni numero."""
+    tokens = re.findall(r"[0-9]+|[a-záéíóúñ#]+", texto.lower())
+    meaningful = [t for t in tokens if not t.isdigit() and t.strip("#") not in _FILLER_GENERAL]
+    return bool(tokens) and not meaningful and not any(t.isdigit() for t in tokens)
 
 
 def _jv_por_numero(id_usuario: str, numero: str) -> str:
@@ -883,7 +943,11 @@ def buscar(id_usuario: str, consulta: str) -> str:
     if numero_jv:
         return _jv_por_numero(id_usuario, numero_jv)
 
-    # 2. Numero suelto -> cotizacion real de JH por su nfactura.
+    # 2. "La ultima en general" (sin cliente ni numero) -> la mas reciente de todas.
+    if _es_general(texto):
+        return _ultima_general(id_usuario)
+
+    # 3. Numero suelto -> cotizacion real de JH por su nfactura.
     consulta_cliente = texto
     numero = _numero_suelto(texto)
     if numero is not None:
@@ -893,7 +957,7 @@ def buscar(id_usuario: str, consulta: str) -> str:
             return _resumen(id_usuario, enc, _fecha_corta(header.get("fecha")), _estado_jh(header))
         consulta_cliente = str(numero)   # no es una cotizacion; pruebalo como codigo
 
-    # 3. Resolver el cliente y buscar en AMBAS fuentes.
+    # 4. Resolver el cliente y buscar en AMBAS fuentes.
     clientes = buscar_cliente(consulta_cliente)
     if len(clientes) > 1:
         opciones = "; ".join(f"{_texto(c['nombre'])} (codigo {c['codigo']})" for c in clientes[:5])
@@ -928,7 +992,7 @@ def buscar(id_usuario: str, consulta: str) -> str:
             f"No encontre cotizaciones de {nombre_cli}. Si quieres, preparo una nueva con preparar_cotizacion."
         )
 
-    # 4. Respaldo: por nombre dentro de las JV (sirve para clientes de contado).
+    # 5. Respaldo: por nombre dentro de las JV (sirve para clientes de contado).
     filas = _filas_emitidas({
         "cliente->>nombre": f"ilike.*{texto}*", "estado": "eq.emitida",
         "order": "numero.desc", "limit": "5", "select": _SELECT_ENCONTRADA,

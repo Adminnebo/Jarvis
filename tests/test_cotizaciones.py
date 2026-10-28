@@ -57,6 +57,8 @@ def catalogo(entorno_limpio, monkeypatch):
         if "iCotizacionesWebIA" in sql:            # cabecera de JH
             if "nfactura = 3807" in sql or "cliente = 6177" in sql:
                 return [HEADER_JH]
+            if "WHERE" not in sql:                 # la ultima en general de JH
+                return [HEADER_JH]
             return []
         if "dCotizacionesWebIA" in sql:            # lineas de JH
             return DETALLE_JH if "nfactura = 3807" in sql else []
@@ -475,6 +477,8 @@ def emitidas(catalogo, monkeypatch):
             return [FILA_EMITIDA]
         if params.get("cliente->>codigo") == "eq.7000":
             return [FILA_JV_SOLO]
+        if set(params) <= {"estado", "order", "limit", "select"}:   # la ultima JV en general
+            return [FILA_EMITIDA]
         if "cliente->>nombre" in params:
             return [FILA_EMITIDA] if "ELIAM" in params["cliente->>nombre"].upper() else []
         return []
@@ -581,6 +585,14 @@ def test_busca_por_cliente_con_ambas_pregunta(emitidas):
     texto = _buscar("6177")
     assert "3807" in texto and "JV-00012" in texto
     assert cotizaciones.encontrada_de("admin") is None
+
+
+def test_busca_ultima_en_general(emitidas):
+    # JH (28-oct) es mas nueva que la JV (20-oct): trae la de JH y menciona la otra.
+    texto = _buscar("la última cotización en general")
+    assert "3807" in texto and "JH" in texto
+    enc = cotizaciones.encontrada_de("admin")
+    assert enc.fuente == "jh" and enc.numero == "3807"
 
 
 def test_recotizar_desde_jh_emite_jv(servicios_y_emitidas):
