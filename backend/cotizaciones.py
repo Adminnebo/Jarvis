@@ -861,31 +861,20 @@ def _ultima_jv() -> dict | None:
     return filas[0] if filas else None
 
 
-def _momento(iso) -> datetime:
-    """La fecha como datetime con zona, para comparar JH (naive) con JV (UTC)."""
-    try:
-        m = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
-        return m if m.tzinfo else m.replace(tzinfo=ZONA)
-    except Exception:  # noqa: BLE001
-        return datetime.min.replace(tzinfo=ZONA)
-
-
 def _ultima_general(id_usuario: str) -> str:
-    """La cotizacion mas reciente de todas, sea de JH o de Jarvis."""
+    """La ultima cotizacion "en general": la real de JH. Las JV de Jarvis son
+    aparte (de prueba o hechas a mano), asi que no se cuelan aqui aunque sean mas
+    recientes; solo se menciona cual es la ultima JV, por si la quieren."""
     header = _ultima_jh()
     jv = _ultima_jv()
-    if not header and not jv:
-        raise ErrorCotizacion("No encontre ninguna cotizacion emitida todavia.")
-    usar_jh = bool(header) and (
-        not jv or _momento(header.get("fecha")) >= _momento(jv.get("creada_at"))
-    )
-    if usar_jh:
-        otra = f" (la mas reciente de Jarvis es la {formato(int(jv['numero']))})" if jv else ""
+    if header:
+        otra = f" La mas reciente de Jarvis es la {formato(int(jv['numero']))}." if jv else ""
         enc = _encontrada_desde_jh(header)
         return _resumen(id_usuario, enc, _fecha_corta(header.get("fecha")), _estado_jh(header),
                         nota=f"La ultima en general es de JH.{otra} ")
-    otra = f" (la mas reciente de JH es la {int(header['nfactura'])})" if header else ""
-    return _guardar_y_resumir(id_usuario, jv, nota=f"La ultima en general es de Jarvis.{otra} ")
+    if jv:
+        return _guardar_y_resumir(id_usuario, jv, nota="Solo hay cotizaciones de Jarvis. ")
+    raise ErrorCotizacion("No encontre ninguna cotizacion emitida todavia.")
 
 
 # Palabras de relleno al pedir "la cotizacion numero X": si al quitarlas solo

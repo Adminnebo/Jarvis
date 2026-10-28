@@ -588,9 +588,9 @@ def test_busca_por_cliente_con_ambas_pregunta(emitidas):
 
 
 def test_busca_ultima_en_general(emitidas):
-    # JH (28-oct) es mas nueva que la JV (20-oct): trae la de JH y menciona la otra.
+    # "en general" = la real de JH (3807), aunque haya una JV; se menciona la JV.
     texto = _buscar("la última cotización en general")
-    assert "3807" in texto and "JH" in texto
+    assert "3807" in texto and "JH" in texto and "JV-00012" in texto
     enc = cotizaciones.encontrada_de("admin")
     assert enc.fuente == "jh" and enc.numero == "3807"
 

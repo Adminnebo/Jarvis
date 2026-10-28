@@ -201,3 +201,10 @@ de JH que desde las de JV. Emite una **JV nueva**; las de JH no se tocan.
 **Límite:** la lista de líneas de una cotización de JH se lee con el mismo tope
 `MAX_LINEAS` (60) que ya rige las cotizaciones; una de JH con más de 60 líneas
 quedaría recortada (caso raro, se asume fuera de alcance).
+
+**"La última en general" (ajuste post-prueba):** sin cliente ni número,
+`buscar_cotizacion` trae la **última real de JH** (`iCotizacionesWebIA` ordenada
+por fecha/nfactura desc) y menciona cuál es la última JV. Se eligió priorizar JH
+en vez de "la más reciente por fecha" porque las JV de prueba/manuales son a
+menudo más nuevas y tapaban la cotización real que se busca. Para la última de
+Jarvis se pide explícitamente ("la última JV").
