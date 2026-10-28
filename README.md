@@ -590,6 +590,17 @@ Siempre en dos pasos:
    privado. Llega al chat como
    tarjeta y a los lentes como documento.
 
+Además puede **retomar una cotización ya emitida** y re-cotizarla a otro precio:
+
+1. **`buscar_cotizacion`**: "dame la última cotización de Ferretería Eliam" / "del
+   cliente 6177" / "del RNC 131…" / "la JV-12". Resuelve el cliente contra la Base
+   JH y trae la última emitida (número, cliente, fecha, total y productos).
+2. **`recotizar`**: "ahora los quiero a precio 7" o "precio 5 con un 6%". Toma los
+   mismos productos y cantidades y los re-cotiza al nivel elegido (Pn crudo del
+   catálogo, sin factor del cliente) con la utilidad opcional encima
+   (`precio = Pn / (1 − utilidad/100)`). Arma un borrador; `emitir_cotizacion` saca
+   una JV nueva tras el "sí". La vieja queda intacta.
+
 ### Cotizar sobre el coste
 
 Además de los niveles P1–P7, se puede cotizar **al coste, o al coste con un

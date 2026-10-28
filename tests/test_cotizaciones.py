@@ -214,7 +214,8 @@ def test_sin_configurar_no_se_ofrecen(entorno_limpio, monkeypatch):
     monkeypatch.delenv("JARVIS_PDF_KEY", raising=False)
     monkeypatch.delenv("PDFCO_API_KEY", raising=False)
     nombres = {e["name"] for e in herramientas.esquemas()}
-    assert not {"preparar_cotizacion", "emitir_cotizacion"} & nombres
+    assert not {"preparar_cotizacion", "emitir_cotizacion",
+                "buscar_cotizacion", "recotizar"} & nombres
 
 
 # --- Plantilla ---
