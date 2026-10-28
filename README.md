@@ -172,7 +172,7 @@ Además del chat y la voz, se anotan (y se cobran con el mismo margen):
 |---|---|---|---|
 | `transcripcion` | lo que dice el usuario en la voz, con `gpt-live-transcribe` | por duración, $0.017 el minuto | el navegador y el puente, del evento `input_audio_transcription.completed` |
 | `tts` | la respuesta leída en voz alta por un puente (`gpt-4o-mini-tts`) | tokens: $0.60/M de texto, $12/M de audio | el puente, del `usage` que da el TTS con `stream_format: "sse"` |
-| `cotizacion` | el PDF de cada cotización en PDF.co | por crédito (el `credits` de la respuesta) | Jarvis mismo |
+| `cotizacion` | el PDF de cada cotización | por crédito (el `credits` de la respuesta; con `pdfjh` es 0, el servicio es propio) | Jarvis mismo |
 
 Todo entra por `POST /api/consumo/voz` con `{"modo", "modelo", "uso"}` —el
 uso tal cual lo devolvió el proveedor, nunca un precio—, y el precio lo pone
@@ -586,7 +586,8 @@ Siempre en dos pasos:
 2. **`emitir_cotizacion`**, solo tras un "sí": inserta la fila en
    `jarvis_cotizaciones` (que da el número), arma el HTML
    ([backend/cotizacion_html.py](backend/cotizacion_html.py), port del nodo de
-   n8n), lo convierte con PDF.co y lo sube al bucket privado. Llega al chat como
+   n8n), lo convierte con el servicio PDF de JH (`pdfjh`) y lo sube al bucket
+   privado. Llega al chat como
    tarjeta y a los lentes como documento.
 
 ### Cotizar sobre el coste
@@ -631,7 +632,9 @@ disponible para reintentar (con otro número).
 |---|---|
 | `JARVIS_FUENTE_CATALOGO` | Id de la fuente con el catálogo y los clientes (Base JH) |
 | `JARVIS_BUCKET_COTIZACIONES` | `jarvis_cotizaciones` |
-| `PDFCO_API_KEY` | La de PDF.co |
+| `JARVIS_PDF_KEY` | Clave `x-api-key` del servicio PDF de JH (`pdfjh`), el valor de `CLAVES=jh:…` |
+| `JARVIS_PDF_URL` | Opcional. Endpoint del servicio; por defecto `https://pdfjh.neboaiconsulting.com/v1/pdf/convert/from/html` |
+| `PDFCO_API_KEY` | Opcional, respaldo: solo se usa si `JARVIS_PDF_KEY` está vacía (volver a PDF.co) |
 
 Además usa `SUPABASE_SERVICE_ROLE_KEY` y `SUPABASE_PROJECT_REF`. Tabla y bucket:
 

@@ -11,7 +11,7 @@ Dos pasos, siempre:
      precios los pone el servidor, nunca el modelo: Camila inventaba precios
      cuando los tomaba de la conversacion.
   2. emitir(): solo despues de que la persona confirma. Le da numero, arma el
-     PDF con PDF.co y lo deja en el chat.
+     PDF con el servicio de JH (pdfjh) y lo deja en el chat.
 """
 
 import os
@@ -44,7 +44,11 @@ FIRMA_APP = 24 * 3600
 # El de la web se pide cada vez que se abre, asi que basta con poco.
 FIRMA_WEB = 300
 
-URL_PDFCO = "https://api.pdf.co/v1/pdf/convert/from/html"
+# Servicio HTML->PDF. Antes era PDF.co; ahora el propio de JH (pdfjh, en server2),
+# que habla la misma API: POST /v1/pdf/convert/from/html, header x-api-key y
+# responde {url}. La URL se puede cambiar por entorno (JARVIS_PDF_URL) y la clave
+# sale de JARVIS_PDF_KEY (o del viejo PDFCO_API_KEY, por compatibilidad).
+URL_PDF_POR_DEFECTO = "https://pdfjh.neboaiconsulting.com/v1/pdf/convert/from/html"
 ZONA = ZoneInfo("America/Santo_Domingo")
 
 # Lo que dice "Usuario:" en el PDF. Es fijo, igual que en las de Camila: el
@@ -76,10 +80,20 @@ def bucket() -> str:
     return _env("JARVIS_BUCKET_COTIZACIONES")
 
 
+def url_pdf() -> str:
+    return _env("JARVIS_PDF_URL") or URL_PDF_POR_DEFECTO
+
+
+def clave_pdf() -> str:
+    # JARVIS_PDF_KEY es la del servicio actual (pdfjh); PDFCO_API_KEY queda como
+    # respaldo para no romper si alguna vez se vuelve a PDF.co.
+    return _env("JARVIS_PDF_KEY") or _env("PDFCO_API_KEY")
+
+
 def configurado() -> bool:
-    return all(_env(v) for v in (
-        "JARVIS_FUENTE_CATALOGO", "JARVIS_BUCKET_COTIZACIONES", "PDFCO_API_KEY",
-        "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_PROJECT_REF",
+    return all((
+        _env("JARVIS_FUENTE_CATALOGO"), _env("JARVIS_BUCKET_COTIZACIONES"),
+        clave_pdf(), _env("SUPABASE_SERVICE_ROLE_KEY"), _env("SUPABASE_PROJECT_REF"),
     ))
 
 
@@ -543,8 +557,8 @@ def _actualizar(numero: int, cambios: dict) -> None:
 
 def _pdf(html: str, nombre: str) -> bytes:
     respuesta = httpx.post(
-        URL_PDFCO,
-        headers={"x-api-key": _env("PDFCO_API_KEY")},
+        url_pdf(),
+        headers={"x-api-key": clave_pdf()},
         json={
             "html": html, "name": nombre, "paperSize": "Letter",
             # Los mismos margenes que usa n8n: la plantilla esta calibrada ahi.
@@ -554,14 +568,14 @@ def _pdf(html: str, nombre: str) -> bytes:
     )
     datos = respuesta.json()
     if respuesta.status_code >= 400 or datos.get("error") or not datos.get("url"):
-        raise RuntimeError(f"PDF.co: {datos.get('message') or respuesta.status_code}")
-    # PDF.co ya cobro la conversion, llegue o no el archivo: se anota aqui.
-    # Dice cuantos creditos gasto (una pagina simple, ~9).
+        raise RuntimeError(f"servicio PDF: {datos.get('message') or respuesta.status_code}")
+    # pdfjh no cobra creditos (devuelve credits:0); se anota igual por si algun
+    # dia vuelve PDF.co, que si cobra la conversion llegue o no el archivo.
     consumo.registrar_cotizacion(datos.get("credits") or 0)
     archivo = httpx.get(datos["url"], timeout=60)
     archivo.raise_for_status()
     if not archivo.content.startswith(b"%PDF"):
-        raise RuntimeError("PDF.co no devolvio un PDF.")
+        raise RuntimeError("El servicio PDF no devolvio un PDF.")
     return archivo.content
 
 

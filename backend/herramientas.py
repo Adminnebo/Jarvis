@@ -94,7 +94,7 @@ def ejecutar_completo(nombre: str, argumentos_json: str, usuario: str,
     otra cosa.
 
     `quien` (el acceso.Usuario) y `dispositivo` son para las herramientas que
-    gastan por su cuenta, como la cotizacion en PDF.co: con eso su gasto se
+    gastan por su cuenta, como el PDF de la cotizacion: con eso su gasto se
     anota a la organizacion y al aparato de quien la pidio.
     """
     entrada = REGISTRO.get(nombre)
