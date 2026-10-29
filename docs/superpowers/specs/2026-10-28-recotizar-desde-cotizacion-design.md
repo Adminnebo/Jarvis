@@ -226,3 +226,11 @@ JV con PDF en el bucket.
   `ProductoManual`.
 - `whatsapp.py` delega en `archivo_para_envio`; el resto del flujo (firmar + enviar
   por Evolution, dos pasos con confirmación) no cambia.
+
+## Ampliación (2026-10-29): clave pegada de JH para el nivel + utilidad
+
+JH expresa nivel y utilidad en un número pegado: la **primera cifra es el nivel**
+(1–7) y el **resto el % de utilidad** ("55" = P5 5%, "47" = P4 7%, "550" = P5 50%).
+`recotizar` acepta ese número tal cual en `nivel`: `_nivel_y_utilidad(nivel,
+utilidad)` lo descompone, pero solo cuando no vino la utilidad por separado (así
+"P5"/"5" con utilidad aparte sigue igual). La primera cifra fuera de 1–7 es error.

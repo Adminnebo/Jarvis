@@ -553,6 +553,26 @@ def test_recotizar_nivel_invalido(emitidas):
     assert "P1 a P7" in _recotizar("banana")
 
 
+def test_recotizar_nomenclatura_jh(emitidas):
+    # "55" = nivel P5 con 5% de utilidad: 12.5 / 0.95 = 13.16
+    _buscar("7000")
+    _recotizar("55")
+    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 13.16
+    # "550" = nivel P5 con 50% de utilidad: 12.5 / 0.5 = 25.0
+    _buscar("7000")
+    _recotizar("550")
+    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 25.0
+    # "47" = nivel P4 con 7%: 13.0 / 0.93 = 13.98
+    _buscar("7000")
+    _recotizar("47")
+    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 13.98
+
+
+def test_recotizar_nomenclatura_nivel_fuera_de_rango(emitidas):
+    _buscar("7000")
+    assert "1 a 7" in _recotizar("80")       # 8 no es un nivel
+
+
 @pytest.fixture
 def servicios_y_emitidas(servicios, emitidas):
     return servicios

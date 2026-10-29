@@ -1084,6 +1084,23 @@ def _normalizar_nivel(texto: str) -> str:
     return f"P{encontrado.group(0)}"
 
 
+def _nivel_y_utilidad(nivel, utilidad) -> tuple[str, float]:
+    """El nivel (P1..P7) y el % de utilidad.
+
+    Soporta la nomenclatura de JH, un numero pegado donde la PRIMERA cifra es el
+    nivel y el RESTO el porcentaje de utilidad: "55" = P5 con 5%, "47" = P4 con
+    7%, "550" = P5 con 50%. Solo cuando no vino la utilidad por separado.
+    """
+    nivel_txt = str(nivel or "").strip()
+    util_txt = str(utilidad or "").strip()
+    solo = re.sub(r"\D", "", nivel_txt)
+    if not util_txt and len(solo) >= 2:
+        if solo[0] not in "1234567":
+            raise ErrorCotizacion("El nivel (la primera cifra) tiene que ser de 1 a 7.")
+        return f"P{solo[0]}", _leer_utilidad(solo[1:])
+    return _normalizar_nivel(nivel_txt), _leer_utilidad(util_txt)
+
+
 def recotizar(id_usuario: str, nivel: str, utilidad=0) -> str:
     """Rearma un borrador con los productos de la cotizacion encontrada, al nivel pedido."""
     encontrada = encontrada_de(id_usuario)
@@ -1091,8 +1108,7 @@ def recotizar(id_usuario: str, nivel: str, utilidad=0) -> str:
         raise ErrorCotizacion(
             "No hay una cotizacion encontrada (o paso media hora). Busca primero con buscar_cotizacion."
         )
-    nivel_elegido = _normalizar_nivel(nivel)
-    por_ciento = _leer_utilidad(utilidad)
+    nivel_elegido, por_ciento = _nivel_y_utilidad(nivel, utilidad)
 
     pedidos = [(_texto(l["codigo"]).upper(), float(l["cantidad"])) for l in encontrada.productos]
     catalogo = productos_del_catalogo([codigo for codigo, _ in pedidos])

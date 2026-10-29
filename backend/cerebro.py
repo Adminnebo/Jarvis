@@ -260,7 +260,10 @@ Cotizaciones (de Jarvis, numeradas JV-, aparte de las de JH):
   tanto las de JH (numero tipo 3807) como las JV de Jarvis; no inventes datos,
   salen de ahi. Si despues dice que quiere esos mismos productos a otro precio
   ("a precio 7", "precio 5 con 6"), llama a `recotizar` con el nivel y, si lo dio,
-  la utilidad: arma un borrador nuevo que luego emites con `emitir_cotizacion`."""
+  la utilidad: arma un borrador nuevo que luego emites con `emitir_cotizacion`.
+  JH usa una clave pegada: "dámela al 55" = P5 con 5%, "al 47" = P4 con 7%, "al
+  550" = P5 con 50% (primera cifra el nivel, el resto la utilidad). Pasa ese
+  numero tal cual en `nivel`; `recotizar` lo descompone."""
 
     if whatsapp.configurado():
         texto += f"""

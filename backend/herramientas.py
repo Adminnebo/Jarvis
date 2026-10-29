@@ -469,8 +469,11 @@ def buscar_cotizacion(consulta: str, usuario: str = "") -> str:
     "productos y cantidades, precio del nivel pedido (P1..P7) y, si lo piden, un % de "
     "utilidad encima. Despues emite con emitir_cotizacion solo si el usuario confirma.",
     disponible=_cotizaciones_disponibles,
-    nivel="El nivel de precio que pidieron, P1 a P7 ('a precio 7' es P7)",
-    utilidad="Opcional: % de utilidad encima del nivel ('precio 5 con 6' es 6). Vacio o 0 = el nivel pelado.",
+    nivel="El nivel de precio, P1 a P7 ('a precio 7' es P7). Tambien acepta la "
+          "clave de JH pegada, donde la PRIMERA cifra es el nivel y el RESTO el % "
+          "de utilidad: '55'=P5 5%, '47'=P4 7%, '550'=P5 50%. Pasala tal cual, no la descompongas tu.",
+    utilidad="Opcional: % de utilidad encima del nivel ('precio 5 con 6' es 6). Vacio si ya "
+             "va pegado en el nivel (p. ej. '55') o si se cotiza al nivel pelado.",
 )
 def recotizar(nivel: str, utilidad: str = "", usuario: str = "") -> str:
     from . import cotizaciones
