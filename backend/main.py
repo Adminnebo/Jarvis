@@ -733,7 +733,56 @@ def ejecutar_herramienta(peticion_http: Request, peticion: PeticionDeHerramienta
         f"herramienta {peticion.nombre} {round((time.perf_counter() - inicio) * 1000)}ms",
         f"{peticion.argumentos} -> {resultado}",
     )
-    return {"resultado": resultado, "adjuntos": adjuntos}
+    return {"resultado": resultado, "adjuntos": adjuntos,
+            "mesa": peticion.nombre in herramientas.DE_LA_MESA}
+
+
+# --- La mesa de cotizaciones en pantalla ---
+# La tabla de la web lee y cambia la misma mesa que usa la voz: lo que se toca
+# en un lado, el otro ya lo sabe.
+
+class CambioDePrecio(BaseModel):
+    cotizacion: str
+    linea: int
+    precio: str
+
+
+class EleccionDeMesa(BaseModel):
+    cotizacion: str = ""
+    piso: str | None = None
+
+
+@app.get("/api/mesa")
+def ver_mesa(peticion: Request):
+    return cotizaciones.vista_mesa(peticion.state.usuario.id)
+
+
+@app.post("/api/mesa/precio")
+def cambiar_precio_en_mesa(peticion: Request, cambio: CambioDePrecio):
+    """Un precio cambiado a mano en la tabla. `nota` dice que cambio y como
+    quedo: la web se la pasa a Jarvis para que quede enterado. `corto` es lo
+    que queda en el historial del chat."""
+    id_usuario = peticion.state.usuario.id
+    try:
+        nota, corto = cotizaciones.cambiar_a_mano(
+            id_usuario, cambio.cotizacion, cambio.linea, cambio.precio)
+    except cotizaciones.ErrorCotizacion as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    return {"nota": nota, "corto": corto, "vista": cotizaciones.vista_mesa(id_usuario)}
+
+
+@app.post("/api/mesa/elegir")
+def elegir_en_mesa(peticion: Request, eleccion: EleccionDeMesa):
+    """Cambia la cotizacion con la que se trabaja (la pestaña) o el piso."""
+    id_usuario = peticion.state.usuario.id
+    try:
+        if eleccion.cotizacion:
+            cotizaciones.elegir(id_usuario, eleccion.cotizacion)
+        if eleccion.piso is not None:
+            cotizaciones.fijar_piso(id_usuario, eleccion.piso or "no")
+    except cotizaciones.ErrorCotizacion as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    return cotizaciones.vista_mesa(id_usuario)
 
 
 class FotoSubida(BaseModel):

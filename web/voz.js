@@ -477,6 +477,9 @@ export function crearSesionDeVoz(eventos) {
       resultado = datos.resultado;
       // Lo que la herramienta manda al chat va a la pantalla, no al modelo.
       if (datos.adjuntos?.length) avisar("onAdjuntos", datos.adjuntos);
+      // Si la mesa de cotizaciones esta en pantalla, el modelo lo sabe y no
+      // lee la tabla en voz alta.
+      if (datos.mesa && typeof resultado === "string") resultado += eventos.onMesa?.(item.name) || "";
     } catch (error) {
       resultado = error.name === "TimeoutError"
         ? `La consulta ${item.name} tardo demasiado. Dilo y ofrece reintentar.`
@@ -511,6 +514,19 @@ export function crearSesionDeVoz(eventos) {
       },
     });
     pedirRespuesta();
+  }
+
+  /* Le cuenta algo al modelo sin pedirle que hable: lo que se cambio a mano
+     en la pantalla. Lo tiene en cuenta en la proxima respuesta. */
+  function contexto(texto) {
+    enviar({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "system",
+        content: [{ type: "input_text", text: texto }],
+      },
+    });
   }
 
   /* Cuantos caracteres caben en un mensaje del canal de datos.
@@ -560,5 +576,5 @@ export function crearSesionDeVoz(eventos) {
     avisar("onCierre");
   }
 
-  return { conectar, cerrar, escribir, silenciar, adjuntarImagen, espacioParaImagen };
+  return { conectar, cerrar, escribir, contexto, silenciar, adjuntarImagen, espacioParaImagen };
 }

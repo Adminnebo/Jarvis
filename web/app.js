@@ -12,6 +12,7 @@ import { abrirPanelDispositivos } from "./dispositivos.js";
 import { abrirPanelOrganizacion } from "./organizacion.js";
 import { abrirPanelAsistente } from "./asistente.js";
 import { configurarAvatar } from "./avatar.js";
+import { configurarMesa, refrescar as refrescarMesa } from "./mesa.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -353,6 +354,7 @@ async function enviar(mensaje) {
   const nodoRespuesta = burbuja("jarvis");
   let completo = "";
   let porDecir = "";
+  let usoHerramientas = false;
 
   try {
     const respuesta = await fetch("/api/chat", {
@@ -399,6 +401,7 @@ async function enviar(mensaje) {
           }
         } else if (evento.tipo === "herramienta") {
           estadoVisual("pensando", `Consultando ${evento.dato}...`);
+          usoHerramientas = true;
         } else if (evento.tipo === "adjuntos") {
           burbujaDeAdjuntos(evento.dato);
         } else if (evento.tipo === "aviso") {
@@ -416,6 +419,8 @@ async function enviar(mensaje) {
 
     if (porDecir.trim()) decir(porDecir);
     if (!completo && nodoRespuesta.isConnected) nodoRespuesta.remove();
+    // Si la mesa de cotizaciones cambio, la tabla se abre con lo nuevo.
+    if (usoHerramientas) refrescarMesa({ abrir: "cambio" });
   } catch (error) {
     nodoRespuesta.remove();
     burbuja("error", `No pude conectar con el servidor: ${error.message}`);
@@ -504,6 +509,17 @@ async function abrirVozEnVivo() {
     onAdjuntos: (adjuntos) => {
       burbujaDeAdjuntos(adjuntos);
       guardarTurno("assistant", resumenDeAdjuntos(adjuntos), adjuntos);
+    },
+
+    // Una herramienta de la mesa termino: la tabla se abre (o se repinta) y
+    // al modelo se le dice que ya esta a la vista.
+    onMesa: (nombre) => {
+      if (nombre === "emitir_cotizacion") {
+        refrescarMesa();
+        return "";
+      }
+      refrescarMesa({ abrir: true });
+      return NOTA_MESA_EN_PANTALLA;
     },
 
     onError: (mensaje) => burbuja("error", mensaje),
@@ -692,6 +708,41 @@ $("btn-volver").addEventListener("click", () => {
     const origen = leerMarca("jarvis_panel_origen");
     if (origen) location.href = origen;
   }, 200);
+});
+
+// --------------------------------------------------------------------------
+// Mesa de cotizaciones en pantalla (mesa.js)
+// --------------------------------------------------------------------------
+
+// Va pegado al resultado de la herramienta, solo en la voz en vivo: con la
+// tabla delante, leerla en voz alta sobra.
+const NOTA_MESA_EN_PANTALLA =
+  "\n\n[PANTALLA: esta cotizacion ya se ve en una tabla al lado del chat, con " +
+  "precios, costos y margenes. Por voz di solo lo importante, en una o dos frases: " +
+  "el margen general (y el de cuando se cotizo, si cambio), lo que rompe el piso o " +
+  "queda a perdida, y lo que cambio. No leas la tabla ni la lista de productos " +
+  "salvo que te la pidan.]";
+
+configurarMesa({
+  // Lo que se cambia a mano en la tabla se le cuenta a Jarvis: en vivo, sin
+  // que hable; y en el historial, para el chat escrito.
+  alCambiarAMano: (nota, corto) => {
+    sesionViva?.contexto(nota);
+    guardarTurno("user", `[Desde la tabla] ${corto}`);
+  },
+  alEmitir: (nombre, resultado, adjuntos) => {
+    if (adjuntos.length) {
+      burbujaDeAdjuntos(adjuntos);
+      guardarTurno("assistant", resumenDeAdjuntos(adjuntos), adjuntos);
+    } else {
+      burbuja("error", resultado);
+    }
+    sesionViva?.contexto(
+      `Se emitio «${nombre}» con el boton de la tabla de la pantalla, no por voz. ` +
+      `Resultado: ${resultado}`,
+    );
+  },
+  alError: (mensaje) => burbuja("error", mensaje),
 });
 
 // --------------------------------------------------------------------------

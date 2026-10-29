@@ -788,3 +788,64 @@ def test_si_el_costo_no_cambio_lo_dice_en_una(emitidas):
     texto = _buscar("JV-12")      # sin costo guardado ni compras: solo el de hoy
     assert "solo se puede decir el margen con el costo de hoy" in texto
     assert "CUANDO SE COTIZO" not in texto
+
+
+# --- La mesa en pantalla ---
+
+@pytest.fixture
+def web(emitidas, monkeypatch):
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    monkeypatch.setenv("JARVIS_CLAVE_SECRETA", "clave-de-pruebas-larga")
+    cliente = TestClient(app)
+    assert cliente.get("/api/mesa").status_code == 401
+    cliente.post("/acceso", data={"clave": "la-del-admin"}, follow_redirects=False)
+    return cliente
+
+
+def test_la_tabla_trae_la_original_y_las_variantes(web):
+    assert web.get("/api/mesa").json()["cotizaciones"] == []
+    _buscar("3807")
+    _variantes({"base": "costo", "margen": 50})
+    vista = web.get("/api/mesa").json()
+    original, variante = vista["cotizaciones"]
+    assert original["id"] == "original" and original["original"]
+    assert round(original["margen"], 1) == 33.3 and round(original["margen_cotizado"], 1) == 37.9
+    breaker = original["lineas"][1]
+    assert breaker["costo"] == 100.0 and breaker["costo_cotizado"] == 80.0
+    assert round(breaker["margen_cotizado"], 1) == 87.5
+    assert variante["id"] == "costo + 50%" and variante["margen_cotizado"] is None
+    assert vista["activa"] == "costo + 50%"
+
+
+def test_un_precio_cambiado_a_mano(web):
+    _buscar("3807")
+    web.post("/api/mesa/elegir", json={"piso": "25"})
+    respuesta = web.post("/api/mesa/precio", json={"cotizacion": "original", "linea": 1, "precio": "9"})
+    datos = respuesta.json()
+    # La original no se toca: se cambia una copia, que queda activa.
+    assert "'ajustada'" in datos["nota"] and "ROMPE EL PISO" in datos["nota"]
+    assert datos["nota"].startswith("Cambio hecho a mano") and "Di el producto" not in datos["nota"]
+    assert datos["corto"] == ("Cambie a mano en la tabla «ajustada»: producto 1 (KEYARD ALAMBRE "
+                              "THHN #12 ROJO) de RD$ 13.00 a RD$ 9.00. Margen general 33.3% -> 0.0%.")
+    vista = datos["vista"]
+    assert vista["activa"] == "ajustada"
+    ajustada = vista["cotizaciones"][1]
+    assert ajustada["lineas"][0]["precio"] == 9.0 and ajustada["rompe_piso"]
+    assert vista["cotizaciones"][0]["lineas"][0]["precio"] == 13.0
+    assert web.post("/api/mesa/precio", json={"cotizacion": "original", "linea": 9,
+                                               "precio": "1"}).status_code == 400
+
+
+def test_la_pestana_elegida_es_con_la_que_se_trabaja(web):
+    _buscar("3807")
+    _variantes({"base": "costo"}, {"base": "costo", "margen": 50})
+    assert web.post("/api/mesa/elegir", json={"cotizacion": "a costo"}).json()["activa"] == "a costo"
+    assert cotizaciones.borrador_de("admin").nombre == "a costo"
+
+
+def test_las_herramientas_de_la_mesa_avisan_a_la_web(web):
+    respuesta = web.post("/api/herramienta", json={"nombre": "buscar_cotizacion",
+                                                   "argumentos": json.dumps({"consulta": "3807"})})
+    assert respuesta.json()["mesa"] is True
+    respuesta = web.post("/api/herramienta", json={"nombre": "recordar", "argumentos": "{}"})
+    assert respuesta.json()["mesa"] is False

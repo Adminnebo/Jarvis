@@ -125,6 +125,12 @@ def ejecutar_completo(nombre: str, argumentos_json: str, usuario: str,
         return f"Error al ejecutar {nombre}: {error}", []
 
 
+# Las que cambian o muestran la mesa de cotizaciones: despues de cualquiera, la
+# tabla de la web se vuelve a pintar.
+DE_LA_MESA = {"buscar_cotizacion", "preparar_cotizacion", "crear_variantes",
+              "ajustar_precios", "analizar_cotizacion", "emitir_cotizacion"}
+
+
 def ejecutar(nombre: str, argumentos_json: str, usuario: str) -> str:
     """Como ejecutar_completo, para quien solo necesita el texto."""
     return ejecutar_completo(nombre, argumentos_json, usuario)[0]

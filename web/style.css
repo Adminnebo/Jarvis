@@ -1094,7 +1094,9 @@ body {
   .barra { flex-wrap: nowrap; }
   .marca { min-width: 0; }
   .boton-menu { display: block; }
-  .acciones:not(.abierto) > :not(.boton-menu) { display: none; }
+  .acciones:not(.abierto) > :not(.boton-menu):not(#btn-mesa) { display: none; }
+  /* La cotizacion en curso queda a mano, fuera del menu. */
+  #btn-mesa:not([hidden]) { display: block; }
   .acciones.abierto {
     flex-direction: column; align-items: stretch; gap: 2px;
     position: absolute; top: 6px; right: 10px; z-index: 40;
@@ -1179,3 +1181,167 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
 }
 .panel .boton-texto:hover, .modal .boton-texto:hover { border-color: var(--borde-fuerte); }
 .boton-texto:disabled, .boton-mini:disabled, .boton-primario:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---------- Mesa de cotizaciones (mesa.js) ---------- */
+/* A la derecha en escritorio, con el chat corrido a la izquierda para que se
+   vean los dos; en el telefono, un panel abajo que se pliega. */
+
+:root { --ancho-mesa: min(640px, 96vw); }
+
+.panel-mesa { width: var(--ancho-mesa); padding-top: 0; padding-bottom: 0; }
+/* La barra pegajosa se queda en el borde del relleno: sin relleno arriba no
+   tapa las pestañas. */
+.panel-mesa .panel-barra { margin-top: 0; }
+
+@media (min-width: 1100px) {
+  body.con-mesa { padding-right: var(--ancho-mesa); }
+  body.con-mesa .barra { margin-right: calc(-1 * var(--ancho-mesa)); }
+  .panel-mesa { box-shadow: none; }
+}
+
+.mesa-pestanas {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  margin-bottom: 12px;
+  scrollbar-width: none;
+}
+.mesa-pestana {
+  flex: none;
+  padding: 4px 11px;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tenue);
+  font: 500 12.5px var(--fuente);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.mesa-pestana:hover { color: var(--texto); border-color: var(--borde-fuerte); }
+.mesa-pestana[aria-selected="true"] {
+  color: var(--acento);
+  border-color: var(--acento);
+  background: var(--acento-suave);
+}
+.mesa-pestana.nueva { animation: mesa-resalte 1.6s ease-out; }
+
+.mesa-cliente { margin: 0; font-weight: 500; }
+.mesa-nota { margin: 2px 0 0; color: var(--tenue); font-size: 12px; }
+
+.mesa-tabla { margin: 12px 0; }
+.mesa-tabla th.num, .mesa-tabla td.num { text-align: right; }
+.mesa-tabla td { vertical-align: top; }
+.mesa-tabla td.tenue { color: var(--tenue); }
+.mesa-tabla .mesa-producto { white-space: normal; min-width: 150px; }
+.mesa-descripcion { display: block; line-height: 1.35; }
+.mesa-codigo, .mesa-entonces { display: block; color: var(--tenue); font-size: 11.5px; margin-top: 2px; }
+.mesa-entonces { color: var(--aviso); }
+.mesa-movil { display: none; }
+.mesa-tabla tr.a-perdida .mesa-margen { color: var(--peligro); font-weight: 600; }
+.mesa-tabla tr.cambio td { animation: mesa-resalte 1.6s ease-out; }
+
+.mesa-precio {
+  width: 88px;
+  padding: 3px 6px;
+  margin: -4px 0;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.mesa-precio:hover { border-color: var(--borde-fuerte); }
+.mesa-precio:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+
+/* Las cifras quedan siempre a la vista, aunque la tabla sea larga. */
+.mesa-pie {
+  position: sticky;
+  bottom: 0;
+  margin: 0 -18px;
+  padding: 12px 18px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--borde);
+  background: var(--superficie);
+}
+.mesa-pie:empty { display: none; }
+.mesa-cifras { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.mesa-cifra { display: grid; gap: 1px; }
+.mesa-cifra span {
+  color: var(--tenue);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.mesa-cifra strong { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mesa-cifra.mal strong, .mesa-piso .mal { color: var(--peligro); }
+.mesa-cifra.tenue strong { color: var(--tenue); font-weight: 500; }
+.mesa-piso .bien { color: var(--ok); }
+.mesa-aviso { margin: 8px 0 0; color: var(--aviso); font-size: 12.5px; }
+
+.mesa-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.mesa-piso { color: var(--tenue); font-size: 12.5px; }
+.mesa-piso input {
+  width: 48px;
+  padding: 3px 6px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+  text-align: right;
+}
+.mesa-piso input:focus { outline: none; border-color: var(--acento); }
+.mesa-emitir.armado { background: var(--aviso); }
+
+.boton-plegar { display: none; }
+
+@keyframes mesa-resalte {
+  from { background: var(--acento-suave); }
+  to { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mesa-pestana.nueva, .mesa-tabla tr.cambio td { animation: none; }
+}
+
+@media (max-width: 720px) {
+  .panel-mesa {
+    top: auto;
+    bottom: var(--alto-entrada, 60px);
+    height: min(62vh, 560px);
+    width: 100vw;
+    border-left: none;
+    border-top: 1px solid var(--borde-fuerte);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -18px 40px rgba(0, 0, 0, 0.5);
+  }
+  .panel-mesa .panel-barra { border-radius: 14px 14px 0 0; }
+  .boton-plegar { display: grid; }
+  .panel-mesa.plegada { height: auto; }
+  .panel-mesa.plegada #mesa-cabecera,
+  .panel-mesa.plegada #mesa-cuerpo,
+  .panel-mesa.plegada .mesa-aviso,
+  .panel-mesa.plegada .mesa-acciones { display: none; }
+  .panel-mesa.plegada .boton-plegar { transform: rotate(180deg); }
+  .col-ganancia, .col-cant, .col-costo { display: none; }
+  .mesa-movil { display: block; color: var(--tenue); font-size: 11.5px; margin-top: 2px; }
+  .mesa-tabla .mesa-producto { min-width: 0; }
+  .mesa-tabla th, .mesa-tabla td { padding: 7px 8px; }
+  .mesa-precio { width: 80px; }
+  .mesa-pie { padding-bottom: 12px; }
+  .mesa-cifras { gap: 6px 16px; }
+  .mesa-cifra strong { font-size: 14px; }
+}

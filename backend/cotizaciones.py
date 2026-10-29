@@ -1620,10 +1620,38 @@ def ajustar_precios(id_usuario: str, cambios, cotizacion: str = "", piso="") -> 
         f"Margen general: {_pct(general_antes['margen'])} -> {_pct(general['margen'])} sobre el costo; "
         f"total RD$ {_num(cual['totales']['total'])}. "
         + _avisos(general, piso_actual).strip()
-        + " Di el producto cambiado (precio y margen nuevo) y el margen general antes y "
-        "despues. Si rompio el piso o quedo a perdida, dilo en la misma frase con la cifra; "
-        "se aplico igual."
+        + _COMO_DECIR_EL_AJUSTE
     )
+
+
+_COMO_DECIR_EL_AJUSTE = (
+    " Di el producto cambiado (precio y margen nuevo) y el margen general antes y "
+    "despues. Si rompio el piso o quedo a perdida, dilo en la misma frase con la cifra; "
+    "se aplico igual."
+)
+
+
+def cambiar_a_mano(id_usuario: str, cotizacion: str, linea: int,
+                   precio: str) -> tuple[str, str]:
+    """Un precio cambiado en la tabla de la web. Devuelve:
+    - la nota para que Jarvis quede enterado, completa y sin la instruccion de
+      como decirlo (nadie le pidio que hable);
+    - una linea corta para el historial del chat."""
+    _, cual = _resolver(mesa.cargar(id_usuario), cotizacion)
+    antes = margenes.analizar(cual["lineas"])["margen"]
+    texto = ajustar_precios(id_usuario, [{"linea": str(linea), "precio": precio}], cotizacion)
+    m = mesa.cargar(id_usuario)
+    ahora = mesa.activa(m)
+    nueva = ahora["lineas"][linea - 1]
+    corto = (
+        f"Cambie a mano en la tabla «{ahora['nombre']}»: producto {linea} "
+        f"({nueva.get('descripcion') or nueva['codigo']}) de RD$ "
+        f"{_num(cual['lineas'][linea - 1]['precio_unitario'])} a RD$ {_num(nueva['precio_unitario'])}. "
+        f"Margen general {_pct(antes)} -> {_pct(margenes.analizar(ahora['lineas'])['margen'])}."
+    )
+    nota = ("Cambio hecho a mano en la tabla de la pantalla, no por voz: "
+            + texto.removesuffix(_COMO_DECIR_EL_AJUSTE))
+    return nota, corto
 
 
 def analizar(id_usuario: str, cotizacion: str = "", producto: str = "", piso="") -> str:
@@ -1722,3 +1750,74 @@ def nombre_de(id_usuario: str) -> str:
         except Exception:  # noqa: BLE001
             pass
     return id_usuario
+
+
+# --------------------------------------------------------------------------
+# La mesa en pantalla (la tabla de la web)
+# --------------------------------------------------------------------------
+
+def _vista_de(cual: dict, id_: str, nombre: str, piso: float | None,
+              original: bool) -> dict:
+    lineas = cual["lineas"]
+    general = margenes.analizar(lineas)
+    al_cotizar = margenes.analizar(_al_cotizar(lineas)) if original else None
+    filas = []
+    for n, l in enumerate(lineas, start=1):
+        costo, precio = l.get("costo"), float(l["precio_unitario"])
+        entonces = l.get("costo_cotizado") if original else None
+        filas.append({
+            "n": n, "codigo": l["codigo"], "descripcion": l.get("descripcion") or l["codigo"],
+            "unidad": l.get("unidad") or "UND", "cantidad": float(l["cantidad"]),
+            "costo": costo, "precio": precio, "precio_original": l.get("precio_original"),
+            "margen": margenes.margen(precio, costo),
+            "ganancia": (precio - costo) * float(l["cantidad"]) if costo else None,
+            "costo_cotizado": entonces,
+            "margen_cotizado": margenes.margen(precio, entonces) if entonces else None,
+            "ajuste": l.get("ajuste") or "",
+        })
+    margen = general["margen"]
+    return {
+        "id": id_, "nombre": nombre, "original": original,
+        "cliente": (cual.get("cliente") or {}).get("nombre") or "",
+        "fecha": cual.get("fecha") or "",
+        "lineas": filas,
+        "total": totalizar(lineas)["total"],
+        "costo": general["costo"], "ganancia": general["ganancia"], "margen": margen,
+        "margen_cotizado": (al_cotizar["margen"]
+                            if al_cotizar and any(f["costo_cotizado"] for f in filas) else None),
+        "sin_costo": general["sin_costo"], "a_perdida": general["a_perdida"],
+        "rompe_piso": piso is not None and margen is not None and margen < piso,
+    }
+
+
+def vista_mesa(id_usuario: str) -> dict:
+    """Lo que muestra la tabla de la web: la original y las variantes, con sus
+    margenes ya calculados. Los numeros salen de aqui, como para la voz."""
+    m = mesa.cargar(id_usuario)
+    cotizaciones = []
+    if m.get("original"):
+        o = m["original"]
+        cotizaciones.append(_vista_de(o, "original", f"{o['numero']} (original)", m["piso"], True))
+    cotizaciones += [_vista_de(v, v["nombre"], v["nombre"], m["piso"], False)
+                     for v in m["variantes"]]
+    activa = m.get("ultima") if m.get("ultima") in {c["id"] for c in cotizaciones} else None
+    if activa is None and cotizaciones:
+        activa = cotizaciones[-1]["id"]
+    return {"piso": m["piso"], "activa": activa, "cotizaciones": cotizaciones}
+
+
+def elegir(id_usuario: str, cual: str) -> None:
+    """La que se mira en la tabla pasa a ser con la que se trabaja: "emitela"
+    o "bajale al 2" hablan de esa."""
+    with mesa.candado:
+        m = mesa.cargar(id_usuario)
+        tipo, datos = _resolver(m, cual)
+        m["ultima"] = "original" if tipo == "original" else datos["nombre"]
+        mesa.guardar(id_usuario, m)
+
+
+def fijar_piso(id_usuario: str, piso: str) -> None:
+    with mesa.candado:
+        m = mesa.cargar(id_usuario)
+        _leer_piso(m, piso)
+        mesa.guardar(id_usuario, m)

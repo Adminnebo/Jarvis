@@ -32,6 +32,8 @@
       <span class="insignia" id="insignia-supabase" hidden>Supabase</span>
       <span class="nombre-usuario" id="nombre-usuario" hidden></span>
       <span class="meta" id="meta" hidden data-super-admin></span>
+      <button id="btn-mesa" class="boton-texto" type="button" hidden
+              title="La cotización en curso: precios, costos y márgenes">Cotización</button>
       <button id="btn-consumo" class="boton-texto" hidden data-super-admin>Consumo</button>
       <button id="btn-fuentes" class="boton-texto" hidden data-super-admin>Fuentes</button>
       <button id="btn-organizacion" class="boton-texto" hidden>Organización</button>
@@ -86,6 +88,23 @@
   </main>
 
   <section class="conversacion" id="conversacion"></section>
+
+  <!-- La mesa de cotizaciones: la misma que usa la voz. Ver mesa.js. -->
+  <aside class="panel panel-ancho panel-mesa" id="panel-mesa" hidden aria-label="Cotización en curso">
+    <div class="panel-barra">
+      <h2>Cotización</h2>
+      <div class="panel-barra-acciones">
+        <button id="btn-plegar-mesa" class="boton-cerrar boton-plegar" type="button"
+                title="Plegar" aria-label="Plegar o desplegar la tabla" aria-expanded="true">&#8964;</button>
+        <button id="btn-cerrar-mesa" class="boton-cerrar"
+                title="Cerrar (Esc)" aria-label="Cerrar">&times;</button>
+      </div>
+    </div>
+    <div id="mesa-pestanas" class="mesa-pestanas" role="tablist"></div>
+    <div id="mesa-cabecera"></div>
+    <div id="mesa-cuerpo"></div>
+    <div id="mesa-pie" class="mesa-pie"></div>
+  </aside>
 
   <aside class="panel" id="panel-memoria" hidden>
     <div class="panel-barra">
