@@ -147,6 +147,15 @@ _ESQUEMA = """
         creado TEXT NOT NULL,
         actualizado TEXT NOT NULL
     );
+
+    -- La mesa de cotizaciones de cada persona (original + variantes sin
+    -- emitir), en JSON. Aqui y no en memoria: cada despliegue reinicia Jarvis
+    -- y se perdia lo que alguien estaba armando. Ver mesa.py.
+    CREATE TABLE IF NOT EXISTS mesas_cotizacion (
+        usuario_id TEXT PRIMARY KEY,
+        datos TEXT NOT NULL,
+        actualizado REAL NOT NULL
+    );
 """
 
 
