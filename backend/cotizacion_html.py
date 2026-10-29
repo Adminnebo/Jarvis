@@ -9,14 +9,36 @@ toca el CSS de las filas o la imagen, hay que mover tambien los parametros de
 altura de abajo, igual que en el original.
 """
 
+import base64
 import html
 import math
+from pathlib import Path
 
-LOGO_URL = "https://bewpkmgcnzukyouplbwm.supabase.co/storage/v1/object/public/JH-Iconos/JH%20LG_page-0001.jpg"
-ICON_WA_URL = "https://bewpkmgcnzukyouplbwm.supabase.co/storage/v1/object/public/JH-Iconos/whatsapp.png"
-ICON_IG_URL = "https://bewpkmgcnzukyouplbwm.supabase.co/storage/v1/object/public/JH-Iconos/instagram.png"
-ICON_FLAG_US_URL = "https://bewpkmgcnzukyouplbwm.supabase.co/storage/v1/object/public/JH-Iconos/flag.png"
-QR_URL = "https://bewpkmgcnzukyouplbwm.supabase.co/storage/v1/object/public/JH-Iconos/QR.jpeg"
+_ICONOS = "https://bewpkmgcnzukyouplbwm.supabase.co/storage/v1/object/public/JH-Iconos/"
+LOGO_URL = _ICONOS + "JH%20LG_page-0001.jpg"
+ICON_WA_URL = _ICONOS + "whatsapp.png"
+ICON_FLAG_US_URL = _ICONOS + "flag.png"
+NEBO_LOGO_URL = _ICONOS + "Logo%20Nebo%20AI%20(1).png"
+QR_URL = _ICONOS + "QR.jpeg"  # Instagram de Lucas
+
+
+def _embebida(nombre: str, tipo: str) -> str:
+    # El logo del Popular y el QR de JH no estan en Supabase: van dentro del HTML.
+    datos = (Path(__file__).parent / "imagenes_cotizacion" / nombre).read_bytes()
+    return f"data:image/{tipo};base64,{base64.b64encode(datos).decode()}"
+
+
+QR_JH_URL = _embebida("qr-jh.jpg", "jpeg")  # Instagram de JH
+
+# Cuentas del pie: (banco, logo, RD$, US$)
+BANCOS = [
+    ("BHD León", _ICONOS + "bhd.png", "11430300012", "11430300021"),
+    ("Santa Cruz", _ICONOS + "santacruz.png", "11331000001127", "21332020000751"),
+    ("Popular", _embebida("popular.png", "png"), "736525973", "785575630"),
+    ("Banreservas", _ICONOS + "banreservas.png", "9607530405", "9607546865"),
+    ("Scotiabank", _ICONOS + "scotiabank.png", "07500020104", "07500146261"),
+]
+EMAIL_CXC = "cxc.lv@jhelectroalambres.com"
 
 # Paginacion: el pie es position:fixed y no reserva espacio, asi que el unico
 # freno contra el solapamiento es este presupuesto de alto por pagina.
@@ -154,27 +176,43 @@ _COLUMNAS = """
     </tr>
   </thead>"""
 
+def _banco(nombre: str, logo: str, rd: str, us: str) -> str:
+    return f"""
+  <td class="ft-banco">
+    <table class="ft-banco-head"><tr>
+      <td class="ft-banco-logo"><img src="{logo}" alt=""></td>
+      <td class="ft-banco-nombre">{nombre}</td>
+    </tr></table>
+    <table class="ft-cuentas">
+      <tr><td class="mon">RD$</td><td>{rd}</td></tr>
+      <tr><td class="mon">US$</td><td>{us}</td></tr>
+    </table>
+  </td>"""
+
+
+_ICONO_CORREO = ('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="10" viewBox="0 0 24 17" class="ft-mail">'
+                 '<rect width="24" height="17" rx="2" fill="#0b2a6b"/>'
+                 '<path d="M1.5 2l10.5 8 10.5-8" stroke="#fff" stroke-width="2" fill="none"/></svg>')
+
+# Cuentas de JH | NEBO | QR de Lucas | QR de JH. Mismo pie que la cotizacion de
+# Camila en n8n.
 _PIE = f"""
   <div class="page-footer">
-    <div class="footer-col footer-col-left">
-      <div class="footer-text-block">
-        <div class="footer-generated">Cotización generada automáticamente mediante tecnología inteligente</div>
-        <div class="footer-nebo"><b>NEBO AI</b></div>
-        <div class="footer-brand"><b>LM CONSULTING GROUP USA LLC</b></div>
-        <div class="footer-brand"><b>Lucas Marte</b>&nbsp;&nbsp;|&nbsp;&nbsp;<b>Doctorado en IA y Big Data</b></div>
-      </div>
+    <div class="ft-col ft-bancos-col">
+      <div class="ft-bancos-title">Cuentas bancarias · JH Electro Alambres S.R.L.</div>
+      <table class="ft-bancos"><tr>{"".join(_banco(*b) for b in BANCOS)}</tr></table>
+      <div class="ft-bancos-nota">{_ICONO_CORREO}Transacciones y estados de cuenta: <b>{EMAIL_CXC}</b></div>
     </div>
-    <div class="footer-col footer-col-center">
-      <img src="{ICON_FLAG_US_URL}" alt="US" style="width:auto;height:14px;vertical-align:middle;margin-right:6px;"><span class="footer-registered">Empresa registrada en Miami</span>
+    <div class="ft-col ft-nebo-col">
+      <img src="{NEBO_LOGO_URL}" alt="NEBO AI" class="ft-nebo-logo">
+      <div class="footer-brand">LM CONSULTING GROUP USA LLC</div>
+      <div class="ft-line"><b>Lucas Marte</b>&nbsp;|&nbsp;Ingeniero Industrial</div>
+      <div class="ft-line"><b>Doctorado en Big Data, Finanzas Cuantitativas e Inteligencia Artificial</b></div>
+      <div class="ft-line"><img src="{ICON_FLAG_US_URL}" alt="US" class="ft-ico">Empresa registrada en Miami</div>
+      <div class="ft-line ft-wa"><img src="{ICON_WA_URL}" alt="WA" class="ft-ico">809-627-8739</div>
     </div>
-    <div class="footer-col footer-col-right">
-      <div class="footer-contact-line"><img src="{ICON_WA_URL}" alt="WA" style="width:20px;height:20px;vertical-align:middle;margin-right:5px;"><span>WhatsApp: 809-627-8739</span></div>
-      <div class="footer-contact-line"><img src="{ICON_IG_URL}" alt="IG" style="width:20px;height:20px;vertical-align:middle;margin-right:5px;"><span>Instagram: @lucasmarte_</span></div>
-    </div>
-    <div class="footer-col footer-col-qr">
-      <img src="{QR_URL}" alt="QR" class="qr-img">
-      <div class="qr-caption">Escanea para<br>contactarnos</div>
-    </div>
+    <div class="ft-col ft-qr-col"><img src="{QR_URL}" alt="QR Instagram Lucas Marte" class="qr-img"></div>
+    <div class="ft-col ft-qr-col"><img src="{QR_JH_URL}" alt="QR Instagram JH" class="qr-img"></div>
   </div>"""
 
 
@@ -451,121 +489,59 @@ CSS = """
     font-weight: bold;
   }
 
+  /* ===== FOOTER DE PAGINA (fijo, sale en todas las paginas) ===== */
   .page-footer {
     display: table;
+    table-layout: fixed;
     width: 100%;
-    padding-top: 20px;
-    border-top: 1.5px solid #555;
-    font-size: 7.5pt;
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    padding-left: 3mm;
-    padding-right: 3mm;
-    padding-bottom: 0;
+    border-top: 1.5px solid #1a3c8a;
+    border-bottom: 1.5px solid #1a3c8a;
+    padding: 5px 0 4px 0;
     background: #fff;
-  }
-  .footer-col {
-    display: table-cell;
-    vertical-align: middle;
-    padding-left: 10px;
-    padding-right: 10px;
-  }
-  .footer-col-left {
-    width: 48%;
-    padding-left: 0;
-    white-space: nowrap;
-  }
-  .footer-col-center {
-    width: 18%;
-    text-align: center;
-    white-space: nowrap;
-  }
-  .footer-col-right {
-    width: 20%;
-    text-align: right;
-  }
-  .footer-col-qr {
-    width: 8%;
-    text-align: right;
-    padding-right: 0;
-  }
-
-  .footer-col-left svg,
-  .footer-col-left img {
-    float: left;
-    margin-top: 2px;
-  }
-  .footer-text-block {
-    overflow: hidden;
-    line-height: 1.6;
-    white-space: nowrap;
-  }
-  .footer-generated {
-    font-size: 6.5pt;
-    color: #333;
-  }
-  .footer-brand {
     font-size: 7pt;
-    margin-top: 1px;
-    white-space: normal;
+    color: #0b2a6b;
   }
-  .footer-brand b {
-    color: #1a3c8a;
-  }
-  .footer-nebo {
-    font-size: 8.5pt;
-    margin-top: 1px;
-    white-space: normal;
-  }
-  .footer-nebo b {
-    color: #1a3c8a;
-  }
+  .ft-col { display: table-cell; vertical-align: middle; }
+  .ft-bancos-col { width: 61%; padding-right: 6px; }
+  .ft-nebo-col { width: 21%; padding: 0 6px; border-left: 1px solid #1a3c8a; line-height: 1.3; }
+  .ft-qr-col { width: 9%; text-align: center; border-left: 1px solid #1a3c8a; padding: 0 2px; }
 
-  .footer-col-center svg,
-  .footer-col-center img {
-    display: inline;
-    vertical-align: middle;
-    margin-right: 5px;
-  }
-  .footer-registered {
-    font-size: 7.5pt;
-    color: #333;
-    vertical-align: middle;
-  }
+  /* Cuentas bancarias: un banco por columna (ancho segun el contenido) */
+  .ft-bancos-title { color: #0033CC; font-weight: bold; font-size: 7.5pt; margin-bottom: 3px; }
+  .ft-bancos { width: 100%; border-collapse: collapse; }
+  .ft-banco { vertical-align: top; padding: 0 4px; border-left: 1px solid #1a3c8a; }
+  .ft-banco:first-child { border-left: none; padding-left: 0; }
+  .ft-banco-head { border-collapse: collapse; margin-bottom: 2px; }
+  .ft-banco-head td { vertical-align: middle; padding: 0; height: 20px; }
+  .ft-banco-logo { padding-right: 4px !important; }
+  .ft-banco-logo img { height: 20px; width: auto; max-width: 26px; display: block; }
+  .ft-banco-nombre { font-weight: bold; font-size: 7pt; white-space: nowrap; }
+  .ft-cuentas { border-collapse: collapse; font-size: 6.2pt; line-height: 1.35; }
+  .ft-cuentas td { padding: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ft-cuentas .mon { padding-right: 4px; }
+  .ft-bancos-nota { font-size: 6.5pt; margin-top: 5px; text-align: center; }
+  .ft-bancos-nota b { font-size: 7pt; }
+  .ft-mail { vertical-align: middle; margin-right: 5px; }
 
-  .footer-contact-line {
-    font-size: 8pt;
-    margin-bottom: 5px;
-    white-space: nowrap;
-    line-height: 20px;
-    text-align: right;
-  }
-  .footer-contact-line span {
-    vertical-align: middle;
-  }
+  /* NEBO */
+  .ft-nebo-logo { height: 22px; width: auto; display: block; margin-bottom: 2px; }
+  .footer-nebo { font-size: 10pt; font-weight: bold; margin-bottom: 1px; }
+  .footer-brand { font-size: 6pt; font-weight: bold; white-space: nowrap; }
+  .ft-line { font-size: 5.5pt; margin-top: 1px; }
+  .ft-wa { font-size: 6.5pt; }
+  .ft-ico, .ft-line svg { height: 9px; width: auto; vertical-align: middle; margin-right: 3px; }
 
-  .qr-img {
-    width: 55px;
-    height: 55px;
-    display: inline-block;
-  }
+  /* QR de Instagram */
+  /* Los dos QR son cuadrados con el mismo encuadre: mismo tamaño fijo. */
+  .qr-img { width: 60px; height: 60px; display: inline-block; }
   .qr-placeholder {
-    width: 55px;
-    height: 55px;
-    border: 1px dashed #999;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 8pt;
-    color: #999;
+    width: 52px; height: 52px; border: 1px dashed #999;
+    display: inline-block; line-height: 52px; text-align: center;
+    font-size: 8pt; color: #999;
   }
-  .qr-caption {
-    font-size: 6.5pt;
-    margin-top: 2px;
-    line-height: 1.2;
-    text-align: right;
-    color: #333;
-  }
+  .qr-caption { font-size: 4pt; margin-top: 2px; text-transform: uppercase; color: #000; white-space: nowrap; }
 """
