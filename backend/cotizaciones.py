@@ -33,12 +33,13 @@ PREFIJO = "JV-"
 NIVELES = tuple(f"P{i}" for i in range(1, 8))
 MAX_LINEAS = 60
 MAX_CANTIDAD = 1_000_000
-# Lo que se le puede sumar al coste. Un tope evita que un 2000 mal dictado
-# salga como cotizacion.
-# La utilidad es sobre el precio de venta, asi que 100 seria dividir por cero.
-# El tope deja afuera lo que ya es un error de dictado: con 95 el precio sale
-# veinte veces el coste.
+# La utilidad de la clave de JH es sobre el precio de venta, asi que 100 seria
+# dividir por cero. El tope deja afuera lo que ya es un error de dictado: con
+# 95 el precio sale veinte veces el coste.
 MAX_UTILIDAD = 95
+# El margen al cotizar al costo es sobre el costo: 1000 ya es once veces el
+# costo, y mas que eso es un numero mal dictado.
+MAX_MARGEN = 1000
 
 # El enlace que viaja a la app de los lentes, que descarga sin sesion.
 FIRMA_APP = 24 * 3600
@@ -137,29 +138,6 @@ def productos_del_catalogo(codigos: list[str]) -> dict[str, dict]:
         f"WHERE Codigo IN ({lista})"
     )
     return {_texto(f.get("CodigoLimpio") or f.get("Codigo")).upper(): f for f in filas}
-
-
-def coste_de(fila: dict, columna: str) -> float:
-    """El coste del producto, leido de la columna que se pida.
-
-    La columna no se adivina: la dice quien configura la fuente, en sus
-    notas. Una tabla puede tener varias parecidas -coste, costo promedio,
-    ultimo costo- y elegir la que no es seria cotizar mal sin que se note.
-    """
-    nombre = (columna or "").strip().lower()
-    clave = next((c for c in fila if c.strip().lower() == nombre), None)
-    if clave is None:
-        raise ErrorCotizacion(
-            f"El catalogo no tiene una columna '{columna}'. La columna del coste "
-            "se configura en las notas de la fuente; preguntale a quien administra "
-            "Jarvis cual es."
-        )
-    try:
-        return float(fila.get(clave) or 0)
-    except (TypeError, ValueError):
-        return 0.0
-
-
 
 
 _NOMBRE_PERMITIDO = re.compile(r"[^\w\s.&-]", re.UNICODE)
@@ -277,6 +255,7 @@ class Encontrada:
     total: float
     fuente: str = "jv"          # "jv" (jarvis_cotizaciones) o "jh" (Base JH)
     creado: float = field(default_factory=time.time)
+    cuando: str = ""            # cuando se cotizo, tal como viene de la base
 
 
 def encontrada_de(id_usuario: str) -> Encontrada | None:
@@ -434,8 +413,8 @@ def calcular_linea(fila: dict, cantidad: float, nivel: str, factor: float,
 
     Los precios del catalogo ya incluyen ITBIS: el bruto se despeja.
 
-    Con `coste` -{columna, utilidad}- el precio no sale del nivel del cliente
-    sino de esa columna con ese porcentaje de utilidad.
+    Con `coste` -{margen}- el precio no sale del nivel del cliente sino del
+    costo del catalogo con ese margen.
     """
     try:
         tasa = float(fila.get("TipoItbis") or 0)
@@ -443,20 +422,18 @@ def calcular_linea(fila: dict, cantidad: float, nivel: str, factor: float,
         tasa = 0.0
 
     if coste is None:
-        # Precio del nivel. Con utilidad_nivel (recotizar a un nivel elegido) se
-        # le aplica el mismo margen que al coste: PV = base / (1 - %/100).
+        # Precio del nivel. Con utilidad_nivel (la clave de JH, "55" = P5 con 5)
+        # se usa la cuenta de JH, sobre el precio de venta: PV = base / (1 - %/100).
         precio = round(float(fila.get(nivel) or 0) * factor, 2)
         if utilidad_nivel:
             precio = round(precio / (1 - utilidad_nivel / 100), 2)
         base = 0.0
     else:
-        # El coste de este catalogo ya trae el ITBIS adentro, igual que los
-        # P1..P7: es una columna de precio mas, y el bruto se despeja abajo.
-        # PV = coste / (1 - % utilidad). El porcentaje es la tajada del PRECIO
-        # DE VENTA, no un recargo sobre el coste: con 30%, 1000 no va a 1300
-        # sino a 1428.57, que es lo que deja 30% de utilidad de verdad.
-        base = coste_de(fila, coste["columna"])
-        precio = round(base / (1 - coste["utilidad"] / 100), 2)
+        # El costo de este catalogo ya trae el ITBIS adentro, igual que los
+        # P1..P7: el bruto se despeja abajo. El margen es SOBRE EL COSTO, como
+        # en toda la mesa: 1000 con 30% sale a 1300.
+        base = margenes.costo_de_fila(fila) or 0.0
+        precio = margenes.precio_con_margen(base, coste["margen"])
 
     bruto = precio / (1 + tasa / 100)
     return {
@@ -491,32 +468,36 @@ def _cantidad(valor: float) -> str:
 
 
 def _leer_utilidad(utilidad) -> float:
-    """El porcentaje de utilidad, validado. Es la parte del precio de venta."""
+    """El porcentaje de la clave de JH ("55" = P5 con 5), validado. Es la parte
+    del precio de venta, como lo cuenta JH."""
     try:
         por_ciento = float(utilidad or 0)
     except (TypeError, ValueError):
         raise ErrorCotizacion(f"El porcentaje de utilidad no es un numero: '{utilidad}'.") from None
     if not 0 <= por_ciento <= MAX_UTILIDAD:
         raise ErrorCotizacion(
-            f"El porcentaje de utilidad tiene que estar entre 0 y {MAX_UTILIDAD:g}. "
-            "Es la parte del precio de venta, no lo que se le suma al coste."
+            f"El porcentaje de utilidad tiene que estar entre 0 y {MAX_UTILIDAD:g}."
         )
     return por_ciento
 
 
-def _leer_coste(columna: str, utilidad) -> dict | None:
-    """Los datos para cotizar desde el coste, o None para usar los niveles."""
-    if not (columna or "").strip():
-        return None
-    return {"columna": columna.strip(), "utilidad": _leer_utilidad(utilidad)}
+def _leer_margen(margen) -> float:
+    """El margen sobre el costo para cotizar al costo, validado."""
+    try:
+        por_ciento = float(str(margen or 0).replace("%", "").replace(",", ".").strip() or 0)
+    except ValueError:
+        raise ErrorCotizacion(f"El margen no es un numero: '{margen}'.") from None
+    if not 0 <= por_ciento <= MAX_MARGEN:
+        raise ErrorCotizacion(f"El margen sobre el costo tiene que estar entre 0 y {MAX_MARGEN:g}.")
+    return por_ciento
 
 
 def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
-             ciudad: str = "", contacto: str = "", columna_coste: str = "",
-             utilidad=0) -> str:
+             ciudad: str = "", contacto: str = "", al_costo: bool = False,
+             margen=0) -> str:
     """Arma el borrador y devuelve el resumen para confirmar."""
     pedidos = _leer_productos(productos)
-    coste = _leer_coste(columna_coste, utilidad)
+    coste = {"margen": _leer_margen(margen)} if al_costo else None
     datos_cliente = _resolver_cliente(cliente or "", contado, ciudad or "", contacto or "")
 
     catalogo = productos_del_catalogo([codigo for codigo, _ in pedidos])
@@ -527,7 +508,8 @@ def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
             "correctos con buscar_en_fuente."
         )
 
-    ajuste = f"coste + {_cantidad(coste['utilidad'])}%" if coste else datos_cliente["nivel"]
+    ajuste = (("a costo" if not coste["margen"] else f"costo + {coste['margen']:g}%")
+              if coste else datos_cliente["nivel"])
     lineas = [
         _completar(calcular_linea(catalogo[codigo], cantidad, datos_cliente["nivel"],
                                   datos_cliente["factor"], coste),
@@ -536,7 +518,7 @@ def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
     ]
     sin_precio = [l["descripcion"] or l["codigo"] for l in lineas if l["precio_unitario"] <= 0]
     if sin_precio:
-        falta = f"coste en '{coste['columna']}'" if coste else f"precio {datos_cliente['nivel']}"
+        falta = "costo" if coste else f"precio {datos_cliente['nivel']}"
         raise ErrorCotizacion(
             f"Sin {falta} en el catalogo: {', '.join(sin_precio)}. "
             "No se puede cotizar asi; dilo."
@@ -546,16 +528,15 @@ def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
 
     detalle = "; ".join(
         f"{_cantidad(l['cantidad'])} {l['unidad'] or 'UND'} de {l['descripcion']} "
-        + (f"(coste {_num(l['coste'])}) " if coste else "")
+        + (f"(costo {_num(l['coste'])}) " if coste else "")
         + f"a {_num(l['precio_unitario'])} = {_num(l['subtotal_linea'])}"
         for l in lineas
     )
     if coste:
         # Se dice como se calculo, para que quien cotiza lo vea antes de emitir.
         tipo_cliente = (
-            f"al coste de '{coste['columna']}'"
-            + (f" con {_cantidad(coste['utilidad'])}% de utilidad"
-               if coste["utilidad"] else "")
+            "al costo"
+            + (f" + {coste['margen']:g}% sobre el costo" if coste["margen"] else "")
             + ", ITBIS incluido"
         )
     else:
@@ -566,7 +547,7 @@ def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
         f"{len(lineas)} producto(s): {detalle}. Total RD$ {_num(totales['total'])}, "
         f"ITBIS incluido RD$ {_num(totales['itbis'])}. "
         "Resume cliente, cantidad de productos y total, y pregunta si la emite. "
-        + ("Al resumir, di sobre que precio se calculo y el total; el coste de "
+        + ("Al resumir, di sobre que precio se calculo y el total; el costo de "
            "cada producto no se lee salvo que lo pidan. " if coste else "")
         + "Llama a emitir_cotizacion solo si dice que si; si pide cambios, vuelve a "
         "llamar a preparar_cotizacion."
@@ -829,12 +810,34 @@ def _fecha_corta(iso) -> str:
         return ""
 
 
-def _lineas_de_original(productos: list[dict]) -> list[dict]:
-    """Las lineas de una cotizacion ya hecha: con los precios con que se cotizo
-    (no se recalculan) y el costo de HOY del catalogo, que es el unico que hay
-    (el detalle de JH trae costo 0)."""
+def _dia(cuando: str) -> str:
+    """AAAA-MM-DD en Santo Domingo, o "" si no se entiende."""
+    try:
+        momento = datetime.fromisoformat(str(cuando).replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if momento.tzinfo:
+        momento = momento.astimezone(ZONA)
+    return momento.strftime("%Y-%m-%d")
+
+
+def _lineas_de_original(productos: list[dict], cuando: str = "") -> list[dict]:
+    """Las lineas de una cotizacion ya hecha, con los precios con que se cotizo
+    (no se recalculan) y dos costos:
+    - `costo`: el de HOY del catalogo. Es el que sirve para repetirla o sacar
+      variantes.
+    - `costo_cotizado`: el que habia cuando se cotizo. Las de Jarvis lo
+      guardan; las de JH no (su detalle trae costo 0), y se toma el de la
+      ultima compra hasta ese dia. None si no hay como saberlo.
+    """
+    from . import historial
+
     codigos = [_texto(p.get("codigo")).upper() for p in productos]
     catalogo = productos_del_catalogo(codigos) if codigos else {}
+    guardados = {c: float(p.get("costo") or 0) for c, p in zip(codigos, productos)}
+    faltan = [c for c in codigos if not guardados.get(c)]
+    dia = _dia(cuando)
+    comprados = historial.costos_a_la_fecha(faltan, dia) if faltan and dia else {}
     lineas = []
     for producto, codigo in zip(productos, codigos):
         fila = catalogo.get(codigo) or {}
@@ -851,14 +854,52 @@ def _lineas_de_original(productos: list[dict]) -> list[dict]:
             "TipoItbis": float(tasa or 0),
         }
         precio = float(producto.get("precio_unitario") or producto.get("precio") or 0)
-        lineas.append(_completar(margenes.con_precio(base, precio), fila or None, "original"))
+        linea = _completar(margenes.con_precio(base, precio), fila or None, "original")
+        linea["costo_cotizado"] = guardados.get(codigo) or comprados.get(codigo)
+        lineas.append(linea)
     return lineas
+
+
+def _de_hoy(linea: dict) -> dict:
+    """Una linea que se va a volver a cotizar: el costo de la original ya no aplica."""
+    return {k: v for k, v in linea.items() if k != "costo_cotizado"}
+
+
+def _al_cotizar(lineas: list[dict]) -> list[dict]:
+    """Las lineas con el costo de cuando se cotizo en vez del de hoy. Las que
+    no lo tienen se quedan con el de hoy."""
+    return [dict(l, costo=l.get("costo_cotizado") or l.get("costo")) for l in lineas]
+
+
+def _margen_al_cotizar(original: dict) -> str:
+    """El margen de cuando se cotizo, al lado del de hoy, si son distintos."""
+    lineas = original["lineas"]
+    con_dato = [l for l in lineas if l.get("costo_cotizado")]
+    if not con_dato:
+        return (" No hay costo de cuando se cotizo (ni guardado ni compras de antes): solo "
+                "se puede decir el margen con el costo de hoy.")
+    antes = margenes.analizar(_al_cotizar(lineas))
+    hoy = margenes.analizar(lineas)
+    if antes["margen"] is None or hoy["margen"] is None:
+        return ""
+    if abs(antes["margen"] - hoy["margen"]) < 0.5:
+        return (f" Cuando se cotizo el margen era practicamente el mismo "
+                f"({_pct(antes['margen'])}): el costo no ha cambiado.")
+    sube = "subio" if antes["margen"] > hoy["margen"] else "bajo"
+    return (
+        f" CUANDO SE COTIZO dejaba {_pct(antes['margen'])} sobre el costo (ganancia RD$ "
+        f"{_num(antes['ganancia'])}); en conjunto el costo {sube} desde entonces, y si se repite igual "
+        f"HOY deja {_pct(hoy['margen'])}"
+        + (f". {len(lineas) - len(con_dato)} producto(s) sin costo de esa fecha van con el de hoy"
+           if len(con_dato) < len(lineas) else "")
+        + ". Al dar el margen, di los dos, cada uno con su nombre."
+    )
 
 
 def _resumen(id_usuario: str, encontrada: Encontrada, fecha: str = "",
              estado: str = "", nota: str = "") -> str:
     """Pone la cotizacion encontrada como ORIGINAL de una mesa nueva y la resume."""
-    lineas = _lineas_de_original(encontrada.productos)
+    lineas = _lineas_de_original(encontrada.productos, encontrada.cuando)
     with mesa.candado:
         descartadas = [v["nombre"] for v in mesa.cargar(id_usuario)["variantes"]]
         nueva = mesa.vacia()
@@ -880,7 +921,7 @@ def _resumen(id_usuario: str, encontrada: Encontrada, fecha: str = "",
         + f", total RD$ {_num(encontrada.total)}"
         + (f", {estado}" if estado else "")
         + f". {len(lineas)} producto(s):\n{_tabla(lineas)}\n"
-        + _general(margenes.analizar(lineas)) + "\n"
+        + _general(margenes.analizar(lineas)) + _margen_al_cotizar(nueva["original"]) + "\n"
         + aviso
         + "Desde aqui se pueden sacar variantes (a costo, costo + X %, otro nivel) con "
         "crear_variantes, ajustar precios con ajustar_precios o analizarla con "
@@ -894,6 +935,7 @@ def _guardar_y_resumir(id_usuario: str, fila: dict, nota: str = "") -> str:
     encontrada = Encontrada(
         cliente=fila["cliente"], productos=fila["productos"],
         numero=formato(int(fila["numero"])), total=float(fila["total"]), fuente="jv",
+        cuando=str(fila.get("creada_at") or ""),
     )
     return _resumen(id_usuario, encontrada, _fecha_corta(fila.get("creada_at")), nota=nota)
 
@@ -951,7 +993,8 @@ def _encontrada_desde_jh(header: dict) -> Encontrada:
         for l in _detalle_jh(int(header["nfactura"]))
     ]
     return Encontrada(cliente, productos, str(int(header["nfactura"])),
-                      float(header.get("total") or 0), fuente="jh")
+                      float(header.get("total") or 0), fuente="jh",
+                      cuando=str(header.get("fecha") or ""))
 
 
 def _estado_jh(header: dict) -> str:
@@ -1252,8 +1295,17 @@ def _tabla(lineas: list[dict]) -> str:
             + (f"costo {_num(costo)}, margen {_pct(margenes.margen(l['precio_unitario'], costo))}, "
                f"ganancia RD$ {_num((l['precio_unitario'] - costo) * float(l['cantidad']))}"
                if costo else "sin costo en el catalogo")
+            + _linea_al_cotizar(l)
         )
     return "\n".join(filas)
+
+
+def _linea_al_cotizar(linea: dict) -> str:
+    entonces, hoy = linea.get("costo_cotizado"), linea.get("costo")
+    if not entonces or (hoy and abs(entonces - hoy) < 0.005):
+        return ""
+    return (f" (al cotizar: costo {_num(entonces)}, margen "
+            f"{_pct(margenes.margen(linea['precio_unitario'], entonces))})")
 
 
 def _general(analisis: dict, piso: float | None = None) -> str:
@@ -1461,7 +1513,7 @@ def _variante(lineas: list[dict], pedido: dict) -> tuple[str, list[dict]]:
         )
     nuevas = []
     for linea, precio in zip(lineas, precios):
-        nueva = margenes.con_precio(linea, precio)
+        nueva = _de_hoy(margenes.con_precio(linea, precio))
         nueva["precio_original"] = nueva["precio_unitario"]
         nueva["ajuste"] = nombre
         nuevas.append(nueva)
@@ -1507,7 +1559,7 @@ def ajustar_precios(id_usuario: str, cambios, cotizacion: str = "", piso="") -> 
         if tipo == "original":
             # La original no se toca: se ajusta una copia.
             cual = _guardar_variante(id_usuario, "ajustada", cual["cliente"],
-                                     [dict(l, ajuste="original") for l in cual["lineas"]],
+                                     [_de_hoy(dict(l, ajuste="original")) for l in cual["lineas"]],
                                      cual["numero"])
             m = mesa.cargar(id_usuario)
             cual = mesa.variante(m, cual["nombre"])
@@ -1592,6 +1644,9 @@ def analizar(id_usuario: str, cotizacion: str = "", producto: str = "", piso="")
                     f"{_pct(margenes.analizar(lineas)['margen'])}, ganancia RD$ "
                     f"{_num(margenes.analizar(lineas)['ganancia'])}" for nombre, lineas in filas)
                 + ". Margenes sobre el costo, con el costo de hoy del catalogo."
+                + (_margen_al_cotizar(m["original"]).replace(" Al dar el margen, di los dos, "
+                                                             "cada uno con su nombre.", "")
+                   if m.get("original") else "")
             )
         tipo, cual = _resolver(m, cotizacion)
         m["ultima"] = "original" if tipo == "original" else cual["nombre"]
@@ -1602,6 +1657,8 @@ def analizar(id_usuario: str, cotizacion: str = "", producto: str = "", piso="")
     nombre = f"{cual['numero']} (original)" if tipo == "original" else f"'{cual['nombre']}'"
     general = margenes.analizar(lineas)
     texto = f"Cotizacion {nombre}, total RD$ {_num(totalizar(lineas)['total'])}. {_general(general, piso_actual)}"
+    if tipo == "original":
+        texto += _margen_al_cotizar(cual)
 
     if (producto or "").strip():
         n = _resolver_linea(lineas, producto)
@@ -1615,6 +1672,10 @@ def analizar(id_usuario: str, cotizacion: str = "", producto: str = "", piso="")
                       f"ganancia RD$ {_num(ganancia)}"
                       + (f" ({peso:.0f}% de la ganancia de la cotizacion)" if peso is not None else "")
                       + ".")
+            entonces = linea.get("costo_cotizado")
+            if entonces and abs(entonces - costo) >= 0.005:
+                texto += (f" Cuando se cotizo: costo {_num(entonces)}, margen "
+                          f"{_pct(margenes.margen(linea['precio_unitario'], entonces))}.")
             if piso_actual is not None:
                 minimo = margenes.precio_minimo(lineas, n, piso_actual)
                 texto += (f" Para no bajar del {piso_actual:g}% general, lo mas bajo que se puede "

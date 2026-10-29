@@ -105,3 +105,14 @@ def test_dice_como_se_estimo(base):
     texto = _historial(producto="9679")
     assert "JH no guarda el costo en sus cotizaciones" in texto
     assert "No hagas otras cuentas" in texto
+
+
+def test_costos_a_la_fecha_en_una_consulta(base):
+    from backend import historial
+
+    historial.costos_a_la_fecha(["9679", "3790", "x'; DROP TABLE y --"], "2026-10-28")
+    (sql, limite), = [(s, l) for s, l in base if "List_ComprasIA" in s]
+    assert "IN ('3790', '9679')" in sql and "DROP" not in sql
+    assert "DATEADD(day, 1, '2026-10-28')" in sql and "ROW_NUMBER()" in sql
+    assert limite == 2
+    assert historial.costos_a_la_fecha(["9679"], "ayer") == {}

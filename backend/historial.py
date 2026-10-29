@@ -79,6 +79,24 @@ def _compras(codigo: str) -> list[tuple[datetime, float]]:
     return [(_fecha(f["Fecha"]), float(f["Costo"])) for f in filas if _fecha(f["Fecha"])]
 
 
+def costos_a_la_fecha(codigos: list[str], dia: str) -> dict[str, float]:
+    """El costo de la ultima compra de cada producto hasta ese dia (AAAA-MM-DD),
+    en una sola consulta. Los que no tienen compra antes no aparecen."""
+    codigos = sorted({c for c in codigos if cotizaciones.CODIGO.match(c or "")})
+    if not codigos or not FECHA.match(dia or ""):
+        return {}
+    lista = ", ".join(f"'{c}'" for c in codigos)
+    filas = cotizaciones._consultar(
+        "SELECT Codigo, Costo FROM (SELECT LTRIM(RTRIM(Codigo)) AS Codigo, Costo, "
+        "ROW_NUMBER() OVER (PARTITION BY LTRIM(RTRIM(Codigo)) ORDER BY Fecha DESC) AS n "
+        f"FROM dbo.List_ComprasIA WHERE LTRIM(RTRIM(Codigo)) IN ({lista}) AND Costo > 0 "
+        f"AND Fecha < DATEADD(day, 1, '{dia}')) x WHERE n = 1",
+        limite=len(codigos),
+    )
+    return {_texto(f.get("Codigo")).upper(): float(f["Costo"]) for f in filas
+            if f.get("Codigo") and f.get("Costo")}
+
+
 def _fecha(valor) -> datetime | None:
     if isinstance(valor, datetime):
         return valor.replace(tzinfo=None)

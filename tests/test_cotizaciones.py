@@ -10,12 +10,12 @@ from backend.main import app
 PRODUCTOS = {
     "9681": {"Codigo": "9681", "Referencia": "#12CR", "Descripcion": "KEYARD ALAMBRE THHN #12 ROJO",
              "Und": "PIES      ", "P1": 14.3, "P2": 14.0, "P3": 13.5, "P4": 13.0, "P5": 12.5,
-             "P6": 12.0, "P7": 11.5, "TipoItbis": 18, "Coste": 10.0, "costo": 10.0},
+             "P6": 12.0, "P7": 11.5, "TipoItbis": 18, "costo": 10.0},
     "3790": {"Codigo": "3790", "Referencia": "QO240", "Descripcion": "BREAKER 2P 40AMP",
              "Und": "UND", "P1": 1614.55, "P2": 1500, "P3": 1400, "P4": 118.0, "P5": 0,
-             "P6": 0, "P7": 0, "TipoItbis": 18, "Coste": 1000.0, "costo": 100.0},
+             "P6": 0, "P7": 0, "TipoItbis": 18, "costo": 100.0},
     "5555": {"Codigo": "5555", "Referencia": "", "Descripcion": "SIN PRECIO", "Und": "UND",
-             "P1": 0, "P2": 0, "P3": 0, "P4": 0, "P5": 0, "P6": 0, "P7": 0, "TipoItbis": 18, "Coste": 0},
+             "P1": 0, "P2": 0, "P3": 0, "P4": 0, "P5": 0, "P6": 0, "P7": 0, "TipoItbis": 18, "costo": 0},
 }
 CLIENTES = [
     {"codigo": 6177, "nombre": "FERRETERIA ELIAM MAX EIRL", "rnc": "131832334", "direccion": "C/ 1",
@@ -39,6 +39,9 @@ DETALLE_JH = [
      "Descripcion": "BREAKER 2P 40AMP", "Und": "UND"},
 ]
 
+# Costo de la ultima compra hasta el dia de la 3807: el breaker costaba menos.
+COMPRAS_JH = {"3790": 80.0}
+
 
 @pytest.fixture
 def catalogo(entorno_limpio, monkeypatch):
@@ -53,8 +56,11 @@ def catalogo(entorno_limpio, monkeypatch):
 
     consultas = []
 
-    def consultar(sql):
+    def consultar(sql, limite=60):
         consultas.append(sql)
+        if "List_ComprasIA" in sql:                # ultima compra hasta el dia de la cotizacion
+            return [{"Codigo": c, "Costo": v} for c, v in COMPRAS_JH.items()
+                    if f"'{c}'" in sql and "'2026-10-28'" in sql]
         if "List_ProductosIA" in sql:
             return [f for c, f in PRODUCTOS.items() if f"'{c}'" in sql]
         if "iCotizacionesWebIA" in sql:            # cabecera de JH
@@ -294,90 +300,74 @@ def test_el_pdf_solo_se_abre_con_sesion_y_numero_valido(servicios, monkeypatch):
     assert cliente.get("/api/cotizaciones/..%2Fotra.pdf", follow_redirects=False).status_code == 404
 
 
-# --- Cotizar sobre el coste ---
+# --- Cotizar al costo ---
 
-def test_el_coste_ya_trae_el_itbis_y_no_se_le_agrega(catalogo):
+def test_el_costo_ya_trae_el_itbis_y_no_se_le_agrega(catalogo):
     # Es una columna de precio mas, como los P1..P7: el bruto se despeja.
-    _preparar(cliente="6177", columna_coste="Coste",
+    _preparar(cliente="6177", al_costo="si",
               productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
 
     linea = cotizaciones.borrador_de("admin").lineas[0]
-    assert linea["coste"] == 1000.0
-    assert linea["precio_unitario"] == 1000.0
-    assert round(linea["precio_bruto"], 2) == 847.46
+    assert linea["coste"] == 100.0
+    assert linea["precio_unitario"] == 100.0
+    assert round(linea["precio_bruto"], 2) == 84.75
 
 
-def test_el_porcentaje_es_la_utilidad_sobre_el_precio_de_venta(catalogo):
-    _preparar(cliente="6177", columna_coste="Coste", utilidad="30",
+def test_el_margen_al_costo_es_sobre_el_costo(catalogo):
+    _preparar(cliente="6177", al_costo="si", margen="30",
               productos=json.dumps([{"codigo": "3790", "cantidad": 2}]))
 
     borrador = cotizaciones.borrador_de("admin")
-    # PV = coste / (1 - 0.30): 1000 / 0.7 = 1428.57, no 1300.
-    assert borrador.lineas[0]["precio_unitario"] == 1428.57
-    assert borrador.totales == {"subtotal": 2421.31, "itbis": 435.83, "total": 2857.14}
+    # Igual que las variantes: 100 con 30% sale a 130, no a 142.86.
+    assert borrador.lineas[0]["precio_unitario"] == 130.0
+    assert borrador.lineas[0]["ajuste"] == "costo + 30%"
+    assert borrador.totales["total"] == 260.0
 
 
-def test_el_coste_manda_sobre_el_nivel_y_el_factor_del_cliente(catalogo):
+def test_el_costo_manda_sobre_el_nivel_y_el_factor_del_cliente(catalogo):
     # El cliente 4926 es P2 con factor 1.1: nada de eso entra en este precio.
-    _preparar(cliente="4926", columna_coste="Coste",
+    _preparar(cliente="4926", al_costo="si",
               productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
-    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 1000.0
+    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 100.0
 
 
 def test_el_borrador_dice_sobre_que_se_calculo(catalogo):
-    texto = _preparar(cliente="6177", columna_coste="Coste", utilidad="30",
+    texto = _preparar(cliente="6177", al_costo="si", margen="30",
                       productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
 
-    # Con la cuenta a la vista, un coste que ya trajera ITBIS se nota antes de
-    # emitir: el precio saldria mas alto de lo que deberia.
-    assert "al coste de 'Coste' con 30% de utilidad" in texto
+    assert "al costo + 30% sobre el costo" in texto
     assert "ITBIS incluido" in texto
-    assert "(coste 1,000.00)" in texto
+    assert "(costo 100.00)" in texto
 
 
-def test_la_columna_del_coste_no_se_adivina(catalogo):
-    texto = _preparar(cliente="6177", columna_coste="CostoPromedio",
-                      productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
-
-    assert "no tiene una columna 'CostoPromedio'" in texto
-    assert cotizaciones.borrador_de("admin") is None
-
-
-def test_un_producto_sin_coste_no_se_cotiza(catalogo):
-    texto = _preparar(cliente="6177", columna_coste="Coste",
+def test_un_producto_sin_costo_no_se_cotiza(catalogo):
+    texto = _preparar(cliente="6177", al_costo="si",
                       productos=json.dumps([{"codigo": "5555", "cantidad": 1}]))
 
-    assert "Sin coste en 'Coste'" in texto
+    assert "Sin costo en el catalogo" in texto
     assert cotizaciones.borrador_de("admin") is None
 
 
-@pytest.mark.parametrize("utilidad", ["-10", "100", "mucho"])
-def test_un_porcentaje_que_no_sirve_no_deja_borrador(catalogo, utilidad):
-    # 100% de utilidad seria dividir por cero: el precio no existe.
-    texto = _preparar(cliente="6177", columna_coste="Coste", utilidad=utilidad,
+@pytest.mark.parametrize("margen", ["-10", "5000", "mucho"])
+def test_un_margen_que_no_sirve_no_deja_borrador(catalogo, margen):
+    texto = _preparar(cliente="6177", al_costo="si", margen=margen,
                       productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
 
-    assert "porcentaje de utilidad" in texto
+    assert "margen" in texto
     assert cotizaciones.borrador_de("admin") is None
 
 
-def test_sin_columna_de_coste_todo_sigue_como_antes(catalogo):
-    _preparar(cliente="6177", productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
-    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 118.0
-
-
-def test_la_utilidad_queda_siendo_la_pedida(catalogo):
-    # Lo que define la formula: de cada peso vendido, 30 centavos son utilidad.
-    _preparar(cliente="6177", columna_coste="Coste", utilidad="30",
+def test_un_margen_de_mas_de_100_si_vale(catalogo):
+    # Sobre el costo, 150% es posible: 100 sale a 250.
+    _preparar(cliente="6177", al_costo="si", margen="150",
               productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
+    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 250.0
 
-    linea = cotizaciones.borrador_de("admin").lineas[0]
-    ganancia = linea["precio_unitario"] - linea["coste"]
-    assert round(ganancia / linea["precio_unitario"], 4) == 0.3
 
-    # Sobre el neto da lo mismo: el ITBIS esta de los dos lados.
-    coste_neto = 1000 / 1.18
-    assert round((linea["precio_bruto"] - coste_neto) / linea["precio_bruto"], 4) == 0.3
+def test_sin_al_costo_todo_sigue_como_antes(catalogo):
+    _preparar(cliente="6177", margen="30",
+              productos=json.dumps([{"codigo": "3790", "cantidad": 1}]))
+    assert cotizaciones.borrador_de("admin").lineas[0]["precio_unitario"] == 118.0
 
 
 # --------------------------------------------------------------------------
@@ -752,3 +742,49 @@ def test_una_cotizacion_que_no_existe_lo_dice(emitidas):
     assert "La cotizacion 7000 no existe en JH" in texto and "JV-00011" in texto
     # Si pidieron el cliente, el aviso sobra.
     assert "no existe" not in _buscar("la del cliente 7000")
+
+
+# --- Margen de cuando se cotizo contra el de hoy ---
+# En la 3807 (28-oct) el breaker costaba 80 (ultima compra), hoy 100. El keyard
+# no tiene compra anterior: va con el de hoy. Entonces: costo 1000 + 160 = 1160
+# contra venta 1600 -> 37.9%. Hoy: 33.3%.
+
+def test_una_vieja_da_el_margen_de_entonces_y_el_de_hoy(emitidas, catalogo):
+    texto = _buscar("3807")
+    assert "CUANDO SE COTIZO dejaba 37.9% sobre el costo" in texto
+    assert "si se repite igual HOY deja 33.3%" in texto
+    assert "1 producto(s) sin costo de esa fecha van con el de hoy" in texto
+    assert "(al cotizar: costo 80.00, margen 87.5%)" in texto
+    # Solo una consulta de compras, con los que no tienen costo guardado.
+    compras = [s for s in catalogo if "List_ComprasIA" in s]
+    assert len(compras) == 1 and "'2026-10-28'" in compras[0]
+
+
+def test_analizar_la_original_da_los_dos(emitidas):
+    _buscar("3807")
+    texto = _herr("analizar_cotizacion", cotizacion="la 3807", producto="breaker")
+    assert "Margen general: 33.3%" in texto and "CUANDO SE COTIZO dejaba 37.9%" in texto
+    assert "Cuando se cotizo: costo 80.00, margen 87.5%" in texto
+    assert "CUANDO SE COTIZO dejaba 37.9%" in _herr("analizar_cotizacion", cotizacion="todas")
+
+
+def test_las_variantes_van_con_el_costo_de_hoy(emitidas):
+    _buscar("3807")
+    _variantes({"base": "costo", "margen": 50})
+    assert all("costo_cotizado" not in l for l in cotizaciones.borrador_de("admin").lineas)
+    texto = _herr("analizar_cotizacion", cotizacion="la del 50")
+    assert "CUANDO SE COTIZO" not in texto and "al cotizar" not in texto
+
+
+def test_una_jv_usa_el_costo_que_guardo(emitidas, monkeypatch):
+    fila = {**FILA_EMITIDA, "productos": [{**FILA_EMITIDA["productos"][0], "costo": 8.0}]}
+    monkeypatch.setattr(cotizaciones, "_filas_emitidas", lambda params: [fila])
+    texto = _buscar("JV-12")
+    # Venta 1300 contra costo guardado 800 -> 62.5%; hoy 1000 -> 30%.
+    assert "CUANDO SE COTIZO dejaba 62.5%" in texto and "HOY deja 30.0%" in texto
+
+
+def test_si_el_costo_no_cambio_lo_dice_en_una(emitidas):
+    texto = _buscar("JV-12")      # sin costo guardado ni compras: solo el de hoy
+    assert "solo se puede decir el margen con el costo de hoy" in texto
+    assert "CUANDO SE COTIZO" not in texto
