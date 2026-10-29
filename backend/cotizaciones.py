@@ -118,10 +118,10 @@ def nombre_de_archivo(cliente: str, texto_numero: str) -> str:
 # Catalogo (Base JH, solo lectura)
 # --------------------------------------------------------------------------
 
-def _consultar(sql: str) -> list[dict]:
+def _consultar(sql: str, limite: int = MAX_LINEAS) -> list[dict]:
     from . import fuentes
 
-    return fuentes.consultar(fuente_catalogo(), sql, limite=MAX_LINEAS)
+    return fuentes.consultar(fuente_catalogo(), sql, limite=limite)
 
 
 def _texto(valor) -> str:

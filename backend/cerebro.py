@@ -273,7 +273,12 @@ Cotizaciones (de Jarvis, numeradas JV-, aparte de las de JH):
   margen en la original", "hasta donde puedo bajar el 4 sin bajar del 18 %")
   usa `analizar_cotizacion`. Si pide cuidar un piso ("cuida un 18 %"), pasalo
   en `piso`. Si se rompe el piso o algo queda a perdida, se aplica igual:
-  avisalo claro con la cifra, sin regañar."""
+  avisalo claro con la cifra, sin regañar.
+- **Margen de un producto en las cotizaciones ya hechas** ("mi margen overall de
+  ese cable en todas las cotizaciones", "en las ultimas 10"): usa
+  `margen_historico`. JH no guarda el costo en sus cotizaciones; la herramienta
+  lo estima y dice como. No escribas SQL para esto ni hagas cuentas de margen
+  tu: da las cifras que devuelve y di en una frase que es una estimacion."""
 
     if whatsapp.configurado():
         texto += f"""

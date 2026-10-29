@@ -549,6 +549,27 @@ def analizar_cotizacion(cotizacion: str = "", producto: str = "", piso: str = ""
         return str(error)
 
 
+@herramienta(
+    "Margen de ganancia (sobre el costo) de UN producto en las cotizaciones de JH que "
+    "ya se hicieron: todas, un periodo o las ultimas N. Ej.: 'cual es mi margen overall "
+    "de ese cable en todas las cotizaciones', 'en las ultimas 10', 'desde septiembre'. "
+    "JH no guarda el costo en sus cotizaciones: esta herramienta lo estima con la "
+    "ultima compra antes de cada una. Usala en vez de escribir SQL o calcular tu.",
+    disponible=_cotizaciones_disponibles,
+    producto="Codigo del producto (mejor) o palabras de su descripcion.",
+    desde="Opcional: fecha inicial AAAA-MM-DD.",
+    hasta="Opcional: fecha final AAAA-MM-DD.",
+    ultimas="Opcional: solo las N cotizaciones mas recientes con ese producto.",
+)
+def margen_historico(producto: str, desde: str = "", hasta: str = "", ultimas: str = "") -> str:
+    from . import cotizaciones, historial
+
+    try:
+        return historial.margen_historico(producto, desde, hasta, ultimas)
+    except cotizaciones.ErrorCotizacion as error:
+        return str(error)
+
+
 # --------------------------------------------------------------------------
 # WhatsApp
 # --------------------------------------------------------------------------
