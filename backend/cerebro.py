@@ -282,7 +282,10 @@ Cotizaciones (de Jarvis, numeradas JV-, aparte de las de JH):
   cuanto le di este cable a tal cliente", "cual es el precio normal"): usa
   `precios_dados`. Al traer o ajustar una cotizacion, si un producto queda POR
   DEBAJO DE LO NORMAL o hay un precio distinto que se le dio antes a ese mismo
-  cliente, la herramienta lo dice: mencionalo en una frase, sin regañar."""
+  cliente, la herramienta lo dice: mencionalo en una frase, sin regañar.
+- **Margen por cliente** ("cuanto le gano a JDL", "a que clientes les gano
+  menos"): usa `margen_por_cliente` (sin cliente, todos). Como el historico, es
+  una estimacion: dilo en una frase y no hagas otras cuentas."""
 
     if whatsapp.configurado():
         texto += f"""

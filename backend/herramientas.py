@@ -591,6 +591,26 @@ def precios_dados(producto: str, cliente: str = "") -> str:
         return str(error)
 
 
+@herramienta(
+    "Margen de ganancia (sobre el costo) por CLIENTE en las cotizaciones de JH ya "
+    "hechas. Con un cliente: su margen general, contra el promedio de todos, por mes y "
+    "donde menos le ganas. Sin cliente: los clientes de mas venta y a cuales les ganas "
+    "menos. Ej.: 'cuanto le gano a JDL', 'a que clientes les gano menos', 'margen de "
+    "Ferreteria X desde septiembre'. Usala en vez de escribir SQL o calcular tu.",
+    disponible=_cotizaciones_disponibles,
+    cliente="Opcional: nombre, RNC o codigo del cliente. Vacio = todos.",
+    desde="Opcional: fecha inicial AAAA-MM-DD.",
+    hasta="Opcional: fecha final AAAA-MM-DD.",
+)
+def margen_por_cliente(cliente: str = "", desde: str = "", hasta: str = "") -> str:
+    from . import cotizaciones, margen_clientes
+
+    try:
+        return margen_clientes.margen_por_cliente(cliente, desde, hasta)
+    except cotizaciones.ErrorCotizacion as error:
+        return str(error)
+
+
 # --------------------------------------------------------------------------
 # WhatsApp
 # --------------------------------------------------------------------------
