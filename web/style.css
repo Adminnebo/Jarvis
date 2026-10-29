@@ -1238,6 +1238,8 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
 .mesa-codigo, .mesa-entonces { display: block; color: var(--tenue); font-size: 11.5px; margin-top: 2px; }
 .mesa-entonces { color: var(--aviso); }
 .mesa-movil { display: none; }
+.mesa-referencia { display: block; color: var(--tenue); font-size: 11.5px; margin-top: 2px; }
+.mesa-referencia.bajo { color: var(--peligro); }
 .mesa-tabla tr.a-perdida .mesa-margen { color: var(--peligro); font-weight: 600; }
 .mesa-tabla tr.cambio td { animation: mesa-resalte 1.6s ease-out; }
 

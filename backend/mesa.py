@@ -11,7 +11,8 @@ que alguien estaba armando. Vence a las 2 horas sin uso.
 
 Forma de la mesa (dict, se guarda como JSON):
     {"original": {...} | None, "variantes": [{...}], "piso": float | None,
-     "ultima": "original" | nombre de variante | None}
+     "ultima": "original" | nombre de variante | None,
+     "referencias": {codigo: a cuanto se suele cotizar (historial.referencias)}}
 """
 
 import json
@@ -29,7 +30,7 @@ candado = threading.RLock()
 
 
 def vacia() -> dict:
-    return {"original": None, "variantes": [], "piso": None, "ultima": None}
+    return {"original": None, "variantes": [], "piso": None, "ultima": None, "referencias": {}}
 
 
 def cargar(usuario: str) -> dict:

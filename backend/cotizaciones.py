@@ -525,6 +525,11 @@ def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
         )
 
     totales = _guardar_variante(id_usuario, "borrador", datos_cliente, lineas)["totales"]
+    refs = _referencias([codigo for codigo, _ in pedidos], datos_cliente.get("codigo") or "")
+    with mesa.candado:
+        m = mesa.cargar(id_usuario)
+        m["referencias"] = {**m.get("referencias", {}), **refs}
+        mesa.guardar(id_usuario, m)
 
     detalle = "; ".join(
         f"{_cantidad(l['cantidad'])} {l['unidad'] or 'UND'} de {l['descripcion']} "
@@ -545,7 +550,8 @@ def preparar(id_usuario: str, cliente: str, productos, contado: bool = False,
     return (
         f"Borrador listo (aun NO emitido). Cliente: {datos_cliente['nombre']} ({tipo_cliente}). "
         f"{len(lineas)} producto(s): {detalle}. Total RD$ {_num(totales['total'])}, "
-        f"ITBIS incluido RD$ {_num(totales['itbis'])}. "
+        f"ITBIS incluido RD$ {_num(totales['itbis'])}."
+        + _avisos_de_precio(lineas, refs, datos_cliente) + " "
         "Resume cliente, cantidad de productos y total, y pregunta si la emite. "
         + ("Al resumir, di sobre que precio se calculo y el total; el costo de "
            "cada producto no se lee salvo que lo pidan. " if coste else "")
@@ -860,6 +866,81 @@ def _lineas_de_original(productos: list[dict], cuando: str = "") -> list[dict]:
     return lineas
 
 
+def _referencias(codigos: list[str], cliente: str, excluir: int | None = None) -> dict:
+    """A cuanto se suele cotizar cada producto. Es un dato de mas: si la
+    consulta falla, la cotizacion sigue sin el."""
+    from . import historial
+
+    try:
+        return historial.referencias(codigos, cliente, excluir)
+    except Exception as error:  # noqa: BLE001 - sin referencia se sigue igual
+        print(f"  [cotizaciones] sin referencias de precio: {error}")
+        return {}
+
+
+def _lista(linea: dict, cliente: dict | None) -> float | None:
+    """El precio de lista de ese producto para ese cliente: su nivel por su factor."""
+    cliente = cliente or {}
+    base = float((linea.get("niveles") or {}).get(cliente.get("nivel") or "") or 0)
+    return round(base * float(cliente.get("factor") or 1), 2) if base > 0 else None
+
+
+def _nivel_de_cliente(cliente: dict) -> dict:
+    """El cliente con su nivel y factor de la lista de clientes de JH. La
+    cabecera de las cotizaciones de JH no los trae (nivel vacio)."""
+    codigo = _texto(cliente.get("codigo"))
+    if not codigo.isdigit():
+        return cliente
+    try:
+        fila = next((f for f in buscar_cliente(codigo) if _texto(f.get("codigo")) == codigo), None)
+    except Exception:  # noqa: BLE001 - sin nivel, se sigue con el que habia
+        return cliente
+    if not fila:
+        return cliente
+    nivel = _texto(fila.get("NivelPrecio")).upper()
+    try:
+        factor = float(fila.get("factor") or 1)
+    except (TypeError, ValueError):
+        factor = 1.0
+    return {**cliente, "nivel": nivel if nivel in NIVELES else cliente.get("nivel", "P1"),
+            "factor": factor}
+
+
+def _avisos_de_precio(lineas: list[dict], refs: dict, cliente: dict | None,
+                      solo: list[int] | None = None) -> str:
+    """Lo que llama la atencion contra lo cotizado antes: precios por debajo de
+    lo normal (y de la lista del cliente) y lo que se le dio a este mismo
+    cliente. Vacio si nada."""
+    from . import historial
+
+    partes = []
+    for n, l in enumerate(lineas, start=1):
+        if solo is not None and n not in solo:
+            continue
+        ref = refs.get(_texto(l["codigo"]).upper())
+        if not ref:
+            continue
+        precio = float(l["precio_unitario"])
+        lista = _lista(l, cliente)
+        notas = []
+        if historial.bajo_lo_normal(precio, ref, lista):
+            notas.append(f"POR DEBAJO DE LO NORMAL (se suele cotizar entre {_num(ref['p25'])} y "
+                         f"{_num(ref['p75'])}"
+                         + (f"; su precio de lista {cliente.get('nivel')} es {_num(lista)}" if lista else "")
+                         + ")")
+        elif ref["n"] >= 2 and precio < ref["minimo"] - 0.005 and not (lista and precio >= lista - 0.005):
+            notas.append(f"el mas bajo al que se ha cotizado (antes, minimo {_num(ref['minimo'])})")
+        cliente = ref.get("al_cliente")
+        if cliente and abs(cliente["precio"] - precio) >= max(0.01, precio * 0.01):
+            notas.append(f"a este cliente se le dio a {_num(cliente['precio'])} el {cliente['fecha']} "
+                         f"(la {cliente['nfactura']})")
+        if notas:
+            partes.append(f"producto {n} a {_num(precio)}: " + "; ".join(notas))
+    if not partes:
+        return ""
+    return " CONTRA LO COTIZADO ANTES (ultimos 6 meses): " + ". ".join(partes) + "."
+
+
 def _de_hoy(linea: dict) -> dict:
     """Una linea que se va a volver a cotizar: el costo de la original ya no aplica."""
     return {k: v for k, v in linea.items() if k != "costo_cotizado"}
@@ -900,6 +981,10 @@ def _resumen(id_usuario: str, encontrada: Encontrada, fecha: str = "",
              estado: str = "", nota: str = "") -> str:
     """Pone la cotizacion encontrada como ORIGINAL de una mesa nueva y la resume."""
     lineas = _lineas_de_original(encontrada.productos, encontrada.cuando)
+    if encontrada.fuente == "jh":
+        encontrada.cliente = _nivel_de_cliente(encontrada.cliente)
+    refs = _referencias([l["codigo"].upper() for l in lineas], encontrada.cliente.get("codigo") or "",
+                        int(encontrada.numero) if encontrada.fuente == "jh" else None)
     with mesa.candado:
         descartadas = [v["nombre"] for v in mesa.cargar(id_usuario)["variantes"]]
         nueva = mesa.vacia()
@@ -909,6 +994,7 @@ def _resumen(id_usuario: str, encontrada: Encontrada, fecha: str = "",
             "fecha": fecha, "creado": time.time(),
         }
         nueva["ultima"] = "original"
+        nueva["referencias"] = refs
         mesa.guardar(id_usuario, nueva)
 
     aviso = (
@@ -921,7 +1007,8 @@ def _resumen(id_usuario: str, encontrada: Encontrada, fecha: str = "",
         + f", total RD$ {_num(encontrada.total)}"
         + (f", {estado}" if estado else "")
         + f". {len(lineas)} producto(s):\n{_tabla(lineas)}\n"
-        + _general(margenes.analizar(lineas)) + _margen_al_cotizar(nueva["original"]) + "\n"
+        + _general(margenes.analizar(lineas)) + _margen_al_cotizar(nueva["original"])
+        + _avisos_de_precio(lineas, refs, encontrada.cliente) + "\n"
         + aviso
         + "Desde aqui se pueden sacar variantes (a costo, costo + X %, otro nivel) con "
         "crear_variantes, ajustar precios con ajustar_precios o analizarla con "
@@ -1599,6 +1686,7 @@ def ajustar_precios(id_usuario: str, cambios, cotizacion: str = "", piso="") -> 
         m["ultima"] = cual["nombre"]
         mesa.guardar(id_usuario, m)
         piso_actual = m["piso"]
+        refs = m.get("referencias") or {}
 
     general_antes = margenes.analizar(antes)
     general = margenes.analizar(cual["lineas"])
@@ -1620,6 +1708,7 @@ def ajustar_precios(id_usuario: str, cambios, cotizacion: str = "", piso="") -> 
         f"Margen general: {_pct(general_antes['margen'])} -> {_pct(general['margen'])} sobre el costo; "
         f"total RD$ {_num(cual['totales']['total'])}. "
         + _avisos(general, piso_actual).strip()
+        + _avisos_de_precio(cual["lineas"], refs, cual["cliente"], sorted(set(cambiadas)))
         + _COMO_DECIR_EL_AJUSTE
     )
 
@@ -1680,6 +1769,7 @@ def analizar(id_usuario: str, cotizacion: str = "", producto: str = "", piso="")
         m["ultima"] = "original" if tipo == "original" else cual["nombre"]
         mesa.guardar(id_usuario, m)
         piso_actual = m["piso"]
+        refs = m.get("referencias") or {}
 
     lineas = cual["lineas"]
     nombre = f"{cual['numero']} (original)" if tipo == "original" else f"'{cual['nombre']}'"
@@ -1711,6 +1801,12 @@ def analizar(id_usuario: str, cotizacion: str = "", producto: str = "", piso="")
                           + "." if minimo else f" Cualquier precio mantiene el {piso_actual:g}% general.")
         else:
             texto += f" El producto {n}, {linea['descripcion']}, no tiene costo en el catalogo."
+        from . import historial
+
+        ref = refs.get(_texto(linea["codigo"]).upper())
+        texto += (" Contra lo cotizado antes: "
+                  + historial.texto_de_referencia(ref, float(linea["precio_unitario"]),
+                                                  _lista(linea, cual.get("cliente"))) + ".")
         texto += " Di el margen del producto y el general."
     else:
         con_costo = [(n, margenes.margen(l["precio_unitario"], l["costo"]))
@@ -1720,6 +1816,7 @@ def analizar(id_usuario: str, cotizacion: str = "", producto: str = "", piso="")
             texto += f" El de menos margen es el {n} ({lineas[n - 1]['descripcion']}, {_pct(valor)})."
             holgados = sorted(con_costo, key=lambda x: -x[1])[:3]
             texto += " Los de mas margen: " + ", ".join(f"{k} ({_pct(v)})" for k, v in holgados) + "."
+        texto += _avisos_de_precio(lineas, refs, cual.get("cliente"))
         texto += (f"\n{_tabla(lineas)}\nPor voz di el margen general, la ganancia y lo que llama "
                   "la atencion; la tabla solo si la piden. Por escrito muestra la tabla.")
     return texto
@@ -1757,7 +1854,7 @@ def nombre_de(id_usuario: str) -> str:
 # --------------------------------------------------------------------------
 
 def _vista_de(cual: dict, id_: str, nombre: str, piso: float | None,
-              original: bool) -> dict:
+              original: bool, refs: dict) -> dict:
     lineas = cual["lineas"]
     general = margenes.analizar(lineas)
     al_cotizar = margenes.analizar(_al_cotizar(lineas)) if original else None
@@ -1774,6 +1871,8 @@ def _vista_de(cual: dict, id_: str, nombre: str, piso: float | None,
             "costo_cotizado": entonces,
             "margen_cotizado": margenes.margen(precio, entonces) if entonces else None,
             "ajuste": l.get("ajuste") or "",
+            "referencia": _referencia_para_vista(refs.get(_texto(l["codigo"]).upper()), precio,
+                                                 _lista(l, cual.get("cliente"))),
         })
     margen = general["margen"]
     return {
@@ -1790,6 +1889,22 @@ def _vista_de(cual: dict, id_: str, nombre: str, piso: float | None,
     }
 
 
+def _referencia_para_vista(ref: dict | None, precio: float, lista: float | None) -> dict | None:
+    from . import historial
+
+    if not ref:
+        return None
+    cliente = ref.get("al_cliente")
+    return {
+        "n": ref["n"], "p25": ref.get("p25"), "p75": ref.get("p75"), "mediana": ref["mediana"],
+        "minimo": ref["minimo"], "maximo": ref["maximo"], "precios": ref["precios"],
+        "al_cliente": cliente,
+        "bajo": historial.bajo_lo_normal(precio, ref, lista),
+        "mas_bajo": (ref["n"] >= 2 and precio < ref["minimo"] - 0.005
+                     and not (lista and precio >= lista - 0.005)),
+    }
+
+
 def vista_mesa(id_usuario: str) -> dict:
     """Lo que muestra la tabla de la web: la original y las variantes, con sus
     margenes ya calculados. Los numeros salen de aqui, como para la voz."""
@@ -1797,8 +1912,9 @@ def vista_mesa(id_usuario: str) -> dict:
     cotizaciones = []
     if m.get("original"):
         o = m["original"]
-        cotizaciones.append(_vista_de(o, "original", f"{o['numero']} (original)", m["piso"], True))
-    cotizaciones += [_vista_de(v, v["nombre"], v["nombre"], m["piso"], False)
+        cotizaciones.append(_vista_de(o, "original", f"{o['numero']} (original)", m["piso"], True,
+                                      m["referencias"]))
+    cotizaciones += [_vista_de(v, v["nombre"], v["nombre"], m["piso"], False, m["referencias"])
                      for v in m["variantes"]]
     activa = m.get("ultima") if m.get("ultima") in {c["id"] for c in cotizaciones} else None
     if activa is None and cotizaciones:

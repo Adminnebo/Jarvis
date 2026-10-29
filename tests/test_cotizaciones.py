@@ -41,6 +41,22 @@ DETALLE_JH = [
 
 # Costo de la ultima compra hasta el dia de la 3807: el breaker costaba menos.
 COMPRAS_JH = {"3790": 80.0}
+# Lo cotizado antes en JH (lo mas reciente primero). El keyard se suele dar
+# entre 13.60 y 14.00; al cliente 6177 se le dio a 13.80. El breaker, una vez.
+COTIZADO_ANTES = [
+    {"codigo": "9681", "precio": 13.5, "nfactura": 3700, "fecha": "2026-10-20T10:00:00",
+     "cliente": "OTRA", "cliente_codigo": 4926},
+    {"codigo": "9681", "precio": 13.8, "nfactura": 3650, "fecha": "2026-10-10T10:00:00",
+     "cliente": "FERRETERIA ELIAM MAX EIRL", "cliente_codigo": 6177},
+    {"codigo": "9681", "precio": 14.2, "nfactura": 3600, "fecha": "2026-09-01T10:00:00",
+     "cliente": "OTRA", "cliente_codigo": 4926},
+    {"codigo": "9681", "precio": 14.0, "nfactura": 3500, "fecha": "2026-08-01T10:00:00",
+     "cliente": "OTRA", "cliente_codigo": 4926},
+    {"codigo": "9681", "precio": 13.6, "nfactura": 3400, "fecha": "2026-07-01T10:00:00",
+     "cliente": "OTRA", "cliente_codigo": 4926},
+    {"codigo": "3790", "precio": 140.0, "nfactura": 3300, "fecha": "2026-06-01T10:00:00",
+     "cliente": "OTRA", "cliente_codigo": 4926},
+]
 
 
 @pytest.fixture
@@ -61,6 +77,8 @@ def catalogo(entorno_limpio, monkeypatch):
         if "List_ComprasIA" in sql:                # ultima compra hasta el dia de la cotizacion
             return [{"Codigo": c, "Costo": v} for c, v in COMPRAS_JH.items()
                     if f"'{c}'" in sql and "'2026-10-28'" in sql]
+        if "DATEADD(day, -180" in sql:            # a cuanto se ha cotizado (referencias)
+            return [r for r in COTIZADO_ANTES if f"'{r['codigo']}'" in sql]
         if "List_ProductosIA" in sql:
             return [f for c, f in PRODUCTOS.items() if f"'{c}'" in sql]
         if "iCotizacionesWebIA" in sql:            # cabecera de JH
@@ -849,3 +867,66 @@ def test_las_herramientas_de_la_mesa_avisan_a_la_web(web):
     assert respuesta.json()["mesa"] is True
     respuesta = web.post("/api/herramienta", json={"nombre": "recordar", "argumentos": "{}"})
     assert respuesta.json()["mesa"] is False
+
+
+# --- A cuanto se ha cotizado ---
+
+def test_al_traerla_dice_lo_que_se_le_dio_antes_al_cliente(emitidas, catalogo):
+    texto = _buscar("3807")
+    # 13.00 esta bajo lo que se suele cotizar (13.60-14.00), pero el 6177 es P4 y
+    # 13.00 es su precio de lista: no es una alarma.
+    assert "producto 1 a 13.00: a este cliente se le dio a 13.80 el 10-Oct-2026 (la 3650)" in texto
+    assert "POR DEBAJO" not in texto
+    assert "producto 2" not in texto.split("CONTRA LO COTIZADO ANTES")[1]
+    (sql,) = [s for s in catalogo if "DATEADD(day, -180" in s]
+    assert "d.nfactura <> 3807" in sql            # la misma no es referencia de si misma
+
+
+def test_la_tabla_trae_la_referencia(web):
+    _buscar("3807")
+    keyard, breaker = web.get("/api/mesa").json()["cotizaciones"][0]["lineas"]
+    ref = keyard["referencia"]
+    assert not ref["bajo"] and ref["p25"] == 13.6 and ref["p75"] == 14.0
+    assert ref["al_cliente"]["precio"] == 13.8
+    assert breaker["referencia"]["p25"] is None and not breaker["referencia"]["bajo"]
+
+
+def test_ajustar_avisa_solo_de_lo_que_cambio(emitidas):
+    _buscar("3807")
+    texto = _herr("ajustar_precios", cambios=json.dumps([{"linea": "2", "precio": 120}]))
+    assert "CONTRA LO COTIZADO ANTES" not in texto       # el 2 no tiene "normal" (1 vez)
+    texto = _herr("ajustar_precios", cambios=json.dumps([{"linea": "1", "precio": 12}]))
+    assert ("producto 1 a 12.00: POR DEBAJO DE LO NORMAL (se suele cotizar entre 13.60 y 14.00; "
+            "su precio de lista P4 es 13.00)") in texto
+    texto = _herr("ajustar_precios", cambios=json.dumps([{"linea": "1", "precio": 13.8}]))
+    assert "CONTRA LO COTIZADO ANTES" not in texto       # normal y lo mismo que al cliente
+
+
+def test_analizar_un_producto_da_su_referencia(emitidas):
+    _buscar("3807")
+    texto = _herr("analizar_cotizacion", producto="keyard")
+    assert "Contra lo cotizado antes: se suele cotizar entre 13.60 y 14.00 (mediana 13.80" in texto
+    assert "POR DEBAJO" not in texto and "mas bajo" not in texto      # es su lista P4
+    _herr("ajustar_precios", cambios=json.dumps([{"linea": "1", "precio": 12}]))
+    assert "ESTA POR DEBAJO DE LO NORMAL" in _herr("analizar_cotizacion", producto="keyard")
+
+
+def test_precios_dados(catalogo):
+    texto = herramientas.ejecutar("precios_dados", json.dumps(
+        {"producto": "9681", "cliente": "6177"}), "admin")
+    assert "se suele cotizar entre 13.60 y 14.00" in texto
+    assert "a este cliente, la ultima vez a 13.80 (10-Oct-2026, la 3650)" in texto
+    assert "La mas reciente: 13.50 a OTRA" in texto
+    assert "Precios de lista hoy: P1 14.30" in texto
+    texto = herramientas.ejecutar("precios_dados", json.dumps({"producto": "3790"}), "admin")
+    assert "se cotizo 1 vez, a: 140.00" in texto
+
+
+def test_si_la_referencia_falla_la_cotizacion_sigue(emitidas, monkeypatch):
+    from backend import historial
+
+    def falla(*_):
+        raise RuntimeError("base caida")
+    monkeypatch.setattr(historial, "referencias", falla)
+    texto = _buscar("3807")
+    assert "Cotizacion 3807" in texto and "CONTRA LO COTIZADO" not in texto

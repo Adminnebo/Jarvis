@@ -572,6 +572,25 @@ def margen_historico(producto: str, desde: str = "", hasta: str = "", ultimas: s
         return str(error)
 
 
+@herramienta(
+    "A cuanto se ha cotizado UN producto en las cotizaciones de JH de los ultimos 6 "
+    "meses: rango normal, mediana, el mas bajo, el mas reciente y, si se nombra un "
+    "cliente, el ultimo precio que se le dio a ese cliente. Ej.: 'a cuanto se lo he "
+    "dado a otros', 'a cuanto le di este cable a Ferreteria X', 'cual es el precio "
+    "normal de este breaker'. Usala en vez de escribir SQL.",
+    disponible=_cotizaciones_disponibles,
+    producto="Codigo del producto (mejor) o palabras de su descripcion.",
+    cliente="Opcional: nombre, RNC o codigo del cliente, si preguntan por uno.",
+)
+def precios_dados(producto: str, cliente: str = "") -> str:
+    from . import cotizaciones, historial
+
+    try:
+        return historial.precios_dados(producto, cliente)
+    except cotizaciones.ErrorCotizacion as error:
+        return str(error)
+
+
 # --------------------------------------------------------------------------
 # WhatsApp
 # --------------------------------------------------------------------------

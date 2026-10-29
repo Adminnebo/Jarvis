@@ -12,6 +12,7 @@ Todo el calculo pasa aqui: antes el modelo hacia la cuenta de cabeza.
 
 import bisect
 import re
+import statistics
 from datetime import date, datetime
 
 from . import cotizaciones, margenes
@@ -19,6 +20,10 @@ from .cotizaciones import ErrorCotizacion, _num, _texto, fecha_de_documento
 
 MAX_FILAS = 5000
 MAX_RECIENTES = 5
+# Ventana de "lo que se suele cotizar". JH tiene cotizaciones desde 2026-05-31.
+DIAS_REFERENCIA = 180
+# Con menos cotizaciones que esto no se habla de "lo normal": se dicen los precios.
+MIN_PARA_NORMAL = 4
 FECHA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -199,3 +204,143 @@ def margen_historico(producto: str, desde: str = "", hasta: str = "", ultimas=""
         + ". Es aproximado. No hagas otras cuentas: usa estas cifras."
     )
     return texto
+
+
+# --------------------------------------------------------------------------
+# A cuanto se ha cotizado: referencia de precio por producto
+# --------------------------------------------------------------------------
+
+def _codigo_cliente(valor) -> str:
+    try:
+        return str(int(float(valor)))
+    except (TypeError, ValueError):
+        return _texto(valor)
+
+
+def referencias(codigos: list[str], cliente: str = "", excluir: int | None = None) -> dict[str, dict]:
+    """Lo que se cotizo de cada producto en las cotizaciones de JH de los
+    ultimos DIAS_REFERENCIA dias, en una sola consulta.
+
+    Por codigo: cuantas cotizaciones, minimo, cuartiles y maximo del precio,
+    la ultima y la ultima a `cliente` (su codigo). `excluir` es la cotizacion
+    que se esta mirando: no cuenta como referencia de si misma.
+    """
+    codigos = sorted({c for c in codigos if cotizaciones.CODIGO.match(c or "")})
+    if not codigos:
+        return {}
+    lista = ", ".join(f"'{c}'" for c in codigos)
+    sin_esa = f" AND d.nfactura <> {int(excluir)}" if excluir else ""
+    filas = cotizaciones._consultar(
+        "SELECT LTRIM(RTRIM(d.codigo)) AS codigo, d.precio, d.nfactura, h.fecha, h.cliente, "
+        "h.cliente_codigo FROM dbo.dCotizacionesWebIA d JOIN ("
+        "SELECT nfactura, MIN(fecha) AS fecha, MAX(clientenombre) AS cliente, "
+        "MAX(cliente) AS cliente_codigo, MAX(CASE WHEN nulo = 1 THEN 1 ELSE 0 END) AS nulo "
+        "FROM dbo.iCotizacionesWebIA GROUP BY nfactura) h ON h.nfactura = d.nfactura "
+        f"WHERE LTRIM(RTRIM(d.codigo)) IN ({lista}) AND h.nulo = 0 AND d.precio > 0{sin_esa} "
+        f"AND h.fecha >= DATEADD(day, -{DIAS_REFERENCIA}, GETDATE()) "
+        "ORDER BY h.fecha DESC, d.nfactura DESC",
+        limite=MAX_FILAS,
+    )
+    cliente = _codigo_cliente(cliente) if str(cliente or "").strip() else ""
+    por_codigo: dict[str, list[dict]] = {}
+    for f in filas:
+        por_codigo.setdefault(_texto(f.get("codigo")).upper(), []).append(f)
+    resultado = {}
+    for codigo, lineas in por_codigo.items():
+        precios = sorted(float(l["precio"]) for l in lineas)
+        ultima = lineas[0]
+        al_cliente = next((l for l in lineas
+                           if cliente and _codigo_cliente(l.get("cliente_codigo")) == cliente), None)
+        ref = {
+            "n": len({l["nfactura"] for l in lineas}),
+            "minimo": precios[0], "maximo": precios[-1],
+            "mediana": statistics.median(precios),
+            "ultima": _resumen_linea(ultima),
+            "al_cliente": _resumen_linea(al_cliente) if al_cliente else None,
+            "precios": [float(l["precio"]) for l in lineas[:MAX_RECIENTES]],
+        }
+        if ref["n"] >= MIN_PARA_NORMAL:
+            cuartiles = statistics.quantiles(precios, n=4, method="inclusive")
+            ref["p25"], ref["p75"] = cuartiles[0], cuartiles[2]
+        resultado[codigo] = ref
+    return resultado
+
+
+def _resumen_linea(linea: dict) -> dict:
+    cuando = _fecha(linea.get("fecha"))
+    return {"precio": float(linea["precio"]), "nfactura": int(linea["nfactura"]),
+            "cliente": _texto(linea.get("cliente")),
+            "fecha": fecha_de_documento(cuando) if cuando else ""}
+
+
+def bajo_lo_normal(precio: float, ref: dict | None, lista: float | None = None) -> bool:
+    """Por debajo del cuartil de abajo de lo que se suele cotizar (con margen
+    de 1 % para no avisar por centavos).
+
+    Casi todo se cotiza de P1 a P3: un cliente grande (P4..P7) siempre saldria
+    "bajo". Por eso no cuenta si el precio llega a su precio de lista (`lista`,
+    el de su nivel) o a lo que ya se le dio a ese mismo cliente."""
+    if not (ref and ref.get("p25") and precio < ref["p25"] * 0.99):
+        return False
+    if lista and precio >= lista - 0.005:
+        return False
+    cliente = ref.get("al_cliente")
+    return not (cliente and precio >= cliente["precio"] - 0.005)
+
+
+def texto_de_referencia(ref: dict | None, precio: float | None = None,
+                        lista: float | None = None) -> str:
+    """Una frase: a cuanto se suele cotizar y, si se sabe, a cuanto se le dio a
+    este cliente."""
+    if not ref:
+        return "no se ha cotizado en los ultimos 6 meses"
+    if ref.get("p25"):
+        texto = (f"se suele cotizar entre {_num(ref['p25'])} y {_num(ref['p75'])} (mediana "
+                 f"{_num(ref['mediana'])}, de {_num(ref['minimo'])} a {_num(ref['maximo'])}, "
+                 f"{ref['n']} cotizaciones)")
+    else:
+        texto = (f"se cotizo {ref['n']} {'vez' if ref['n'] == 1 else 'veces'}, a: "
+                 + ", ".join(_num(p) for p in ref["precios"]))
+    if ref.get("al_cliente"):
+        c = ref["al_cliente"]
+        texto += f"; a este cliente, la ultima vez a {_num(c['precio'])} ({c['fecha']}, la {c['nfactura']})"
+    if precio is not None and bajo_lo_normal(precio, ref, lista):
+        texto += "; ESTA POR DEBAJO DE LO NORMAL"
+    elif (precio is not None and ref["n"] >= 2 and precio < ref["minimo"] - 0.005
+          and not (lista and precio >= lista - 0.005)):
+        texto += "; es el precio mas bajo al que se ha cotizado"
+    return texto
+
+
+def precios_dados(producto: str, cliente: str = "") -> str:
+    """A cuanto se ha cotizado un producto, y a cuanto a un cliente."""
+    fila = _producto(producto)
+    codigo = _texto(fila.get("CodigoLimpio") or fila.get("Codigo")).upper()
+    descripcion = _texto(fila.get("Descripcion"))
+    datos_cliente = None
+    if (cliente or "").strip():
+        encontrados = cotizaciones.buscar_cliente(cliente)
+        if not encontrados:
+            raise ErrorCotizacion(f"No encontre el cliente '{cliente}'.")
+        if len(encontrados) > 1:
+            opciones = "; ".join(f"{_texto(f['nombre'])} (codigo {f['codigo']})" for f in encontrados[:5])
+            raise ErrorCotizacion(f"'{cliente}' coincide con varios clientes: {opciones}. Pregunta cual.")
+        datos_cliente = encontrados[0]
+    ref = referencias([codigo], datos_cliente["codigo"] if datos_cliente else "").get(codigo)
+    costo = margenes.costo_de_fila(fila)
+    texto = f"{descripcion} (cod {codigo}): {texto_de_referencia(ref)}."
+    if datos_cliente and ref and not ref.get("al_cliente"):
+        texto += f" A {_texto(datos_cliente['nombre'])} no se le ha cotizado en los ultimos 6 meses."
+    if ref:
+        u = ref["ultima"]
+        texto += f" La mas reciente: {_num(u['precio'])} a {u['cliente']} ({u['fecha']}, la {u['nfactura']})."
+        if costo and ref.get("p25"):
+            texto += (f" Con el costo de hoy ({_num(costo)}), a la mediana deja "
+                      f"{margenes.margen(ref['mediana'], costo):.1f}% sobre el costo y al precio "
+                      f"mas bajo {margenes.margen(ref['minimo'], costo):.1f}%.")
+    niveles = ", ".join(f"{n} {_num(float(fila.get(n) or 0))}" for n in cotizaciones.NIVELES
+                        if float(fila.get(n) or 0) > 0)
+    if niveles:
+        texto += f" Precios de lista hoy: {niveles}."
+    return texto + (" Son cotizaciones de JH (no ventas confirmadas). Por voz di el rango normal y, "
+                    "si hay, el ultimo precio a ese cliente; lo demas si lo piden.")

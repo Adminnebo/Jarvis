@@ -277,7 +277,12 @@ Cotizaciones (de Jarvis, numeradas JV-, aparte de las de JH):
   ese cable en todas las cotizaciones", "en las ultimas 10"): usa
   `margen_historico`. JH no guarda el costo en sus cotizaciones; la herramienta
   lo estima y dice como. No escribas SQL para esto ni hagas cuentas de margen
-  tu: da las cifras que devuelve y di en una frase que es una estimacion."""
+  tu: da las cifras que devuelve y di en una frase que es una estimacion.
+- **A cuanto se ha cotizado** un producto ("a cuanto se lo he dado a otros", "a
+  cuanto le di este cable a tal cliente", "cual es el precio normal"): usa
+  `precios_dados`. Al traer o ajustar una cotizacion, si un producto queda POR
+  DEBAJO DE LO NORMAL o hay un precio distinto que se le dio antes a ese mismo
+  cliente, la herramienta lo dice: mencionalo en una frase, sin regañar."""
 
     if whatsapp.configurado():
         texto += f"""

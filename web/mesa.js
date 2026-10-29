@@ -171,6 +171,14 @@ function fila(cot, linea, antes) {
   movil.textContent = `${entero.format(linea.cantidad)} ${linea.unidad.toLowerCase()} · ` +
     (linea.costo ? `costo ${dinero.format(linea.costo)}` : "sin costo");
   producto.append(nombre, codigo, movil);
+  const referencia = textoDeReferencia(linea.referencia);
+  if (referencia) {
+    const nodo = document.createElement("span");
+    nodo.className = `mesa-referencia${linea.referencia.bajo || linea.referencia.mas_bajo ? " bajo" : ""}`;
+    nodo.textContent = referencia;
+    nodo.title = "Cotizaciones de JH de los últimos 6 meses (no son ventas confirmadas)";
+    producto.append(nodo);
+  }
   if (linea.costo_cotizado && Math.abs(linea.costo_cotizado - (linea.costo || 0)) >= 0.005) {
     const entonces = document.createElement("span");
     entonces.className = "mesa-entonces";
@@ -238,6 +246,19 @@ function fila(cot, linea, antes) {
     ganancia,
   );
   return tr;
+}
+
+// A cuanto se suele cotizar: lo que mas ayuda al negociar.
+function textoDeReferencia(ref) {
+  if (!ref) return "";
+  const partes = [];
+  if (ref.bajo) partes.push("bajo lo normal");
+  else if (ref.mas_bajo) partes.push("el más bajo cotizado");
+  partes.push(ref.p25 != null
+    ? `suele ir ${dinero.format(ref.p25)}–${dinero.format(ref.p75)}`
+    : `cotizado antes a ${ref.precios.map((p) => dinero.format(p)).join(", ")}`);
+  if (ref.al_cliente) partes.push(`a este cliente ${dinero.format(ref.al_cliente.precio)} (${ref.al_cliente.fecha})`);
+  return partes.join(" · ");
 }
 
 function celda(texto, clase = "") {
