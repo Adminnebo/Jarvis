@@ -250,15 +250,13 @@ export function crearSesionDeVoz(eventos) {
   async function conectar() {
     avisar("onEstado", "conectando", "Conectando...");
 
-    const respuesta = await fetch("/api/voz/config");
-    const datos = await respuesta.json();
-    if (!respuesta.ok) throw new Error(datos.error || "No pude abrir la sesion de voz");
-    modeloEnUso = datos.modelo;
-
-    // El microfono se pide despues del token: si OpenAI rechaza la sesion,
-    // no molestamos al usuario con el permiso del navegador.
-    // El navegador limpia el audio antes de enviarlo; OpenAI vuelve a
-    // filtrarlo con noise_reduction. Las dos capas suman en un sitio ruidoso.
+    // El microfono se pide PRIMERO, dentro del gesto del click. Safari exige que
+    // getUserMedia corra con la activacion del usuario fresca; si antes hay un
+    // await (como el del token) la pierde y lo rechaza con "The request is not
+    // allowed by the user agent or the platform in the current context". Por eso
+    // va antes del fetch, aunque asi se pida el permiso aunque la sesion falle.
+    // El navegador limpia el audio antes de enviarlo; OpenAI vuelve a filtrarlo
+    // con noise_reduction. Las dos capas suman en un sitio ruidoso.
     const microfono = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
@@ -266,6 +264,20 @@ export function crearSesionDeVoz(eventos) {
         autoGainControl: true,
       },
     });
+
+    let datos;
+    try {
+      const respuesta = await fetch("/api/voz/config");
+      datos = await respuesta.json();
+      if (!respuesta.ok) throw new Error(datos.error || "No pude abrir la sesion de voz");
+    } catch (error) {
+      // Sin sesion no vamos a usar el microfono: se suelta para que el navegador
+      // apague el indicador de grabacion.
+      microfono.getTracks().forEach((t) => t.stop());
+      throw error;
+    }
+    modeloEnUso = datos.modelo;
+
     pista = microfono.getAudioTracks()[0];
     puerta = crearPuerta(microfono, pista, datos.puerta,
                          (nivel, umbral, abierto) =>

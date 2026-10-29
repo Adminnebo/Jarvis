@@ -517,9 +517,27 @@ async function abrirVozEnVivo() {
     estadoVisual("escuchando", "En vivo. Habla cuando quieras.");
     $("meta").textContent = `${datos.modelo} · en vivo`;
   } catch (error) {
-    burbuja("error", `No pude abrir la voz en vivo: ${error.message}`);
+    burbuja("error", `No pude abrir la voz en vivo: ${motivoDeVoz(error)}`);
     cerrarVozEnVivo();
   }
+}
+
+// El porque del fallo del microfono, en una frase util. getUserMedia tira
+// errores con nombre en ingles; aqui se traducen a algo accionable.
+function motivoDeVoz(error) {
+  const nombre = error && error.name;
+  if (nombre === "NotAllowedError" || nombre === "SecurityError") {
+    return "el navegador bloqueo el microfono. En Mac: Ajustes del Sistema > " +
+      "Privacidad y seguridad > Microfono, activa tu navegador; y en el candado " +
+      "de la barra de direcciones permite el microfono para este sitio. Despues reintenta.";
+  }
+  if (nombre === "NotFoundError" || nombre === "DevicesNotFoundError") {
+    return "no encontre ningun microfono conectado.";
+  }
+  if (nombre === "NotReadableError" || nombre === "TrackStartError") {
+    return "el microfono lo esta usando otra app; cierrala y reintenta.";
+  }
+  return error && error.message ? error.message : "error desconocido";
 }
 
 function cerrarVozEnVivo() {
