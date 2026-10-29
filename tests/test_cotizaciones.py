@@ -4,16 +4,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 # Arriba del todo por lo mismo que en test_permisos.py: main carga el .env real.
-from backend import cotizacion_html, cotizaciones, herramientas
+from backend import cotizacion_html, cotizaciones, herramientas, mesa
 from backend.main import app
 
 PRODUCTOS = {
     "9681": {"Codigo": "9681", "Referencia": "#12CR", "Descripcion": "KEYARD ALAMBRE THHN #12 ROJO",
              "Und": "PIES      ", "P1": 14.3, "P2": 14.0, "P3": 13.5, "P4": 13.0, "P5": 12.5,
-             "P6": 12.0, "P7": 11.5, "TipoItbis": 18, "Coste": 10.0},
+             "P6": 12.0, "P7": 11.5, "TipoItbis": 18, "Coste": 10.0, "costo": 10.0},
     "3790": {"Codigo": "3790", "Referencia": "QO240", "Descripcion": "BREAKER 2P 40AMP",
              "Und": "UND", "P1": 1614.55, "P2": 1500, "P3": 1400, "P4": 118.0, "P5": 0,
-             "P6": 0, "P7": 0, "TipoItbis": 18, "Coste": 1000.0},
+             "P6": 0, "P7": 0, "TipoItbis": 18, "Coste": 1000.0, "costo": 100.0},
     "5555": {"Codigo": "5555", "Referencia": "", "Descripcion": "SIN PRECIO", "Und": "UND",
              "P1": 0, "P2": 0, "P3": 0, "P4": 0, "P5": 0, "P6": 0, "P7": 0, "TipoItbis": 18, "Coste": 0},
 }
@@ -35,6 +35,8 @@ HEADER_JH = {
 DETALLE_JH = [
     {"codigo": "9681", "cantidad": 100.0, "precio": 13.0, "porItbis": 18,
      "Descripcion": "KEYARD ALAMBRE THHN #12 ROJO", "Und": "PIES"},
+    {"codigo": "3790", "cantidad": 2.0, "precio": 150.0, "porItbis": 18,
+     "Descripcion": "BREAKER 2P 40AMP", "Und": "UND"},
 ]
 
 
@@ -74,7 +76,6 @@ def catalogo(entorno_limpio, monkeypatch):
         return []
 
     monkeypatch.setattr(cotizaciones, "_consultar", consultar)
-    cotizaciones._borradores.clear()
     return consultas
 
 
@@ -146,9 +147,11 @@ def test_cada_persona_tiene_su_borrador(catalogo):
     assert cotizaciones.borrador_de("jorge") is None
 
 
-def test_un_borrador_viejo_ya_no_vale(catalogo, monkeypatch):
+def test_un_borrador_sin_usar_dos_horas_ya_no_vale(catalogo):
     _preparar(cliente="6177")
-    cotizaciones._borradores["admin"].creado -= cotizaciones.VIGENCIA_BORRADOR + 1
+    mesa.envejecer("admin", mesa.VIGENCIA - 60)
+    assert cotizaciones.borrador_de("admin") is not None
+    mesa.envejecer("admin", 120)
     assert cotizaciones.borrador_de("admin") is None
 
 
@@ -190,11 +193,11 @@ def test_emitir_numera_genera_el_pdf_y_lo_manda_al_chat(servicios):
     assert servicios["subir"] == [("JV-00007.pdf", b"%PDF-1.7 prueba")]
     assert servicios["actualizar"] == [(7, {"pdf_ruta": "JV-00007.pdf", "estado": "emitida"})]
     # Un segundo "si" no emite otra.
-    assert "No hay un borrador" in herramientas.ejecutar("emitir_cotizacion", "{}", "admin")
+    assert "No hay ninguna cotizacion sin emitir" in herramientas.ejecutar("emitir_cotizacion", "{}", "admin")
 
 
 def test_sin_borrador_no_se_emite_nada(servicios):
-    assert "No hay un borrador" in herramientas.ejecutar("emitir_cotizacion", "{}", "admin")
+    assert "No hay ninguna cotizacion sin emitir" in herramientas.ejecutar("emitir_cotizacion", "{}", "admin")
     assert servicios["insertar"] == []
 
 
@@ -237,8 +240,8 @@ def test_sin_configurar_no_se_ofrecen(entorno_limpio, monkeypatch):
     monkeypatch.delenv("JARVIS_PDF_KEY", raising=False)
     monkeypatch.delenv("PDFCO_API_KEY", raising=False)
     nombres = {e["name"] for e in herramientas.esquemas()}
-    assert not {"preparar_cotizacion", "emitir_cotizacion",
-                "buscar_cotizacion", "recotizar"} & nombres
+    assert not {"preparar_cotizacion", "emitir_cotizacion", "buscar_cotizacion",
+                "crear_variantes", "ajustar_precios", "analizar_cotizacion"} & nombres
 
 
 # --- Plantilla ---
@@ -439,13 +442,10 @@ def test_leer_utilidad_valida_el_rango():
         cotizaciones._leer_utilidad("abc")
 
 
-def test_encontrada_se_guarda_y_vence(catalogo):
-    cotizaciones._encontradas.clear()
-    cotizaciones._encontradas["admin"] = cotizaciones.Encontrada(
-        cliente={"nombre": "X"}, productos=[], numero="JV-00007", total=10.0,
-    )
-    assert cotizaciones.encontrada_de("admin").numero == "JV-00007"
-    cotizaciones._encontradas["admin"].creado -= cotizaciones.VIGENCIA_BORRADOR + 1
+def test_encontrada_se_guarda_y_vence(emitidas):
+    _buscar("la 3807")
+    assert cotizaciones.encontrada_de("admin").numero == "3807"
+    mesa.envejecer("admin", mesa.VIGENCIA + 1)
     assert cotizaciones.encontrada_de("admin") is None
 
 
@@ -469,7 +469,6 @@ FILA_JV_SOLO = {
 
 @pytest.fixture
 def emitidas(catalogo, monkeypatch):
-    cotizaciones._encontradas.clear()
 
     def filas(params):
         if "numero" in params:
@@ -522,8 +521,10 @@ def test_sin_cotizaciones_lo_dice(emitidas):
 
 
 def _recotizar(nivel, utilidad="", usuario="admin"):
+    # Lo que antes era recotizar ahora es una variante "a nivel".
+    variante = {"base": "nivel", "nivel": nivel, "utilidad": utilidad}
     return herramientas.ejecutar(
-        "recotizar", json.dumps({"nivel": nivel, "utilidad": utilidad}), usuario
+        "crear_variantes", json.dumps({"variantes": json.dumps([variante])}), usuario
     )
 
 
@@ -533,7 +534,7 @@ def test_recotizar_usa_el_nivel_sin_factor(emitidas):
     borrador = cotizaciones.borrador_de("admin")
     assert borrador.lineas[0]["precio_unitario"] == 11.5     # P7 crudo, sin factor
     assert borrador.totales["total"] == 1150.0
-    assert "aun NO emitido" in texto and "precio P7" in texto
+    assert "sin emitir" in texto and "'P7'" in texto
 
 
 def test_recotizar_con_utilidad(emitidas):
@@ -544,7 +545,6 @@ def test_recotizar_con_utilidad(emitidas):
 
 
 def test_recotizar_sin_encontrada_lo_dice(emitidas):
-    cotizaciones._encontradas.clear()
     assert "usca" in _recotizar("7")
 
 
@@ -628,10 +628,127 @@ def test_archivo_para_envio_de_jh_genera_el_pdf(servicios_y_emitidas):
 
 def test_recotizar_desde_jh_emite_jv(servicios_y_emitidas):
     _buscar("la 3807")                       # cotizacion de JH
-    _recotizar("7")
+    _recotizar("2")                          # el breaker no tiene P5..P7
     texto, adjuntos = herramientas.ejecutar_completo("emitir_cotizacion", "{}", "admin")
     assert "JV-00007" in texto               # la nueva es JV, no toca la 3807
     fila = servicios_y_emitidas["insertar"][0]
     assert fila["cliente"]["nombre"] == "FERRETERIA ELIAM MAX EIRL"
     assert fila["productos"][0]["codigo"] == "9681"
-    assert fila["productos"][0]["precio_unitario"] == 11.5
+    assert fila["productos"][0]["precio_unitario"] == 14.0   # P2 del keyard
+
+
+# --- Mesa: variantes, ajustes y margenes (todo sobre el costo) ---
+# La 3807 de JH: 100 KEYARD a 13 (costo 10, 30%) y 2 BREAKER a 150 (costo 100,
+# 50%). General: costo 1200, venta 1600 -> 33.3%.
+
+def _herr(nombre, usuario="admin", **argumentos):
+    return herramientas.ejecutar(nombre, json.dumps(argumentos), usuario)
+
+
+def _variantes(*pedidos):
+    return _herr("crear_variantes", variantes=json.dumps(list(pedidos)))
+
+
+def test_jalar_una_cotizacion_dice_sus_margenes(emitidas):
+    texto = _buscar("jálame la cotización 3807 y dime qué tiene")
+    assert "Cotizacion 3807" in texto
+    assert "1. 100 PIES de KEYARD ALAMBRE THHN #12 ROJO" in texto and "margen 30.0%" in texto
+    assert "2. 2 UND de BREAKER 2P 40AMP" in texto and "margen 50.0%" in texto
+    assert "Margen general: 33.3% sobre el costo" in texto
+
+
+def test_el_pedido_del_audio_dos_variantes_y_la_original_sigue(servicios_y_emitidas):
+    _buscar("3807")
+    texto = _variantes({"base": "costo"}, {"base": "costo", "margen": 50})
+    assert "'a costo'" in texto and "'costo + 50%'" in texto
+    assert "margen general 0.0%" in texto and "margen general 50.0%" in texto
+    assert servicios_y_emitidas["insertar"] == []           # nada emitido sin el si
+
+    texto, adjuntos = herramientas.ejecutar_completo(
+        "emitir_cotizacion", json.dumps({"cuales": "todas"}), "admin")
+    assert len(adjuntos) == 2 and all("variante" not in a for a in adjuntos)
+    a_costo, con_50 = servicios_y_emitidas["insertar"]
+    assert [l["precio_unitario"] for l in a_costo["productos"]] == [10.0, 100.0]
+    assert [l["precio_unitario"] for l in con_50["productos"]] == [15.0, 150.0]   # 100 -> 150
+    linea = con_50["productos"][0]
+    assert linea["costo"] == 10.0 and linea["margen"] == pytest.approx(50)
+    assert "niveles" not in linea
+    assert con_50["cliente"]["cotizacion_origen"] == "3807"
+    assert cotizaciones.borrador_de("admin") is None
+    for html, _ in servicios_y_emitidas["pdf"]:
+        assert "costo" not in html.lower()                  # el PDF no muestra costos
+
+    # "Y el producto X en la 3807, cual es mi margen overall?"
+    texto = _herr("analizar_cotizacion", cotizacion="la 3807", producto="keyard")
+    assert "margen 30.0%" in texto and "Margen general: 33.3%" in texto
+
+
+def test_ajustar_la_original_ajusta_una_copia_y_avisa_sin_bloquear(emitidas):
+    _buscar("3807")
+    texto = _herr("ajustar_precios", piso="25", cambios=json.dumps([
+        {"linea": "1", "precio": 9}, {"linea": "breaker", "margen": 20}]))
+    assert "'ajustada'" in texto
+    assert "RD$ 13.00 -> RD$ 9.00" in texto and "A PERDIDA" in texto
+    assert "RD$ 150.00 -> RD$ 120.00" in texto
+    # Venta 900 + 240 contra costo 1200.
+    assert "33.3% -> -5.0%" in texto and "ROMPE EL PISO de 25%" in texto
+    # Con el breaker a 120 (gana 40), el keyard tiene que ganar 260 en 100: 12.60.
+    assert "lo mas bajo seria RD$ 12.60" in texto
+    assert cotizaciones.encontrada_de("admin").productos[0]["precio_unitario"] == 13.0
+    borrador = cotizaciones.borrador_de("admin")
+    assert borrador.nombre == "ajustada" and borrador.lineas[0]["precio_unitario"] == 9.0
+
+
+def test_volver_al_precio_original(emitidas):
+    _buscar("3807")
+    _herr("ajustar_precios", cambios=json.dumps([{"linea": "1", "precio": 9}]))
+    texto = _herr("ajustar_precios", cambios=json.dumps([{"linea": "1", "original": "si"}]))
+    assert "RD$ 9.00 -> RD$ 13.00" in texto
+
+
+def test_hasta_donde_puedo_bajar_sin_romper_el_piso(emitidas):
+    _buscar("3807")
+    texto = _herr("analizar_cotizacion", producto="1", piso="25")
+    # Hace falta ganar 300; el breaker gana 100 -> 100(p - 10) >= 200.
+    assert "lo mas bajo que se puede dejar es RD$ 12.00" in texto
+
+
+def test_se_nombra_la_variante_por_lo_que_la_distingue(emitidas):
+    _buscar("3807")
+    _variantes({"base": "costo"}, {"base": "costo", "margen": 50})
+    assert "'costo + 50%'" in _herr("analizar_cotizacion", cotizacion="la del 50")
+    assert "'a costo'" in _herr("analizar_cotizacion", cotizacion="la de costo")
+    assert "(original)" in _herr("analizar_cotizacion", cotizacion="la original")
+    _variantes({"base": "nivel", "nivel": "150"})       # P1 + 50%
+    assert "Pregunta cual" in _herr("analizar_cotizacion", cotizacion="la del 50")
+    assert "No hay una cotizacion" in _herr("analizar_cotizacion", cotizacion="la del 80")
+
+
+def test_comparar_todas(emitidas):
+    _buscar("3807")
+    _variantes({"base": "costo"}, {"base": "costo", "margen": 50})
+    texto = _herr("analizar_cotizacion", cotizacion="todas")
+    assert "original 3807" in texto and "a costo" in texto and "costo + 50%" in texto
+
+
+def test_producto_que_no_esta_en_la_cotizacion(emitidas):
+    _buscar("3807")
+    assert "No hay un producto" in _herr("analizar_cotizacion", producto="tubo pvc")
+
+
+def test_buscar_otra_reemplaza_la_mesa_y_avisa(emitidas):
+    _buscar("3807")
+    _variantes({"base": "costo"})
+    texto = _buscar("JV-12")
+    assert "Se descartaron" in texto and "a costo" in texto
+    assert cotizaciones.borrador_de("admin") is None
+    assert cotizaciones.encontrada_de("admin").numero == "JV-00012"
+
+
+def test_una_cotizacion_que_no_existe_lo_dice(emitidas):
+    assert "No existe la cotizacion 1000" in _buscar("la 1000")
+    # La 7000 no es cotizacion, pero 7000 si es un cliente: trae la suya y avisa.
+    texto = _buscar("la 7000")
+    assert "La cotizacion 7000 no existe en JH" in texto and "JV-00011" in texto
+    # Si pidieron el cliente, el aviso sobra.
+    assert "no existe" not in _buscar("la del cliente 7000")

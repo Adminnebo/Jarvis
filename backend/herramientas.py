@@ -423,24 +423,36 @@ def preparar_cotizacion(productos: str, cliente: str = "", contado: str = "no",
 
 
 @herramienta(
-    "Emite la cotizacion preparada con preparar_cotizacion: le da numero "
-    "(JV-...), genera el PDF y lo manda al chat. Usala SOLO despues de que el "
-    "usuario confirme el resumen del borrador con un si claro.",
+    "Emite cotizaciones sin emitir de la mesa (de preparar_cotizacion, crear_variantes "
+    "o ajustar_precios): le da numero (JV-...) a cada una, genera el PDF y lo manda al "
+    "chat. Usala SOLO despues de que el usuario confirme con un si claro.",
     disponible=_cotizaciones_disponibles,
+    cuales="Vacio para la que se esta trabajando; 'todas' para emitir todas las "
+           "variantes; o el nombre de una ('a costo', 'costo + 50%', 'P5').",
 )
-def emitir_cotizacion(usuario: str = ""):
+def emitir_cotizacion(cuales: str = "", usuario: str = ""):
     from . import cotizaciones
 
+    nombre = cotizaciones.nombre_de(usuario)
     try:
-        adjunto = cotizaciones.emitir(usuario, cotizaciones.nombre_de(usuario))
+        if (cuales or "").strip().lower() in ("todas", "todas las", "las dos", "ambas", "las tres"):
+            adjuntos, errores = cotizaciones.emitir_todas(usuario, nombre)
+        else:
+            adjuntos, errores = [cotizaciones.emitir(usuario, nombre, cuales)], []
     except cotizaciones.ErrorCotizacion as error:
         return str(error)
-    return ConAdjuntos(
-        f"Cotizacion {adjunto['numero']} emitida y enviada al chat, total RD$ "
-        f"{adjunto['total']:,.2f}. Confirmalo en una frase; no leas el numero "
-        "completo ni enlaces salvo que lo pidan.",
-        [adjunto],
+    emitidas = "; ".join(
+        f"{a['numero']} ('{a['variante']}', total RD$ {a['total']:,.2f})" for a in adjuntos
     )
+    texto = f"Emitida(s) y enviada(s) al chat: {emitidas}." if adjuntos else ""
+    if errores:
+        texto += " No se pudieron emitir: " + "; ".join(errores) + ". Dilo."
+    texto += (" Confirmalo en una frase; no leas el numero completo ni enlaces salvo que "
+              "lo pidan.")
+    # El nombre de la variante es para el texto: el adjunto va tal cual a la web
+    # y a los puentes.
+    return ConAdjuntos(texto.strip(), [{k: v for k, v in a.items() if k != "variante"}
+                                       for a in adjuntos])
 
 
 @herramienta(
@@ -449,8 +461,10 @@ def emitir_cotizacion(usuario: str = ""):
     "usuario (numero de cotizacion, codigo de cliente, RNC/cedula, nombre o telefono) "
     "y trae la ultima de ese cliente. Si no dicen cliente ni numero ('la ultima en "
     "general', 'la ultima que hicieron'), pasa la consulta tal cual y trae la ultima "
-    "REAL de JH (las JV de Jarvis no se cuelan ahi). Usala cuando pidan 'dame/busca la "
-    "ultima cotizacion'. No leas en voz el numero completo ni los precios salvo que lo pidan.",
+    "REAL de JH (las JV de Jarvis no se cuelan ahi). Usala cuando pidan 'jalame/dame/busca "
+    "la cotizacion'. Devuelve sus productos con precio, costo y margen, y la deja como "
+    "ORIGINAL en la mesa para sacarle variantes, ajustarla o analizarla. Buscar otra "
+    "reemplaza la mesa.",
     disponible=_cotizaciones_disponibles,
     consulta="Lo que dijo el usuario: numero (3807 o JV-00012), codigo/RNC/nombre/telefono del cliente, o 'la ultima en general'",
 )
@@ -464,22 +478,73 @@ def buscar_cotizacion(consulta: str, usuario: str = "") -> str:
 
 
 @herramienta(
-    "Recotiza los productos de la ultima cotizacion encontrada con buscar_cotizacion, "
-    "a un nivel de precio que elige el usuario. Arma un BORRADOR (no lo emite): mismos "
-    "productos y cantidades, precio del nivel pedido (P1..P7) y, si lo piden, un % de "
-    "utilidad encima. Despues emite con emitir_cotizacion solo si el usuario confirma.",
+    "Arma una o varias cotizaciones nuevas (variantes, sin emitir) con los mismos "
+    "productos y cantidades de la cotizacion traida con buscar_cotizacion (o del "
+    "borrador en curso): a costo, a costo + X %, a un nivel P1..P7, o la misma con un "
+    "descuento. Ej.: 'generame una a costo y otra con 50 % sobre el costo' -> dos "
+    "variantes en UNA llamada. Despues pregunta si las emite y usa emitir_cotizacion. "
+    "Nunca calcules precios tu.",
     disponible=_cotizaciones_disponibles,
-    nivel="El nivel de precio, P1 a P7 ('a precio 7' es P7). Tambien acepta la "
-          "clave de JH pegada, donde la PRIMERA cifra es el nivel y el RESTO el % "
-          "de utilidad: '55'=P5 5%, '47'=P4 7%, '550'=P5 50%. Pasala tal cual, no la descompongas tu.",
-    utilidad="Opcional: % de utilidad encima del nivel ('precio 5 con 6' es 6). Vacio si ya "
-             "va pegado en el nivel (p. ej. '55') o si se cotiza al nivel pelado.",
+    variantes='JSON, una por variante. Formas: {"base": "costo", "margen": 50} '
+              '(margen SOBRE EL COSTO: costo 100 con 50 sale a 150; 0 o vacio = a costo), '
+              '{"base": "nivel", "nivel": "P5", "utilidad": ""} (el nivel acepta la clave de '
+              'JH pegada como "55"; pasala tal cual), {"base": "original", "descuento": 5}.',
+    piso="Opcional: el % minimo de margen general que pidieron cuidar ('cuida un 18' es 18; "
+         "'sin piso' lo quita). Sobre el costo.",
 )
-def recotizar(nivel: str, utilidad: str = "", usuario: str = "") -> str:
+def crear_variantes(variantes: str, piso: str = "", usuario: str = "") -> str:
     from . import cotizaciones
 
     try:
-        return cotizaciones.recotizar(usuario, nivel, utilidad or 0)
+        return cotizaciones.crear_variantes(usuario, variantes, piso)
+    except cotizaciones.ErrorCotizacion as error:
+        return str(error)
+
+
+@herramienta(
+    "Cambia el precio de uno o varios productos de una cotizacion en curso y dice el "
+    "margen del producto y el general, antes y despues. Ej.: 'al 4 ponle 45 y al 5, 35'; "
+    "'que el breaker gane 12 %'; 'bajale 5 % al 3'. Si la cotizacion es la original "
+    "traida, ajusta una copia ('ajustada'). Nunca bloquea: si rompe el piso o vende a "
+    "perdida se aplica igual y se avisa.",
+    disponible=_cotizaciones_disponibles,
+    cambios='JSON, uno por producto: {"linea": "4", "precio": 45} (precio unitario en RD$ '
+            'con ITBIS), {"linea": "4", "margen": 12} (% sobre el costo), {"linea": "4", '
+            '"nivel": "P5"}, {"linea": "4", "descuento": 5}, {"linea": "4", "original": "si"} '
+            '(vuelve al precio con que nacio). "linea" es el numero del producto en la '
+            'cotizacion, su codigo o parte de su descripcion.',
+    cotizacion="Opcional: cual cotizacion de la mesa ('la del 50', 'a costo', 'la original', "
+               "'la 1016'). Vacio = la ultima que se toco.",
+    piso="Opcional: el % minimo de margen general que pidieron cuidar. Sobre el costo.",
+)
+def ajustar_precios(cambios: str, cotizacion: str = "", piso: str = "",
+                    usuario: str = "") -> str:
+    from . import cotizaciones
+
+    try:
+        return cotizaciones.ajustar_precios(usuario, cambios, cotizacion, piso)
+    except cotizaciones.ErrorCotizacion as error:
+        return str(error)
+
+
+@herramienta(
+    "Dice el margen de ganancia (sobre el costo) de una cotizacion en curso, de un "
+    "producto dentro de ella, o compara todas, SIN cambiar nada. Ej.: 'cual es mi margen "
+    "en la 1016', 'y el producto X en la original?', 'hasta donde puedo bajar el 4 sin "
+    "bajar del 18 %', 'comparame las tres'.",
+    disponible=_cotizaciones_disponibles,
+    cotizacion="Opcional: cual ('la original', 'la 1016', 'la del 50', 'a costo'); 'todas' "
+               "para compararlas. Vacio = la ultima que se toco.",
+    producto="Opcional: el producto (numero en la cotizacion, codigo o parte de la descripcion).",
+    piso="Opcional: el % minimo de margen general a cuidar; con producto, dice el precio "
+         "mas bajo posible de ese producto.",
+)
+def analizar_cotizacion(cotizacion: str = "", producto: str = "", piso: str = "",
+                        usuario: str = "") -> str:
+    from . import cotizaciones
+
+    try:
+        return cotizaciones.analizar(usuario, cotizacion, producto, piso)
     except cotizaciones.ErrorCotizacion as error:
         return str(error)
 

@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app
-from backend import acceso, cerebro, continuidad, cotizaciones, whatsapp
+from backend import acceso, cerebro, continuidad, cotizaciones, mesa, whatsapp
 
 AHORA = 1_000_000.0
 
@@ -20,11 +20,9 @@ AHORA = 1_000_000.0
 @pytest.fixture(autouse=True)
 def en_blanco():
     continuidad.olvidar()
-    cotizaciones._borradores.clear()
     whatsapp._pendientes.clear()
     yield
     continuidad.olvidar()
-    cotizaciones._borradores.clear()
     whatsapp._pendientes.clear()
 
 
@@ -32,12 +30,13 @@ def admin():
     return acceso.por_defecto()
 
 
-def _borrador(creado):
-    return cotizaciones.Borrador(
-        {"nombre": "CLIENTE CONTADO"},
-        [{"cantidad": 5.0, "unidad": "UND", "descripcion": "TRUPER CASCO PROTECTOR BLANCO"}],
-        {"total": 2611.75}, creado=creado,
-    )
+def _poner_borrador(usuario, creado):
+    """Un borrador sin emitir en la mesa de esa persona."""
+    mesa.guardar(usuario, {**mesa.vacia(), "ultima": "borrador", "variantes": [{
+        "nombre": "borrador", "cliente": {"nombre": "CLIENTE CONTADO"},
+        "lineas": [{"cantidad": 5.0, "unidad": "UND", "descripcion": "TRUPER CASCO PROTECTOR BLANCO"}],
+        "totales": {"total": 2611.75}, "creado": creado,
+    }]})
 
 
 def test_sin_nada_que_retomar_no_se_agrega_nada():
@@ -46,7 +45,7 @@ def test_sin_nada_que_retomar_no_se_agrega_nada():
 
 
 def test_el_borrador_sin_emitir_llega_a_la_sesion_nueva():
-    cotizaciones._borradores[admin().id] = _borrador(time.time() - 120)
+    _poner_borrador(admin().id, time.time() - 120)
 
     texto = cerebro.configuracion_de_sesion(admin())["instructions"]
     assert "Donde quedaron" in texto
@@ -68,7 +67,7 @@ def test_si_el_contexto_falla_la_voz_abre_igual(monkeypatch, capsys):
 
 
 def test_el_borrador_de_otro_no_se_cuela():
-    cotizaciones._borradores["otra-persona"] = _borrador(time.time())
+    _poner_borrador("otra-persona", time.time())
     assert continuidad.para_prompt(admin()) == ""
 
 
