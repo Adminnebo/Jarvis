@@ -33,7 +33,8 @@ HEADER_JH = {
     "total": 28582.40, "confirmada": 1, "pago": 0,
 }
 DETALLE_JH = [
-    {"codigo": "9681", "cantidad": 100.0, "Descripcion": "KEYARD ALAMBRE THHN #12 ROJO", "Und": "PIES"},
+    {"codigo": "9681", "cantidad": 100.0, "precio": 13.0, "porItbis": 18,
+     "Descripcion": "KEYARD ALAMBRE THHN #12 ROJO", "Und": "PIES"},
 ]
 
 
@@ -593,6 +594,16 @@ def test_busca_ultima_en_general(emitidas):
     assert "3807" in texto and "JH" in texto and "JV-00012" in texto
     enc = cotizaciones.encontrada_de("admin")
     assert enc.fuente == "jh" and enc.numero == "3807"
+
+
+def test_archivo_para_envio_de_jh_genera_el_pdf(servicios_y_emitidas):
+    # Mandar la 3807 de JH: genera el PDF tal cual (precios reales) y lo sube.
+    datos = cotizaciones.archivo_para_envio("3807")
+    assert datos == {"referencia": "3807", "titulo": "FERRETERIA ELIAM MAX EIRL",
+                     "ruta": "jh-3807.pdf"}
+    assert servicios_y_emitidas["subir"][0][0] == "jh-3807.pdf"
+    html, _ = servicios_y_emitidas["pdf"][0]
+    assert "3807" in html and "FERRETERIA ELIAM MAX EIRL" in html
 
 
 def test_recotizar_desde_jh_emite_jv(servicios_y_emitidas):

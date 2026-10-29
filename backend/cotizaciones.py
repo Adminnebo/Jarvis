@@ -877,6 +877,88 @@ def _ultima_general(id_usuario: str) -> str:
     raise ErrorCotizacion("No encontre ninguna cotizacion emitida todavia.")
 
 
+# --- PDF de una cotizacion de JH, para mandarla tal cual por WhatsApp ---
+
+def _lineas_pdf_jh(nfactura: int) -> list[dict]:
+    """Las lineas de una cotizacion de JH, con sus precios reales, en la forma
+    que espera la plantilla del PDF."""
+    filas = _consultar(
+        "SELECT LTRIM(RTRIM(codigo)) AS codigo, cantidad, precio, porItbis, "
+        f"Descripcion, Und FROM dbo.dCotizacionesWebIA WHERE nfactura = {int(nfactura)}"
+    )
+    lineas = []
+    for f in filas:
+        cantidad = float(f.get("cantidad") or 0)
+        precio = round(float(f.get("precio") or 0), 2)
+        tasa = float(f.get("porItbis") or 0)
+        bruto = precio / (1 + tasa / 100) if tasa else precio
+        lineas.append({
+            "codigo": _texto(f.get("codigo")), "referencia": "",
+            "descripcion": _texto(f.get("Descripcion")), "unidad": _texto(f.get("Und")),
+            "cantidad": cantidad, "precio_unitario": precio, "TipoItbis": tasa,
+            "precio_bruto": bruto, "itbis_linea": (precio - bruto) * cantidad,
+            "subtotal_linea": precio * cantidad,
+        })
+    return lineas
+
+
+def _generar_pdf_jh(header: dict) -> str:
+    """Arma el PDF de la cotizacion de JH tal cual (sus precios y numero reales),
+    lo sube al bucket y devuelve la ruta."""
+    nfactura = int(header["nfactura"])
+    lineas = _lineas_pdf_jh(nfactura)
+    if not lineas:
+        raise ErrorCotizacion(f"La cotizacion {nfactura} de JH no tiene productos para el PDF.")
+    itbis = round(float(header.get("itbis") or 0), 2)
+    total = round(float(header.get("total") or 0), 2)
+    totales = {"subtotal": round(total - itbis, 2), "itbis": itbis, "total": total}
+    cliente = {
+        "codigo": _texto(header.get("cliente")), "nombre": _texto(header.get("clientenombre")),
+        "rnc": _texto(header.get("RNC")), "direccion": _texto(header.get("Direccion")),
+        "email": _texto(header.get("Correo")), "telefono": _texto(header.get("Telefono")),
+        "ciudad": _texto(header.get("Ciudad")), "sector": _texto(header.get("Sector")),
+        "contacto": _texto(header.get("Contacto")),
+    }
+    html = cotizacion_html.generar(
+        str(nfactura), _fecha_corta(header.get("fecha")), cliente, lineas, totales,
+        USUARIO_DOCUMENTO, _imagenes([l["codigo"] for l in lineas]),
+    )
+    ruta = f"jh-{nfactura}.pdf"
+    _subir(ruta, _pdf(html, nombre_de_archivo(cliente["nombre"], str(nfactura))))
+    return ruta
+
+
+def archivo_para_envio(numero: str) -> dict:
+    """El PDF a mandar por WhatsApp: {referencia, titulo, ruta}. Resuelve tanto
+    las JV de Jarvis (ya tienen PDF) como las reales de JH (lo genera al vuelo)."""
+    texto = (numero or "").strip().upper()
+
+    if "JV" in texto:
+        jv = _normalizar_jv(texto)
+        if not jv:
+            raise ErrorCotizacion(f"'{numero}' no es un numero de cotizacion valido.")
+        fila = buscar_emitida(jv)
+        if fila is None:
+            raise ErrorCotizacion(f"No existe una cotizacion {jv} emitida.")
+        return {"referencia": jv, "titulo": fila["cliente"], "ruta": fila["pdf_ruta"]}
+
+    if re.fullmatch(r"\d{1,}", texto):
+        header = _cotiz_jh_por_numero(int(texto))
+        if header:
+            return {"referencia": str(int(texto)),
+                    "titulo": _texto(header.get("clientenombre")),
+                    "ruta": _generar_pdf_jh(header)}
+        jv = formato(int(texto))
+        fila = buscar_emitida(jv)
+        if fila is not None:
+            return {"referencia": jv, "titulo": fila["cliente"], "ruta": fila["pdf_ruta"]}
+        raise ErrorCotizacion(
+            f"No encontre la cotizacion {texto} (ni de Jarvis ni de JH) para enviar."
+        )
+
+    raise ErrorCotizacion(f"'{numero}' no es un numero de cotizacion.")
+
+
 # Palabras de relleno al pedir "la cotizacion numero X": si al quitarlas solo
 # queda un numero, ese numero es el de una cotizacion (no el codigo de un cliente).
 _FILLER = {

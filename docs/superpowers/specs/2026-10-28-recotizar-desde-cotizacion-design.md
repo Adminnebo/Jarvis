@@ -208,3 +208,21 @@ por fecha/nfactura desc) y menciona cuál es la última JV. Se eligió priorizar
 en vez de "la más reciente por fecha" porque las JV de prueba/manuales son a
 menudo más nuevas y tapaban la cotización real que se busca. Para la última de
 Jarvis se pide explícitamente ("la última JV").
+
+## Ampliación (2026-10-29): mandar una cotización de JH por WhatsApp
+
+Pedido: poder enviar por WhatsApp las cotizaciones reales de JH (ej. la 3813), no
+solo las JV. Antes el envío (`whatsapp._archivo_de_cotizacion`) exigía un número
+JV con PDF en el bucket.
+
+- Nuevo `cotizaciones.archivo_para_envio(numero)` resuelve el PDF a mandar: si el
+  número lleva "JV" usa el PDF ya emitido (`buscar_emitida`); si es un número
+  pelado intenta primero JH (`iCotizacionesWebIA`) y, si no, JV.
+- Para JH se **genera el PDF al vuelo** con los precios reales:
+  `iCotizacionesWebIA` (cabecera) + `dCotizacionesWebIA` (líneas con `precio`,
+  `porItbis`, `Descripcion`, `Und`), se arma con la misma plantilla
+  (`cotizacion_html.generar`, número = nfactura) y se sube a `jh-<nfactura>.pdf`.
+  No re-cotiza: reproduce la cotización tal cual, incluidas las líneas
+  `ProductoManual`.
+- `whatsapp.py` delega en `archivo_para_envio`; el resto del flujo (firmar + enviar
+  por Evolution, dos pasos con confirmación) no cambia.

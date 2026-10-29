@@ -144,20 +144,16 @@ def _archivos_de_productos(codigos: str, tipo: str, nombres: str) -> tuple[list[
 def _archivo_de_cotizacion(numero: str) -> dict:
     from . import cotizaciones
 
-    texto = (numero or "").strip().upper()
-    if re.fullmatch(r"\d{1,6}", texto):
-        texto = cotizaciones.formato(int(texto))
-    if not cotizaciones.NUMERO.match(texto):
-        raise ErrorEnvio(f"'{numero}' no es un numero de cotizacion de Jarvis (JV-00001).")
     if not cotizaciones.configurado():
         raise ErrorEnvio("Las cotizaciones no estan configuradas.")
-
-    fila = cotizaciones.buscar_emitida(texto)
-    if fila is None:
-        raise ErrorEnvio(f"No existe una cotizacion {texto} emitida.")
+    try:
+        # Las JV ya tienen su PDF; las de JH (numero tipo 3813) se generan al vuelo.
+        datos = cotizaciones.archivo_para_envio(numero)
+    except cotizaciones.ErrorCotizacion as error:
+        raise ErrorEnvio(str(error)) from None
     # La URL se firma al enviar: el enlace dura poco y el "si" puede tardar.
-    return {"tipo": "cotizacion", "referencia": texto, "titulo": fila["cliente"],
-            "ruta": fila["pdf_ruta"], "archivo": fila["pdf_ruta"]}
+    return {"tipo": "cotizacion", "referencia": datos["referencia"], "titulo": datos["titulo"],
+            "ruta": datos["ruta"], "archivo": datos["ruta"]}
 
 
 def preparar(id_usuario: str, numero: str, codigos: str = "", tipo: str = "ambas",

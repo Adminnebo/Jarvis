@@ -493,15 +493,16 @@ def _whatsapp_disponible() -> bool:
 
 @herramienta(
     "Prepara el envio por WhatsApp (no lo manda) de la imagen o ficha tecnica "
-    "de productos y/o de una cotizacion de Jarvis a un numero. Devuelve el "
-    "resumen para confirmarlo. Usala solo cuando pidan mandar algo a un numero "
-    "de WhatsApp. Los productos van por su Codigo del catalogo.",
+    "de productos y/o de una cotizacion a un numero. La cotizacion puede ser de "
+    "Jarvis (JV-) o una real de JH (numero tipo 3813), que se arma en PDF tal "
+    "cual. Devuelve el resumen para confirmarlo. Usala solo cuando pidan mandar "
+    "algo a un numero de WhatsApp. Los productos van por su Codigo del catalogo.",
     disponible=_whatsapp_disponible,
     numero="El numero de WhatsApp tal como lo dijo el usuario",
     codigos="Opcional: codigos de productos separados por coma",
     tipo="Para productos: 'imagen', 'ficha' o 'ambas'. Solo lo que pidieron",
     nombres="Opcional: descripcion de cada producto, en el mismo orden y separadas por '|'",
-    cotizacion="Opcional: numero de la cotizacion de Jarvis, por ejemplo JV-00002",
+    cotizacion="Opcional: numero de cotizacion a mandar: JV- de Jarvis (JV-00002) o de JH (3813)",
 )
 def preparar_envio_whatsapp(numero: str, codigos: str = "", tipo: str = "ambas",
                             nombres: str = "", cotizacion: str = "", usuario: str = "") -> str:

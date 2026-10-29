@@ -669,8 +669,11 @@ values ('jarvis_cotizaciones', 'jarvis_cotizaciones', false);
 
 ## Enviar por WhatsApp
 
-Jarvis puede mandar la foto o la ficha técnica de un producto, o una cotización
-JV, a un número de WhatsApp: "mándale la cotización JV-00002 al 809…".
+Jarvis puede mandar la foto o la ficha técnica de un producto, o una cotización,
+a un número de WhatsApp: "mándale la cotización JV-00002 al 809…". La cotización
+puede ser de Jarvis (JV-, PDF ya en el bucket) o una **real de JH** (número tipo
+3813): en ese caso se arma el PDF al vuelo desde `iCotizacionesWebIA` /
+`dCotizacionesWebIA` con sus precios reales y se sube como `jh-<numero>.pdf`.
 
 Va por Evolution API (`/message/sendMedia`) desde el número conectado a la
 instancia de `EVOLUTION_INSTANCIA`. Siempre en dos pasos: `preparar_envio_whatsapp`

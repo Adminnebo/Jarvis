@@ -27,6 +27,8 @@ def configurado(entorno_limpio, monkeypatch):
     )
     monkeypatch.setattr(cotizaciones, "buscar_emitida",
                         lambda n: {"pdf_ruta": f"{n}.pdf", "cliente": "PRUEBA"} if n == "JV-00002" else None)
+    # No hay cotizaciones de JH en estas pruebas: el numero pelado cae a JV.
+    monkeypatch.setattr(cotizaciones, "_consultar", lambda sql: [])
     monkeypatch.setattr(cotizaciones, "firmar", lambda ruta, s: f"https://firmado/{ruta}?t={s}")
 
     enviados = []
@@ -104,7 +106,7 @@ def test_si_no_existe_el_archivo_no_hay_envio(configurado):
 
 
 def test_una_cotizacion_que_no_existe_no_se_prepara(configurado):
-    assert "No existe una cotizacion JV-00009" in _preparar(numero="8095551234", cotizacion="9")
+    assert "No encontre la cotizacion 9" in _preparar(numero="8095551234", cotizacion="9")
     assert "no es un numero de cotizacion" in _preparar(numero="8095551234", cotizacion="ABC")
 
 

@@ -267,8 +267,8 @@ Cotizaciones (de Jarvis, numeradas JV-, aparte de las de JH):
 
 Enviar por WhatsApp:
 - Si {nombre_usuario} pide mandar a un numero la foto o ficha de un producto, o una
-  cotizacion JV, llama a `preparar_envio_whatsapp`. Si falta el numero,
-  preguntalo.
+  cotizacion (JV de Jarvis o una real de JH como la 3813), llama a
+  `preparar_envio_whatsapp`. Si falta el numero, preguntalo.
 - Lee el numero cifra por cifra y lo que se va a mandar, y pregunta si lo
   envias. Llama a `confirmar_envio_whatsapp` SOLO despues de un si claro. Si
   corrige el numero, vuelve a preparar.
