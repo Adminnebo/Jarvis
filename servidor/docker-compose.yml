@@ -1,0 +1,52 @@
+# Jarvis en su EC2 (54.174.88.26, 909 MB + 1 GB de swap). Antes en Railway (proyecto "Jarvis").
+# Codigo: clones de GitHub en repos/, los despliega desplegar.sh (timer jarvis-despliegue).
+# Secretos en jarvis.env, reloj.env y android.env (solo root). Topes de memoria para que nada tumbe al resto.
+name: jarvis
+
+x-base: &base
+  restart: unless-stopped
+  logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }
+
+services:
+  jarvis:
+    <<: *base
+    build: ./repos/Jarvis
+    env_file: jarvis.env
+    environment:
+      JARVIS_DATA_DIR: /data
+      JARVIS_HOSPEDADO: "1"
+      RAILWAY_GIT_COMMIT_SHA: ${JARVIS_COMMIT:-}  # la lee backend/version.py
+    volumes: [datos:/data]
+    mem_limit: 400m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/salud', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  puente-reloj:
+    <<: *base
+    build: ./repos/jarvis-reloj/puente
+    env_file: reloj.env
+    environment: { PORT: "3000", JARVIS_URL: "http://jarvis:8000" }
+    mem_limit: 160m
+    depends_on: [jarvis]
+
+  puente-android:
+    <<: *base
+    build: ./repos/jarvis-lentes/puente
+    env_file: android.env
+    environment: { PORT: "3000", JARVIS_URL: "http://jarvis:8000" }
+    mem_limit: 160m
+    depends_on: [jarvis]
+
+  caddy:
+    <<: *base
+    image: caddy:2-alpine
+    ports: ["80:80", "443:443"]
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile:ro, caddy:/data]
+    mem_limit: 96m
+
+volumes:
+  datos:
+  caddy:

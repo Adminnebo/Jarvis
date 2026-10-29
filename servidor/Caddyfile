@@ -1,0 +1,10 @@
+# Dominios propios (DNS en Squarespace → 54.174.88.26) y las direcciones de prueba por sslip.io.
+asistente.neboaiconsulting.com, 54-174-88-26.sslip.io {
+	reverse_proxy jarvis:8000
+}
+reloj.neboaiconsulting.com, reloj.54-174-88-26.sslip.io {
+	reverse_proxy puente-reloj:3000
+}
+android.neboaiconsulting.com, android.54-174-88-26.sslip.io {
+	reverse_proxy puente-android:3000
+}

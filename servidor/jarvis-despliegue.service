@@ -1,0 +1,7 @@
+[Unit]
+Description=Despliegue de Jarvis desde GitHub
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/jarvis/desplegar.sh

@@ -1,0 +1,9 @@
+[Unit]
+Description=Mirar GitHub cada minuto y desplegar Jarvis si cambio
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
