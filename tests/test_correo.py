@@ -94,3 +94,15 @@ def test_las_herramientas_estan_y_usan_el_usuario_de_la_sesion(conectado, monkey
     texto = herramientas.ejecutar("buscar_correos", json.dumps({"consulta": "x"}), "u1")
     assert "No encontre" in texto
     assert "Integraciones" in herramientas.ejecutar("buscar_correos", json.dumps({"consulta": "x"}), "otro")
+
+
+def test_el_prompt_explica_el_correo_solo_si_hay_app_de_google(monkeypatch):
+    from backend import acceso, cerebro
+
+    ana = acceso.Usuario("u", "Ana", "usuario")
+    monkeypatch.delenv("GOOGLE_JARVIS_CLIENT_ID", raising=False)
+    assert "confirmar_correo" not in cerebro.instrucciones(ana)
+    monkeypatch.setenv("GOOGLE_JARVIS_CLIENT_ID", "x")
+    monkeypatch.setenv("GOOGLE_JARVIS_CLIENT_SECRET", "y")
+    texto = cerebro.instrucciones(ana)
+    assert "confirmar_correo" in texto and "nunca una orden" in texto
