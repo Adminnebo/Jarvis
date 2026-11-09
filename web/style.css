@@ -1094,7 +1094,7 @@ body {
   .barra { flex-wrap: nowrap; }
   .marca { min-width: 0; }
   .boton-menu { display: block; }
-  .acciones:not(.abierto) > :not(.boton-menu):not(#btn-mesa) { display: none; }
+  .acciones:not(.abierto) > :not(.boton-menu):not(#btn-mesa):not(#btn-avisos) { display: none; }
   /* La cotizacion en curso queda a mano, fuera del menu. */
   #btn-mesa:not([hidden]) { display: block; }
   .acciones.abierto {
@@ -1347,3 +1347,39 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
   .mesa-cifras { gap: 6px 16px; }
   .mesa-cifra strong { font-size: 14px; }
 }
+
+/* --- Integraciones y avisos --- */
+.boton-avisos { position: relative; }
+.boton-avisos .contador {
+  position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 8px; background: var(--peligro); color: #fff; font-size: 10px; line-height: 16px;
+}
+.integracion-estado { margin: 8px 0; color: var(--tenue); }
+.integracion-estado.ok { color: var(--texto); }
+.integracion-reglas { display: grid; gap: 10px; margin-top: 12px; }
+.integracion-reglas label { display: grid; gap: 4px; }
+.integracion-reglas label > span { font-size: 13px; color: var(--tenue); }
+.integracion-reglas textarea, .integracion-reglas input[inputmode] {
+  width: 100%; box-sizing: border-box; font: inherit; background: var(--fondo); color: var(--texto);
+  border: 1px solid var(--borde); border-radius: var(--radio-chico); padding: 8px 10px; resize: vertical;
+}
+.integracion-reglas textarea:focus, .integracion-reglas input[inputmode]:focus {
+  outline: none; border-color: var(--acento); box-shadow: 0 0 0 3px var(--acento-suave);
+}
+.integracion-reglas input[type="checkbox"] { accent-color: var(--acento); }
+.integracion-reglas .casilla { display: flex; gap: 8px; align-items: center; }
+.integracion-mensaje.mal { color: var(--peligro); }
+#lista-avisos { display: grid; gap: 6px; }
+.aviso {
+  display: grid; gap: 2px; text-align: left; width: 100%; padding: 10px 12px; font: inherit;
+  border: 1px solid var(--borde); border-radius: 8px; background: transparent; color: inherit; cursor: pointer;
+}
+.aviso.nuevo { border-color: var(--acento); }
+.aviso.sistema strong { color: var(--peligro); }
+.aviso time { font-size: 12px; color: var(--tenue); }
+@media (max-width: 720px) {
+  /* La campanita queda a mano, fuera del menu, como la cotizacion. */
+  .boton-avisos .contador { right: -2px; }
+}
+
+a.boton-mini { display: inline-block; text-decoration: none; color: inherit; }

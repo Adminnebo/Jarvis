@@ -34,6 +34,9 @@
       <span class="meta" id="meta" hidden data-super-admin></span>
       <button id="btn-mesa" class="boton-texto" type="button" hidden
               title="La cotización en curso: precios, costos y márgenes">Cotización</button>
+      <button id="btn-avisos" class="boton-texto boton-avisos" type="button" hidden
+              title="Avisos de correos importantes" aria-label="Avisos">🔔<span id="avisos-contador" class="contador" hidden></span></button>
+      <button id="btn-integraciones" class="boton-texto" type="button" hidden>Integraciones</button>
       <button id="btn-consumo" class="boton-texto" hidden data-super-admin>Consumo</button>
       <button id="btn-fuentes" class="boton-texto" hidden data-super-admin>Fuentes</button>
       <button id="btn-organizacion" class="boton-texto" hidden>Organización</button>
@@ -218,6 +221,25 @@
     <div id="tabla-consumo"></div>
     <div id="organizaciones-consumo"></div>
     <div id="detalle-consumo"></div>
+  </aside>
+
+  <aside class="panel panel-ancho" id="panel-integraciones" hidden>
+    <div class="panel-barra">
+      <h2>Integraciones</h2>
+      <button id="btn-cerrar-integraciones" class="boton-cerrar"
+              title="Cerrar (Esc)" aria-label="Cerrar">&times;</button>
+    </div>
+    <p class="ayuda-tipo">Conecta tus apps para que Jarvis trabaje con ellas. Cada persona conecta las suyas.</p>
+    <div id="lista-integraciones"></div>
+  </aside>
+
+  <aside class="panel" id="panel-avisos" hidden>
+    <div class="panel-barra">
+      <h2>Avisos</h2>
+      <button id="btn-cerrar-avisos" class="boton-cerrar"
+              title="Cerrar (Esc)" aria-label="Cerrar">&times;</button>
+    </div>
+    <div id="lista-avisos"></div>
   </aside>
 
   <aside class="panel panel-ancho" id="panel-dispositivos" hidden>

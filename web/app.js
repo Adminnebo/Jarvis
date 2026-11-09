@@ -9,6 +9,8 @@ import { abrirPanelFuentes } from "./fuentes.js";
 import { abrirPanelConsumo } from "./consumo.js";
 import { prepararImagen } from "./imagen.js";
 import { abrirPanelDispositivos } from "./dispositivos.js";
+import { abrirPanelIntegraciones } from "./integraciones.js";
+import { iniciarAvisos } from "./avisos.js";
 import { abrirPanelOrganizacion } from "./organizacion.js";
 import { abrirPanelAsistente } from "./asistente.js";
 import { configurarAvatar } from "./avatar.js";
@@ -667,6 +669,9 @@ $("btn-cerrar-panel").addEventListener("click", () => {
 $("btn-fuentes").addEventListener("click", abrirPanelFuentes);
 $("btn-consumo").addEventListener("click", abrirPanelConsumo);
 $("btn-dispositivos").addEventListener("click", abrirPanelDispositivos);
+$("btn-integraciones").addEventListener("click", abrirPanelIntegraciones);
+$("btn-cerrar-integraciones").addEventListener("click", () => { $("panel-integraciones").hidden = true; });
+$("btn-cerrar-avisos").addEventListener("click", () => { $("panel-avisos").hidden = true; });
 $("btn-organizacion").addEventListener("click", abrirPanelOrganizacion);
 $("btn-asistente").addEventListener("click", abrirPanelAsistente);
 // Celular: los accesos de la barra se pliegan en un menu "⋯".
@@ -861,6 +866,8 @@ bombillo.addEventListener("click", () => {
 // Cada minuto basta: es para enterarse de un despliegue, no para vigilar.
 setInterval(() => { vigilarVersion(); vigilarDatos(); }, 60000);
 
+let avisosIniciados = false;
+
 async function cargarEstado() {
   try {
     const estado = await (await fetch("/api/estado")).json();
@@ -875,6 +882,14 @@ async function cargarEstado() {
     const esSuperAdmin = estado.rol === "admin";
     for (const nodo of document.querySelectorAll("[data-super-admin]")) {
       nodo.hidden = !esSuperAdmin;
+    }
+    // Integraciones y avisos son de cada persona, no solo del super admin.
+    $("btn-integraciones").hidden = false;
+    if (!avisosIniciados) { avisosIniciados = true; iniciarAvisos((texto) => enviar(texto)); }
+    // Vuelta de Google: abrir el panel para que se vea la cuenta conectada.
+    if (new URLSearchParams(location.search).get("integraciones")) {
+      history.replaceState(null, "", "/");
+      abrirPanelIntegraciones();
     }
     $("btn-organizacion").hidden = !(esSuperAdmin && estado.es_admin_org);
 
