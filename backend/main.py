@@ -25,6 +25,7 @@ load_dotenv(RAIZ / ".env", override=True)
 
 from . import (  # noqa: E402 - despues de load_dotenv a proposito
     asistente,
+    avisos,
     higgsfield,
     accesos,
     redactor,
@@ -43,7 +44,9 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     esquema,
     fotos,
     fuentes,
+    gmail,
     herramientas,
+    integraciones,
     memoria,
     rutas,
     supabase_sesion,
@@ -78,6 +81,8 @@ def al_arrancar():
     acceso.avisar_de_contrasenas_repetidas()
     cuentas.avisar_de_margenes_invalidos()
     creditos.arrancar()
+    # Revisa los Gmail conectados y avisa de lo importante (no arranca sin la app de Google).
+    avisos.arrancar()
 
     if not supabase_sesion.configurado():
         print(
@@ -1117,6 +1122,92 @@ def archivo_del_avatar(organizacion_id: str, archivo: str, peticion: Request):
         return JSONResponse(status_code=404, content={"error": "No existe."})
     return FileResponse(asistente.carpeta(organizacion_id) / archivo,
                         headers={"Cache-Control": "private, max-age=31536000, immutable"})
+
+
+# --- Integraciones (Gmail) y avisos ---
+
+class ReglasDeAviso(BaseModel):
+    reglas: str = ""
+    whatsapp: str = ""
+    activo: bool = True
+
+
+def _pagina_simple(titulo: str, mensaje: str, status: int) -> HTMLResponse:
+    import html as _html
+
+    return HTMLResponse(
+        f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+        f'<title>{_html.escape(titulo)}</title><body style="font:16px system-ui;max-width:520px;'
+        f'margin:60px auto;padding:0 16px"><h1 style="font-size:20px">{_html.escape(titulo)}</h1>'
+        f'<p>{_html.escape(mensaje)}</p><p><a href="/">Volver a Jarvis</a></p></body>',
+        status_code=status)
+
+
+@app.get("/api/integraciones")
+def ver_integraciones(peticion: Request):
+    return {"apps": integraciones.catalogo(peticion.state.usuario.id)}
+
+
+@app.get("/integraciones/gmail/conectar")
+def conectar_gmail(peticion: Request):
+    if not gmail.configurado():
+        return _pagina_simple("Gmail no disponible", "Falta configurar la app de Google.", 503)
+    return RedirectResponse(gmail.url_de_autorizacion(peticion.state.usuario.id), status_code=302)
+
+
+@app.get("/integraciones/gmail/callback")
+def vuelta_de_google(state: str = "", code: str = "", error: str = ""):
+    """Libre (acceso.LIBRES): quien conecta sale del state firmado, no de la cookie."""
+    usuario_id = gmail.leer_estado(state)
+    if usuario_id is None:
+        return _pagina_simple("Enlace vencido", "Vuelve a tocar Conectar en Integraciones.", 400)
+    if error or not code:
+        return _pagina_simple("Gmail no se conecto",
+                              "No se dieron los permisos en Google. Puedes intentarlo de nuevo.", 400)
+    try:
+        integraciones.conectar_gmail(usuario_id, code)
+    except gmail.ErrorGmail as fallo:
+        return _pagina_simple("Gmail no se conecto", str(fallo), 400)
+    return RedirectResponse("/?integraciones=gmail", status_code=302)
+
+
+@app.delete("/api/integraciones/gmail")
+def desconectar_gmail(peticion: Request):
+    token = integraciones.desconectar(peticion.state.usuario.id)
+    if token:
+        gmail.revocar(token)
+    return {"ok": True}
+
+
+@app.get("/api/integraciones/gmail/reglas")
+def ver_reglas(peticion: Request):
+    return integraciones.reglas(peticion.state.usuario.id)
+
+
+@app.put("/api/integraciones/gmail/reglas")
+def guardar_reglas(peticion: Request, datos: ReglasDeAviso):
+    try:
+        return integraciones.guardar_reglas(peticion.state.usuario.id, datos.reglas,
+                                            datos.whatsapp, datos.activo)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+
+
+@app.get("/api/avisos")
+def ver_avisos(peticion: Request, solo_no_vistos: int = 0):
+    return {"avisos": avisos.listar(peticion.state.usuario.id, bool(solo_no_vistos))}
+
+
+@app.get("/api/avisos/contador")
+def contar_avisos(peticion: Request):
+    return {"no_vistos": avisos.contador(peticion.state.usuario.id)}
+
+
+@app.post("/api/avisos/{id_aviso}/visto")
+def marcar_aviso_visto(id_aviso: str, peticion: Request):
+    if not avisos.marcar_visto(peticion.state.usuario.id, id_aviso):
+        return JSONResponse(status_code=404, content={"error": "No existe ese aviso."})
+    return {"ok": True}
 
 
 @app.get("/")
