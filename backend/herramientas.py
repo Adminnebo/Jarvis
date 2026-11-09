@@ -659,6 +659,90 @@ def confirmar_envio_whatsapp(usuario: str = "") -> str:
         return str(error)
 
 
+
+# --------------------------------------------------------------------------
+# Correo (Gmail de quien habla)
+# --------------------------------------------------------------------------
+
+def _gmail_disponible() -> bool:
+    from . import gmail
+
+    return gmail.configurado()
+
+
+def _correo(funcion, *args) -> str:
+    from . import correo
+
+    try:
+        return funcion(*args)
+    except correo.ErrorCorreo as error:
+        return str(error)
+
+
+@herramienta(
+    "Lista los avisos de correos importantes que la persona todavia no vio. Usala "
+    "cuando pregunte si tiene correos importantes o avisos nuevos.",
+    disponible=_gmail_disponible,
+)
+def ver_avisos(usuario: str = "") -> str:
+    from . import correo
+
+    return _correo(correo.ver_avisos, usuario)
+
+
+@herramienta(
+    "Busca en el Gmail de la persona. Acepta la sintaxis de Gmail: 'from:carlos', "
+    "'factura octubre', 'is:unread newer_than:2d'. Devuelve id, fecha, remitente y asunto.",
+    disponible=_gmail_disponible,
+    consulta="Lo que se busca, en sintaxis de busqueda de Gmail.",
+    cuantos="Opcional: cuantos traer (1 a 25, por defecto 10).",
+)
+def buscar_correos(consulta: str, cuantos: str = "10", usuario: str = "") -> str:
+    from . import correo
+
+    return _correo(correo.buscar, usuario, consulta, cuantos)
+
+
+@herramienta(
+    "Lee un correo completo (con su hilo) del Gmail de la persona. El id sale de "
+    "buscar_correos o de ver_avisos. Resume al leerlo en voz alta.",
+    disponible=_gmail_disponible,
+    id="El id del correo.",
+)
+def leer_correo(id: str, usuario: str = "") -> str:  # noqa: A002 - es el nombre que ve el modelo
+    from . import correo
+
+    return _correo(correo.leer, usuario, id)
+
+
+@herramienta(
+    "Prepara un correo o una respuesta desde el Gmail de la persona. NO lo envia: "
+    "devuelve el borrador para leerselo. Para responder, pasa responder_a con el id "
+    "del correo (para y asunto se completan solos).",
+    disponible=_gmail_disponible,
+    para="Direccion(es) de correo, separadas por coma. Vacio si se responde.",
+    asunto="Asunto. Vacio si se responde.",
+    cuerpo="El texto del correo, ya redactado.",
+    responder_a="Opcional: id del correo al que se responde.",
+)
+def preparar_correo(para: str, asunto: str, cuerpo: str, responder_a: str = "",
+                    usuario: str = "") -> str:
+    from . import correo
+
+    return _correo(correo.preparar, usuario, para, asunto, cuerpo, responder_a)
+
+
+@herramienta(
+    "Envia el correo que preparo preparar_correo. Usala SOLO despues de que la persona "
+    "escucho el borrador y dijo que si.",
+    disponible=_gmail_disponible,
+)
+def confirmar_correo(usuario: str = "") -> str:
+    from . import correo
+
+    return _correo(correo.confirmar, usuario)
+
+
 # --------------------------------------------------------------------------
 # Servicios
 # --------------------------------------------------------------------------
