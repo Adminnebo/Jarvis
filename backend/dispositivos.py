@@ -122,6 +122,11 @@ def _usuario_para(usuario_id: str) -> acceso.Usuario | None:
     return acceso.usuario_de_id(usuario_id)
 
 
+def usuario_para(usuario_id: str) -> acceso.Usuario | None:
+    """Publico: el revisor de avisos lo usa para saber si alguien sigue teniendo acceso."""
+    return _usuario_para(usuario_id)
+
+
 def dispositivos_de(usuario_id: str) -> list[dict]:
     with basedatos.conexion() as con:
         filas = con.execute(
