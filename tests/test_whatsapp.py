@@ -299,3 +299,36 @@ def test_si_sigue_pendiente_al_tope_se_da_por_enviado(configurado, monkeypatch):
 
     monkeypatch.setattr(httpx, "post", post)
     assert ENVIAR_REAL({"number": "1"}, "nebo-wa") == "id-1"
+
+
+def test_enviar_texto_usa_el_respaldo_si_la_principal_falla(configurado, monkeypatch):
+    llamadas = []
+
+    class Respuesta:
+        def __init__(self, status, datos):
+            self.status_code, self._datos, self.text = status, datos, json.dumps(datos)
+
+        def json(self):
+            return self._datos
+
+    def post(url, **kwargs):
+        llamadas.append(url)
+        if "nebo-wa%20%28Respaldo%29" in url:
+            return Respuesta(201, {"key": {"id": ""}})
+        return Respuesta(500, {"error": "caida"})
+
+    monkeypatch.setattr(whatsapp.httpx, "post", post)
+    whatsapp.enviar_texto("809 555 1234", "hola")
+    assert len(llamadas) == 2 and "/message/sendText/" in llamadas[0]
+
+
+def test_enviar_texto_sin_ninguna_instancia_que_sirva_lanza(configurado, monkeypatch):
+    class Respuesta:
+        status_code, text = 500, "x"
+
+        def json(self):
+            return {}
+
+    monkeypatch.setattr(whatsapp.httpx, "post", lambda url, **k: Respuesta())
+    with pytest.raises(whatsapp.ErrorEnvio):
+        whatsapp.enviar_texto("8095551234", "hola")

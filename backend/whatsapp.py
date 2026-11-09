@@ -250,6 +250,26 @@ def _enviar_media(cuerpo: dict, instancia: str) -> str:
     return identificador
 
 
+def enviar_texto(numero: str, texto: str) -> None:
+    """Un mensaje de texto (los avisos de correo). Prueba la principal y luego el respaldo."""
+    destino = normalizar_numero(numero)
+    ultimo: Exception | None = None
+    for instancia in instancias():
+        try:
+            respuesta = httpx.post(
+                f"{_env('EVOLUTION_URL').rstrip('/')}/message/sendText/{quote(instancia, safe='')}",
+                headers={"apikey": _env("EVOLUTION_API_KEY")},
+                json={"number": destino, "text": texto}, timeout=30,
+            )
+            if respuesta.status_code >= 400:
+                raise RuntimeError(f"Evolution respondio {respuesta.status_code}: {respuesta.text[:300]}")
+            _esperar_confirmacion(instancia, str((respuesta.json().get("key") or {}).get("id") or ""))
+            return
+        except Exception as error:  # noqa: BLE001 - se prueba la siguiente instancia
+            ultimo = error
+    raise ErrorEnvio(explicar(ultimo) if ultimo else "WhatsApp no esta configurado")
+
+
 def _estados(instancia: str, identificador: str) -> list[str]:
     respuesta = httpx.post(
         f"{_env('EVOLUTION_URL').rstrip('/')}/chat/findMessages/{quote(instancia, safe='')}",
