@@ -68,7 +68,7 @@ def test_catalogo_muestra_gmail_con_su_estado(monkeypatch):
     monkeypatch.setenv("GOOGLE_JARVIS_CLIENT_ID", "x")
     monkeypatch.setenv("GOOGLE_JARVIS_CLIENT_SECRET", "y")
     integraciones.guardar_gmail("u1", "a@gmail.com", "r1", "1")
-    (app,) = integraciones.catalogo("u1")
+    app = integraciones.catalogo("u1")[0]
     assert app["app"] == "gmail" and app["disponible"] and app["estado"] == "conectado"
     assert app["cuenta"] == "a@gmail.com" and "token" not in app
 
@@ -82,3 +82,44 @@ def test_conectar_gmail_guarda_y_revoca_el_anterior(monkeypatch):
     assert integraciones.conectar_gmail("u1", "codigo") == "ana@gmail.com"
     assert integraciones.conexion("u1")["cursor"] == "500"
     assert revocados == ["viejo"]
+
+
+from backend import zernio
+
+
+def test_catalogo_trae_whatsapp(monkeypatch):
+    monkeypatch.setenv("ZERNIO_API_KEY", "z")
+    apps = {a["app"]: a for a in integraciones.catalogo("u1")}
+    assert apps["whatsapp"]["disponible"] and apps["whatsapp"]["estado"] == "sin_conectar"
+
+
+def test_iniciar_whatsapp_crea_el_perfil_una_sola_vez(monkeypatch):
+    llamadas = []
+    monkeypatch.setattr(zernio, "perfil_de", lambda u, n: llamadas.append((u, n)) or "p1")
+    assert integraciones.iniciar_whatsapp("u1", "Ana") == "p1"
+    assert integraciones.iniciar_whatsapp("u1", "Ana") == "p1"
+    assert llamadas == [("u1", "Ana")]
+
+
+def test_guardar_y_desconectar_whatsapp(monkeypatch):
+    monkeypatch.setattr(zernio, "perfil_de", lambda u, n: "p1")
+    integraciones.iniciar_whatsapp("u1", "Ana")
+    integraciones.guardar_whatsapp("u1", "acc-1", "+1 809 555 1234")
+    assert integraciones.usuario_de_cuenta("acc-1") == "u1"
+    c = integraciones.conexion("u1", "whatsapp")
+    assert c["estado"] == "conectado" and c["cuenta"] == "+1 809 555 1234"
+    assert [x["usuario_id"] for x in integraciones.conectados("whatsapp")] == ["u1"]
+    assert integraciones.desconectar_whatsapp("u1") == "acc-1"
+    assert integraciones.usuario_de_cuenta("acc-1") is None
+    assert integraciones.conexion("u1", "whatsapp")["estado"] == "desconectado"
+    assert integraciones.cuenta_zernio("u1")["perfil_id"] == "p1"   # el perfil se conserva
+    assert integraciones.desconectar_whatsapp("u1") is None
+
+
+def test_la_misma_cuenta_en_otra_persona_se_mueve(monkeypatch):
+    monkeypatch.setattr(zernio, "perfil_de", lambda u, n: f"p-{u}")
+    for u in ("u1", "u2"):
+        integraciones.iniciar_whatsapp(u, u)
+    integraciones.guardar_whatsapp("u1", "acc-1", "x")
+    integraciones.guardar_whatsapp("u2", "acc-1", "x")
+    assert integraciones.usuario_de_cuenta("acc-1") == "u2"

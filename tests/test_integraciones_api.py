@@ -18,8 +18,8 @@ def admin(monkeypatch):
 
 
 def test_catalogo(admin):
-    (app_,) = admin.get("/api/integraciones").json()["apps"]
-    assert app_["app"] == "gmail" and app_["estado"] == "sin_conectar"
+    apps = {a["app"]: a for a in admin.get("/api/integraciones").json()["apps"]}
+    assert apps["gmail"]["estado"] == "sin_conectar" and "whatsapp" in apps
 
 
 def test_conectar_redirige_a_google_con_el_estado_del_usuario(admin):

@@ -1,4 +1,4 @@
-"""Las apps que cada persona conecta a Jarvis. Hoy: Gmail.
+"""Las apps que cada persona conecta a Jarvis: Gmail y WhatsApp (Zernio).
 
 Guarda la conexion (el refresh token cifrado) y las reglas de aviso. No habla
 con Google: eso es gmail.py. Agregar otra app = otra entrada en _APPS y su
@@ -7,12 +7,16 @@ propio modulo.
 
 from datetime import datetime, timezone
 
-from . import basedatos, gmail, secretos, whatsapp
+from . import basedatos, gmail, secretos, whatsapp, zernio
 
 _APPS = [
     {"app": "gmail", "nombre": "Gmail",
      "descripcion": "Jarvis busca, lee y envia tus correos, y te avisa de los importantes.",
      "configurado": gmail.configurado},
+    {"app": "whatsapp", "nombre": "WhatsApp",
+     "descripcion": "Conecta tu WhatsApp Business y sigue usando la app en tu telefono. "
+                    "Jarvis lee tus chats, responde con tu permiso y te avisa de lo importante.",
+     "configurado": zernio.configurado},
 ]
 
 
@@ -127,3 +131,60 @@ def catalogo(usuario_id: str) -> list[dict]:
             "error": actual["error"] if actual else None,
         })
     return salida
+
+
+# --------------------------------------------------------------------------
+# WhatsApp (Zernio): perfil propio de cada persona y la cuenta conectada
+# --------------------------------------------------------------------------
+
+def cuenta_zernio(usuario_id: str) -> dict | None:
+    with basedatos.conexion() as con:
+        fila = con.execute("SELECT * FROM zernio_cuentas WHERE usuario_id = ?", (usuario_id,)).fetchone()
+    return dict(fila) if fila else None
+
+
+def usuario_de_cuenta(cuenta_id: str) -> str | None:
+    with basedatos.conexion() as con:
+        fila = con.execute("SELECT usuario_id FROM zernio_cuentas WHERE cuenta_id = ?", (cuenta_id,)).fetchone()
+    return fila["usuario_id"] if fila else None
+
+
+def iniciar_whatsapp(usuario_id: str, nombre: str) -> str:
+    """El perfil de Zernio de la persona (lo crea la primera vez). Lanza zernio.ErrorZernio."""
+    actual = cuenta_zernio(usuario_id)
+    if actual:
+        return actual["perfil_id"]
+    perfil = zernio.perfil_de(usuario_id, nombre)
+    with basedatos.conexion() as con:
+        con.execute("INSERT INTO zernio_cuentas (usuario_id, perfil_id, actualizado) VALUES (?, ?, ?) "
+                    "ON CONFLICT (usuario_id) DO UPDATE SET perfil_id = excluded.perfil_id, "
+                    "actualizado = excluded.actualizado", (usuario_id, perfil, _ahora()))
+    return perfil
+
+
+def guardar_whatsapp(usuario_id: str, cuenta_id: str, cuenta: str) -> None:
+    with basedatos.conexion() as con:
+        # Un numero que se conecta en otra persona deja de ser del anterior.
+        con.execute("UPDATE zernio_cuentas SET cuenta_id = NULL WHERE cuenta_id = ? AND usuario_id != ?",
+                    (cuenta_id, usuario_id))
+        con.execute("UPDATE zernio_cuentas SET cuenta_id = ?, actualizado = ? WHERE usuario_id = ?",
+                    (cuenta_id, _ahora(), usuario_id))
+        con.execute(
+            "INSERT INTO integraciones (usuario_id, app, cuenta, token, cursor, estado, error, conectado) "
+            "VALUES (?, 'whatsapp', ?, NULL, NULL, 'conectado', NULL, ?) "
+            "ON CONFLICT (usuario_id, app) DO UPDATE SET cuenta = excluded.cuenta, "
+            "estado = 'conectado', error = NULL, conectado = excluded.conectado",
+            (usuario_id, cuenta, _ahora()))
+
+
+def desconectar_whatsapp(usuario_id: str) -> str | None:
+    """Suelta la cuenta y devuelve su id (para borrarla en Zernio). El perfil se conserva."""
+    actual = cuenta_zernio(usuario_id)
+    if not actual or not actual["cuenta_id"]:
+        return None
+    with basedatos.conexion() as con:
+        con.execute("UPDATE zernio_cuentas SET cuenta_id = NULL, actualizado = ? WHERE usuario_id = ?",
+                    (_ahora(), usuario_id))
+        con.execute("UPDATE integraciones SET estado = 'desconectado', error = NULL "
+                    "WHERE usuario_id = ? AND app = 'whatsapp'", (usuario_id,))
+    return actual["cuenta_id"]
