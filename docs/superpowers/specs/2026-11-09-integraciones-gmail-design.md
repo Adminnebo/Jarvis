@@ -147,7 +147,8 @@ Cada `JARVIS_GMAIL_CADA` segundos (por defecto 120), para cada integración `con
    `gpt-4.1-mini`; se llama igual que en `redactor.py`, con `responses.create`). Pide
    salida JSON: `{"importante": bool, "resumen": "..."}`. Ese consumo se anota con
    `cerebro.anotar_consumo(...)` y queda atribuido a la persona y a su organización,
-   como el resto.
+   como el resto. Hay que agregar el precio de ese modelo a la tabla de `consumo.py`;
+   si no, se anota a costo cero.
 5. Si es importante, inserta en `avisos` (el `UNIQUE` evita duplicados) y, si hay número
    de WhatsApp, lo marca `pendiente`. Si no es importante, lo marca `resuelto` en
    `correos_vistos`.
