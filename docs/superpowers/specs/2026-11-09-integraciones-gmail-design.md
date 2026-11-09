@@ -97,7 +97,9 @@ CREATE TABLE IF NOT EXISTS avisos (
   resumen      TEXT,                   -- una línea, de la IA
   creado       TEXT NOT NULL,
   visto        INTEGER NOT NULL DEFAULT 0,
+  tipo         TEXT NOT NULL DEFAULT 'correo', -- 'correo' | 'sistema' (p. ej. "reconecta tu Gmail")
   whatsapp     TEXT NOT NULL DEFAULT 'no_aplica', -- 'pendiente'|'enviado'|'fallido'|'no_aplica'|'tope'
+  enviado      TEXT,                   -- cuándo salió por WhatsApp (para el tope por hora)
   intentos     INTEGER NOT NULL DEFAULT 0,
   UNIQUE (usuario_id, app, ref)
 );
@@ -144,11 +146,12 @@ Cada `JARVIS_GMAIL_CADA` segundos (por defecto 120), para cada integración `con
 3. Si la persona tiene reglas vacías, no hay avisos: solo se avanza el cursor.
 4. Al resto le saca remitente, asunto y los primeros 2.000 caracteres del texto plano
    y los manda a un modelo de texto barato (`JARVIS_MODELO_AVISOS`, por defecto
-   `gpt-4.1-mini`; se llama igual que en `redactor.py`, con `responses.create`). Pide
-   salida JSON: `{"importante": bool, "resumen": "..."}`. Ese consumo se anota con
-   `cerebro.anotar_consumo(...)` y queda atribuido a la persona y a su organización,
-   como el resto. Hay que agregar el precio de ese modelo a la tabla de `consumo.py`;
-   si no, se anota a costo cero.
+   `gpt-5.6-luna`, que ya tiene precio en `consumo.py`; se llama igual que en
+   `redactor.py`, con `responses.create`). Pide salida JSON:
+   `{"importante": bool, "resumen": "..."}`. Ese consumo se anota con
+   `cerebro.anotar_consumo(..., dispositivo="avisos-gmail")` y queda atribuido a la
+   persona y a su organización, como el resto. Si la persona ya no tiene acceso a
+   Jarvis (`dispositivos.usuario_para` da None), su buzón no se revisa.
 5. Si es importante, inserta en `avisos` (el `UNIQUE` evita duplicados) y, si hay número
    de WhatsApp, lo marca `pendiente`. Si no es importante, lo marca `resuelto` en
    `correos_vistos`.
@@ -171,8 +174,11 @@ pedirle a la IA que avise o que haga algo.
 
 ### Con Jarvis (herramientas)
 
-Las herramientas solo están disponibles si la persona tiene Gmail conectado, y siempre
-usan el buzón de quien habla.
+Las herramientas aparecen en el catálogo cuando la app de Google está configurada
+(`GOOGLE_JARVIS_CLIENT_*`). El catálogo es el mismo para todos, así que si quien
+habla no tiene Gmail conectado, la herramienta le responde «conéctalo en
+Integraciones». Siempre usan el buzón de quien habla. La lógica vive en
+`backend/correo.py` y `herramientas.py` solo la envuelve.
 
 | Herramienta | Qué hace |
 |---|---|
@@ -196,20 +202,20 @@ en memoria por usuario y vence a los 10 minutos.
   - el número de WhatsApp para avisos (opcional) y un interruptor de avisos.
 - **Campanita** en la barra superior con un contador de no vistos. Al abrirla se ve la
   lista (remitente, resumen, hace cuánto) y al tocar un aviso Jarvis lo lee. La app
-  consulta `GET /avisos/contador` cada 60 s mientras está abierta.
+  consulta `GET /api/avisos/contador` cada 60 s mientras está abierta.
 
 ### Rutas nuevas (FastAPI, con la sesión de siempre)
 
 ```
-GET    /integraciones                       catálogo + estado del usuario
-GET    /integraciones/gmail/conectar        → redirige a Google
-GET    /integraciones/gmail/callback        vuelta de Google
-DELETE /integraciones/gmail                 desconectar
-GET    /integraciones/gmail/reglas          reglas + whatsapp + activo
-PUT    /integraciones/gmail/reglas
-GET    /avisos?solo_no_vistos=1
-GET    /avisos/contador
-POST   /avisos/{id}/visto
+GET    /api/integraciones                   catálogo + estado del usuario
+GET    /integraciones/gmail/conectar        → redirige a Google (navegador, con sesión)
+GET    /integraciones/gmail/callback        vuelta de Google (libre; la protege el state)
+DELETE /api/integraciones/gmail             desconectar
+GET    /api/integraciones/gmail/reglas      reglas + whatsapp + activo
+PUT    /api/integraciones/gmail/reglas
+GET    /api/avisos?solo_no_vistos=1
+GET    /api/avisos/contador
+POST   /api/avisos/{id}/visto
 ```
 
 `/integraciones/gmail/callback` queda fuera del login de Jarvis, pero se autentica
