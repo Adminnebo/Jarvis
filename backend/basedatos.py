@@ -156,6 +156,61 @@ _ESQUEMA = """
         datos TEXT NOT NULL,
         actualizado REAL NOT NULL
     );
+
+    -- Apps que cada persona conecta (hoy solo Gmail). `token` es el refresh
+    -- token cifrado con secretos.cifrar; `cursor`, el ultimo historyId de Gmail
+    -- ya revisado. Ver integraciones.py.
+    CREATE TABLE IF NOT EXISTS integraciones (
+        usuario_id TEXT NOT NULL,
+        app TEXT NOT NULL,
+        cuenta TEXT,
+        token TEXT,
+        cursor TEXT,
+        estado TEXT NOT NULL CHECK (estado IN ('conectado', 'desconectado')),
+        error TEXT,
+        conectado TEXT NOT NULL,
+        PRIMARY KEY (usuario_id, app)
+    );
+
+    -- Que correos le importan a cada persona (texto libre para la IA) y a que
+    -- WhatsApp avisarle. Ver avisos.py.
+    CREATE TABLE IF NOT EXISTS reglas_aviso (
+        usuario_id TEXT PRIMARY KEY,
+        reglas TEXT NOT NULL DEFAULT '',
+        whatsapp TEXT,
+        activo INTEGER NOT NULL DEFAULT 1
+    );
+
+    -- Los avisos de la campanita. UNIQUE evita avisar dos veces del mismo correo.
+    CREATE TABLE IF NOT EXISTS avisos (
+        id TEXT PRIMARY KEY,
+        usuario_id TEXT NOT NULL,
+        app TEXT NOT NULL,
+        ref TEXT NOT NULL,
+        hilo TEXT,
+        remitente TEXT,
+        asunto TEXT,
+        resumen TEXT,
+        tipo TEXT NOT NULL DEFAULT 'correo',
+        creado TEXT NOT NULL,
+        visto INTEGER NOT NULL DEFAULT 0,
+        whatsapp TEXT NOT NULL DEFAULT 'no_aplica',
+        enviado TEXT,
+        intentos INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (usuario_id, app, ref)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_avisos_usuario ON avisos (usuario_id, visto, creado);
+
+    -- Correos que el revisor ya resolvio (o lleva intentando), para no volver
+    -- a pagar la IA por el mismo correo si el cursor no avanzo.
+    CREATE TABLE IF NOT EXISTS correos_vistos (
+        usuario_id TEXT NOT NULL,
+        ref TEXT NOT NULL,
+        intentos INTEGER NOT NULL DEFAULT 0,
+        resuelto INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (usuario_id, ref)
+    );
 """
 
 
