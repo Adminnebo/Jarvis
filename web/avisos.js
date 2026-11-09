@@ -1,5 +1,5 @@
 /* Campanita: cuántos avisos sin ver (cada 60 s) y la lista. Tocar un aviso de
-   correo le pide a Jarvis que lo lea. */
+   correo o de WhatsApp le pide a Jarvis que lo lea. */
 
 const $$ = (id) => document.getElementById(id);
 const boton = $$("btn-avisos");
@@ -36,7 +36,7 @@ function fila(aviso) {
   item.type = "button";
   item.className = "aviso" + (aviso.visto ? "" : " nuevo") + (aviso.tipo === "sistema" ? " sistema" : "");
   const quien = document.createElement("strong");
-  quien.textContent = aviso.remitente || "Gmail";
+  quien.textContent = aviso.remitente || (aviso.app === "whatsapp" ? "WhatsApp" : "Gmail");
   const resumen = document.createElement("span");
   resumen.textContent = aviso.resumen;
   const cuando = document.createElement("time");
@@ -46,7 +46,8 @@ function fila(aviso) {
     await fetch(`/api/avisos/${aviso.id}/visto`, { method: "POST" });
     actualizarContador();
     panel.hidden = true;
-    if (aviso.tipo === "correo") pedirAJarvis(`Léeme el correo con id ${aviso.ref}`);
+    if (aviso.tipo === "correo" && aviso.app === "whatsapp") pedirAJarvis(`Léeme el chat de WhatsApp con id ${aviso.hilo}`);
+    else if (aviso.tipo === "correo") pedirAJarvis(`Léeme el correo con id ${aviso.ref}`);
   });
   return item;
 }
