@@ -670,6 +670,17 @@ def _gmail_disponible() -> bool:
     return gmail.configurado()
 
 
+def _zernio_disponible() -> bool:
+    from . import zernio
+
+    return zernio.configurado()
+
+
+def _avisos_disponible() -> bool:
+    return _gmail_disponible() or _zernio_disponible()
+
+
+
 def _correo(funcion, *args) -> str:
     from . import correo
 
@@ -680,9 +691,9 @@ def _correo(funcion, *args) -> str:
 
 
 @herramienta(
-    "Lista los avisos de correos importantes que la persona todavia no vio. Usala "
-    "cuando pregunte si tiene correos importantes o avisos nuevos.",
-    disponible=_gmail_disponible,
+    "Lista los avisos de correos y chats de WhatsApp importantes que la persona todavia "
+    "no vio. Usala cuando pregunte si tiene correos, mensajes importantes o avisos nuevos.",
+    disponible=_avisos_disponible,
 )
 def ver_avisos(usuario: str = "") -> str:
     from . import correo
@@ -741,6 +752,67 @@ def confirmar_correo(usuario: str = "") -> str:
     from . import correo
 
     return _correo(correo.confirmar, usuario)
+
+
+# --------------------------------------------------------------------------
+# WhatsApp de la persona (Zernio, coexistencia)
+# --------------------------------------------------------------------------
+
+def _chat(funcion, *args) -> str:
+    from . import whatsapp_chats
+
+    try:
+        return funcion(*args)
+    except whatsapp_chats.ErrorChat as error:
+        return str(error)
+
+
+@herramienta(
+    "Busca en los chats del WhatsApp de la persona (el suyo, conectado en Integraciones). "
+    "Sin texto lista los chats recientes. Devuelve el id de cada chat.",
+    disponible=_zernio_disponible,
+    texto="Opcional: nombre, parte del numero o palabras del ultimo mensaje.",
+)
+def buscar_chats(texto: str = "", usuario: str = "") -> str:
+    from . import whatsapp_chats
+
+    return _chat(whatsapp_chats.buscar, usuario, texto)
+
+
+@herramienta(
+    "Lee los ultimos mensajes de un chat del WhatsApp de la persona. El id sale de "
+    "buscar_chats o de ver_avisos. Resume al leerlo en voz alta.",
+    disponible=_zernio_disponible,
+    id="El id del chat.",
+)
+def leer_chat(id: str, usuario: str = "") -> str:  # noqa: A002 - es el nombre que ve el modelo
+    from . import whatsapp_chats
+
+    return _chat(whatsapp_chats.leer, usuario, id)
+
+
+@herramienta(
+    "Prepara una respuesta en un chat del WhatsApp de la persona. NO la envia: devuelve "
+    "el borrador para leerselo. Solo sirve para chats que ya existen.",
+    disponible=_zernio_disponible,
+    id="El id del chat.",
+    texto="La respuesta, ya redactada.",
+)
+def responder_chat(id: str, texto: str, usuario: str = "") -> str:  # noqa: A002
+    from . import whatsapp_chats
+
+    return _chat(whatsapp_chats.preparar, usuario, id, texto)
+
+
+@herramienta(
+    "Envia la respuesta que preparo responder_chat. Usala SOLO despues de que la persona "
+    "escucho el borrador y dijo que si.",
+    disponible=_zernio_disponible,
+)
+def confirmar_respuesta_chat(usuario: str = "") -> str:
+    from . import whatsapp_chats
+
+    return _chat(whatsapp_chats.confirmar, usuario)
 
 
 # --------------------------------------------------------------------------
