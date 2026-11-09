@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Política de privacidad de Jarvis · Nebo AI: qué datos se tratan, con qué proveedores y por cuánto tiempo.">
-<title>Política de Privacidad · Jarvis · Nebo AI</title>
+<meta name="description" content="Política de privacidad del Asistente Virtual (Jarvis) · Nebo AI: qué datos se tratan, con qué proveedores y por cuánto tiempo.">
+<title>Política de Privacidad · Asistente Virtual · Nebo AI</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -141,16 +141,16 @@
 <div class="hoja">
 
 <header class="tapa">
-  <div class="empresa">Jarvis · Nebo AI</div>
+  <div class="empresa">Asistente Virtual (Jarvis) · Nebo AI</div>
   <h1>Política de Privacidad</h1>
   <div class="fechas">
-    <span>Vigente desde: 1 de octubre de 2026</span>
-    <span>Versión 1.0</span>
+    <span>Vigente desde: 9 de noviembre de 2026</span>
+    <span>Versión 1.1</span>
   </div>
 </header>
 
 <div class="resumen">
-  <p><b>En resumen.</b> Jarvis es un asistente de voz y texto que consulta las fuentes de datos de tu organización, recuerda lo que le pides recordar y prepara cotizaciones. Para responder, envía tu consulta y los datos necesarios a un modelo de inteligencia artificial.</p>
+  <p><b>En resumen.</b> El Asistente Virtual (Jarvis) es un asistente de voz y texto que consulta las fuentes de datos de tu organización, recuerda lo que le pides recordar, prepara cotizaciones y, si lo conectas, lee y envía tu correo de Gmail. Para responder, envía tu consulta y los datos necesarios a un modelo de inteligencia artificial.</p>
   <p>No guardamos el audio de tu voz ni las fotos que envías, y no entrenamos modelos con tus datos.</p>
 </div>
 
@@ -173,26 +173,30 @@
 </ul>
 <h3>De las fuentes de datos que conectas</h3>
 <p>Al responder, Jarvis consulta las bases de datos que tu organización conecta. Pueden contener datos de terceros, como los clientes de tu organización: nombre, RNC, dirección, correo, teléfonos, cotizaciones, saldos, promesas de pago y registros de llamadas. Las cotizaciones que generas se guardan con los datos del cliente destinatario.</p>
+<h3>De tu Gmail, si lo conectas</h3>
+<p>Si conectas tu cuenta de Gmail en <em>Integraciones</em>, el Asistente Virtual accede a tus correos con los permisos <code>gmail.readonly</code> y <code>gmail.send</code> de Google. Guardamos el permiso de acceso cifrado y la dirección de la cuenta conectada. Al buscar o leer un correo, su contenido se procesa para responderte, pero no se copia de forma permanente: solo se guarda, para los correos que te avisamos como importantes, el remitente, el asunto y un resumen de una línea.</p>
+<p>Para decidir si un correo nuevo es importante, se envían a OpenAI el remitente, el asunto y los primeros 2.000 caracteres del texto, junto con las reglas que escribiste. Los correos que Gmail clasifica como promociones, redes sociales, foros o spam no se envían.</p>
 <h3>Voz e imágenes</h3>
 <p>El audio de tu voz y las fotos que envías se procesan para responderte, pero no se almacenan en nuestros servidores: queda la transcripción o la lectura en texto.</p>
 </section>
 
 <section class="clausula">
   <h2><span class="num">3</span> Para qué se usan</h2>
-<p>Para responder tus consultas, generar y enviar cotizaciones y archivos, recordar lo que le pides, y medir y facturar el consumo.</p>
+<p>Para responder tus consultas, generar y enviar cotizaciones y archivos, buscar, leer y enviar tus correos y avisarte de los importantes (si conectas Gmail), recordar lo que le pides, y medir y facturar el consumo.</p>
 <div class="destacado"><p><b>Lo que no hacemos.</b> No vendemos datos personales, no los usamos para publicidad y no entrenamos modelos de inteligencia artificial con ellos.</p></div>
+<div class="destacado"><p><b>Datos de Google: uso limitado.</b> El uso y la transferencia a cualquier otra aplicación de la información recibida de las API de Google por parte del Asistente Virtual se ajustan a la <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de datos de usuario de los servicios de API de Google</a>, incluidos los requisitos de uso limitado. Los datos de tu Gmail solo se usan para darte a ti las funciones de correo del asistente; no se comparten con otras personas de tu organización ni con terceros, salvo los proveedores indicados abajo para prestar esas funciones, y nadie de Nebo AI los lee salvo que nos lo pidas para resolver un problema o lo exija la ley.</p></div>
 </section>
 
 <section class="clausula">
   <h2><span class="num">4</span> Proveedores que intervienen</h2>
 <div class="tabla-scroll"><table><thead><tr><th>Proveedor</th><th>Para qué</th><th>Qué recibe</th></tr></thead><tbody>
-<tr><td><strong>OpenAI</strong></td><td>Modelo que genera las respuestas, voz en vivo y lectura de imágenes</td><td>Tu consulta, tu nombre, los hechos recordados, los resultados de las consultas a tus fuentes, el audio de la voz en vivo y las fotos</td></tr>
+<tr><td><strong>OpenAI</strong></td><td>Modelo que genera las respuestas, voz en vivo, lectura de imágenes y clasificación de correos</td><td>Tu consulta, tu nombre, los hechos recordados, los resultados de las consultas a tus fuentes, el audio de la voz en vivo, las fotos y, si conectas Gmail, los correos que pides leer y el inicio de los correos nuevos a clasificar</td></tr>
 <tr><td><strong>Supabase</strong></td><td>Verificación de acceso desde los paneles, cotizaciones y archivos</td><td>Datos de la sesión, cotizaciones y documentos PDF</td></tr>
 <tr><td><strong>PDF.co</strong></td><td>Generación del PDF de cotización</td><td>El contenido de la cotización, con nombre, RNC, dirección y teléfono del destinatario</td></tr>
-<tr><td><strong>Evolution API y WhatsApp</strong></td><td>Envío de archivos por WhatsApp</td><td>Número del destinatario, archivo y texto del mensaje</td></tr>
+<tr><td><strong>Evolution API y WhatsApp</strong></td><td>Envío de archivos y de avisos de correos importantes por WhatsApp</td><td>Número del destinatario, archivo y texto del mensaje (en un aviso: remitente y resumen del correo)</td></tr>
 <tr><td><strong>Open-Meteo</strong></td><td>Consulta del clima</td><td>Solo el nombre de la ciudad</td></tr>
-<tr><td><strong>Google</strong></td><td>Establecer la conexión de voz y, según tu navegador, el dictado</td><td>Tu dirección IP; el audio del dictado si tu navegador usa su servicio de reconocimiento de voz</td></tr>
-<tr><td><strong>Railway</strong></td><td>Alojamiento del servicio</td><td>Toda la información del servicio</td></tr>
+<tr><td><strong>Google</strong></td><td>Establecer la conexión de voz, el dictado según tu navegador y, si conectas Gmail, leer y enviar tus correos</td><td>Tu dirección IP; el audio del dictado si tu navegador usa su servicio de reconocimiento de voz; los correos que envías desde el asistente</td></tr>
+<tr><td><strong>Amazon Web Services</strong></td><td>Alojamiento del servicio</td><td>Toda la información del servicio</td></tr>
 </tbody></table></div>
 </section>
 
@@ -207,6 +211,7 @@
 <li><strong>Conversación:</strong> solo se guardan los últimos 40 mensajes, y puedes reiniciarla cuando quieras.</li>
 <li><strong>Hechos recordados:</strong> se conservan hasta que los borres o le pidas a Jarvis olvidarlos.</li>
 <li><strong>Dispositivos:</strong> puedes revocar su acceso en cualquier momento.</li>
+<li><strong>Gmail:</strong> al desconectarlo desde <em>Integraciones</em> se revoca el permiso en Google y se borra; también puedes quitarlo en <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. Los avisos de correos importantes se conservan hasta que pidas borrarlos.</li>
 <li><strong>Cuenta, consumo, cotizaciones y registro de envíos:</strong> no tienen un borrado automático; se conservan mientras uses el servicio y se eliminan a tu solicitud.</li>
 </ul>
 </section>
@@ -222,7 +227,7 @@
 <ul>
 <li>las comunicaciones viajan cifradas mediante TLS;</li>
 <li>las contraseñas no se guardan en claro;</li>
-<li>las credenciales de tus fuentes de datos se guardan cifradas;</li>
+<li>las credenciales de tus fuentes de datos y el permiso de acceso a tu Gmail se guardan cifrados;</li>
 <li>las conexiones a tus fuentes de datos son de solo lectura por defecto;</li>
 <li>los enlaces a los documentos generados están firmados y caducan.</li>
 </ul>
@@ -250,7 +255,7 @@
 <p>Esta política se rige por las leyes del Estado de Florida y las leyes federales de Estados Unidos. Cuando la persona titular o la empresa cliente estén sujetas a otra normativa de protección de datos, como la Ley 172-13 de la República Dominicana, se respetarán también los derechos que esa normativa les reconoce.</p>
 </section>
 
-<footer>Jarvis · Nebo AI · LM Consulting Group USA LLC · <a href="/">Volver</a></footer>
+<footer>Asistente Virtual (Jarvis) · Nebo AI · LM Consulting Group USA LLC · <a href="/acerca">Qué es</a> · <a href="/">Entrar</a></footer>
 
 </div>
 </body>

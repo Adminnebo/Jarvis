@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Asistente Virtual de Nebo AI: asistente de voz y texto para empresas que consulta los datos de tu organización, prepara cotizaciones y, si lo conectas, lee y responde tu correo de Gmail.">
+<title>Asistente Virtual · Nebo AI</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --papel:  #FBFBFC;
+    --panel:  #F2F3F6;
+    --tinta:  #1A1D24;
+    --suave:  #5B6272;
+    --linea:  #E2E4EA;
+    --acento: #34496E;
+    --marca:  #8C4B3C;
+
+    --titulo: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --texto:  "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --dato:   ui-monospace, "Cascadia Mono", Consolas, "SF Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --papel:  #0a0a0b;
+      --panel:  #111113;
+      --tinta:  #ececf0;
+      --suave:  #7d7d86;
+      --linea:  #232327;
+      --acento: #4da3ff;
+      --marca:  #D89179;
+    }
+  }
+  :root[data-theme="dark"] {
+    --papel:  #0a0a0b;
+    --panel:  #111113;
+    --tinta:  #ececf0;
+    --suave:  #7d7d86;
+    --linea:  #232327;
+    --acento: #4da3ff;
+    --marca:  #D89179;
+  }
+
+  body {
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: var(--texto);
+    font-size: 17px;
+    line-height: 1.68;
+    margin: 0;
+    padding: 0 24px 110px;
+  }
+  .hoja { max-width: 700px; margin: 0 auto; }
+
+  header.tapa {
+    padding: 76px 0 28px;
+    border-bottom: 2px solid var(--tinta);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .empresa {
+    font-family: var(--titulo); font-size: 12px; font-weight: 700;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--acento);
+  }
+  h1 {
+    font-family: var(--titulo);
+    font-size: clamp(30px, 5.4vw, 41px); font-weight: 700;
+    line-height: 1.12; margin: 0; letter-spacing: -.015em; text-wrap: balance;
+  }
+  .fechas {
+    font-family: var(--dato); font-size: 12.5px; color: var(--suave);
+    display: flex; flex-wrap: wrap; gap: 4px 20px;
+  }
+
+  .resumen {
+    margin: 30px 0 8px; padding: 20px 24px;
+    background: var(--panel); border-radius: 5px;
+    border-left: 3px solid var(--acento);
+  }
+  .resumen p { margin: 0 0 10px; }
+  .resumen p:last-child { margin-bottom: 0; }
+
+  section.clausula {
+    padding-top: 40px; margin-top: 40px; border-top: 1px solid var(--linea);
+  }
+  h2 {
+    font-family: var(--titulo); font-size: 21px; font-weight: 700;
+    margin: 0 0 16px; line-height: 1.3; text-wrap: balance;
+    display: flex; gap: 13px; align-items: baseline;
+  }
+  h2 .num {
+    font-family: var(--dato); font-size: 13px; color: var(--acento);
+    flex: none; font-variant-numeric: tabular-nums;
+  }
+  h3 {
+    font-family: var(--titulo); font-size: 15px; font-weight: 700;
+    margin: 26px 0 10px; color: var(--acento);
+  }
+  p { margin: 0 0 14px; }
+  section.clausula > p:last-child, li > p:last-child { margin-bottom: 0; }
+
+  ul, ol.letras { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  ol.letras { list-style: lower-latin; }
+
+  .tabla-scroll { overflow-x: auto; margin: 0 0 16px; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--titulo); font-size: 14px; }
+  th, td {
+    text-align: left; padding: 10px 14px 10px 0;
+    border-bottom: 1px solid var(--linea); vertical-align: top;
+  }
+  th {
+    font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--suave); font-weight: 700; border-bottom-color: var(--tinta);
+  }
+  td strong { font-weight: 700; }
+
+  .destacado {
+    margin: 18px 0; padding: 16px 20px;
+    background: var(--panel); border-left: 3px solid var(--marca); border-radius: 0 5px 5px 0;
+  }
+  .destacado p:last-child { margin-bottom: 0; }
+  .destacado b { color: var(--marca); }
+
+  code {
+    font-family: var(--dato); font-size: .85em;
+    background: var(--panel); padding: 2px 5px; border-radius: 3px; overflow-wrap: anywhere;
+  }
+  a { color: var(--acento); }
+  :focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+  footer {
+    margin-top: 52px; padding-top: 22px; border-top: 2px solid var(--tinta);
+    font-family: var(--titulo); font-size: 14px; color: var(--suave);
+  }
+  .acciones { display:flex; flex-wrap:wrap; gap:12px; margin:26px 0 0; font-family:var(--titulo); font-size:15px; }
+  .boton { display:inline-block; padding:10px 18px; border-radius:6px; background:var(--tinta); color:var(--papel); text-decoration:none; font-weight:600; }
+  .boton.sec { background:transparent; color:var(--acento); border:1px solid var(--linea); }
+</style>
+
+</head>
+<body>
+<div class="hoja">
+
+<header class="tapa">
+  <div class="empresa">Nebo AI</div>
+  <h1>Asistente Virtual</h1>
+  <p style="margin:0;">Un asistente de voz y texto para empresas. Le hablas o le escribes y te responde con los datos de tu organización: precios, inventario, clientes, cotizaciones y, si lo conectas, tu correo de Gmail.</p>
+  <div class="acciones">
+    <a class="boton" href="/acceso/cuenta">Entrar</a>
+    <a class="boton sec" href="/privacidad">Política de privacidad</a>
+  </div>
+</header>
+
+<section class="clausula">
+  <h2><span class="num">1</span> Qué hace</h2>
+<ul>
+<li><strong>Responde preguntas sobre tu negocio</strong> consultando las bases de datos que tu organización conecta: precios, existencias, clientes, saldos y ventas.</li>
+<li><strong>Prepara y envía cotizaciones</strong> y fichas técnicas de productos, por WhatsApp o en PDF, siempre con tu confirmación antes de enviar.</li>
+<li><strong>Recuerda</strong> lo que le pides recordar, para no repetírselo.</li>
+<li><strong>Funciona por voz</strong> desde el navegador, el celular, un reloj o unos lentes vinculados.</li>
+</ul>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">2</span> Integración con Gmail</h2>
+<p>Cada persona puede conectar, si quiere, su propia cuenta de Gmail desde la sección <em>Integraciones</em>. Con esa conexión el Asistente Virtual puede:</p>
+<ul>
+<li><strong>buscar y leer tus correos</strong> cuando se lo pides («¿qué me escribió Carlos?», «busca la factura de octubre»);</li>
+<li><strong>redactar y enviar correos o respuestas</strong> en tu nombre, solo después de leerte el borrador y recibir tu confirmación;</li>
+<li><strong>avisarte de los correos importantes</strong> según las reglas que tú escribes (por ejemplo, «clientes que piden cotización y pagos»), por WhatsApp y dentro de la aplicación.</li>
+</ul>
+<p>Para eso pide a Google dos permisos: <code>gmail.readonly</code> (leer) y <code>gmail.send</code> (enviar). El Asistente Virtual solo usa tu correo para darte estas funciones a ti: no lo comparte con otras personas de tu organización, no lo usa para publicidad y no lo usa para entrenar modelos de inteligencia artificial. Puedes desconectar Gmail en cualquier momento desde <em>Integraciones</em> o en <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</p>
+<div class="destacado"><p><b>Uso limitado.</b> El uso y la transferencia a cualquier otra aplicación de la información recibida de las API de Google por parte del Asistente Virtual se ajustan a la <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de datos de usuario de los servicios de API de Google</a>, incluidos los requisitos de uso limitado.</p></div>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">3</span> Para quién es</h2>
+<p>El Asistente Virtual es un servicio para empresas clientes de Nebo AI y su personal. El acceso lo da cada organización a sus usuarios; no hay registro abierto al público.</p>
+</section>
+
+<section class="clausula">
+  <h2><span class="num">4</span> Quién lo ofrece</h2>
+<p>Nebo AI es un nombre comercial de LM Consulting Group USA LLC, 3905 NW 107th Ave, Suite 304, Doral, FL 33178, Estados Unidos. Contacto: <strong>privacidad@neboaiconsulting.com</strong>.</p>
+</section>
+
+<footer>Asistente Virtual · Nebo AI · LM Consulting Group USA LLC · <a href="/privacidad">Política de privacidad</a></footer>
+
+</div>
+</body>
+</html>

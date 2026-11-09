@@ -1124,6 +1124,12 @@ def inicio():
     return FileResponse(WEB / "index.html")
 
 
+@app.get("/acerca")
+def acerca():
+    """Publica, sin sesion: la pagina principal que revisa Google (acceso.LIBRES)."""
+    return FileResponse(WEB / "acerca.html")
+
+
 @app.get("/privacidad")
 def privacidad():
     """Publica, sin sesion: esta ruta esta en acceso.LIBRES."""

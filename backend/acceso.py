@@ -285,7 +285,7 @@ def pagina_login(error: str = "") -> str:
   <p style="margin-top:18px;">
     <a href="/acceso/cuenta">Entrar con tu correo (el mismo de los paneles)</a>
   </p>
-  <p><a href="/privacidad">Politica de privacidad</a></p>
+  <p><a href="/acerca">Que es el Asistente Virtual</a> · <a href="/privacidad">Politica de privacidad</a></p>
 </div></body></html>"""
 
 
@@ -429,7 +429,7 @@ function marcarQueVieneDeUnPanel() {
 
 LIBRES = (
     "/acceso", "/api/salud", "/api/version", "/entrar", "/acceso/supabase",
-    "/acceso/cuenta", "/api/dispositivos/vincular", "/privacidad",
+    "/acceso/cuenta", "/api/dispositivos/vincular", "/privacidad", "/acerca",
     # Entra con su propia clave, no con una sesion: la revisa la ruta (costos.py).
     "/api/costos/resumen",
 )
