@@ -143,10 +143,11 @@ Cada `JARVIS_GMAIL_CADA` segundos (por defecto 120), para cada integración `con
    - ya está `resuelto` en `correos_vistos`.
 3. Si la persona tiene reglas vacías, no hay avisos: solo se avanza el cursor.
 4. Al resto le saca remitente, asunto y los primeros 2.000 caracteres del texto plano
-   y los manda al modelo barato (`JARVIS_MODELO_AVISOS`, por defecto el modelo de texto
-   barato que ya usa `redactor.py`). Pide salida JSON: `{"importante": bool, "resumen": "..."}`.
-   Ese consumo se anota con `consumo.registrar(...)` y queda atribuido a la persona y
-   a su organización, como el resto.
+   y los manda a un modelo de texto barato (`JARVIS_MODELO_AVISOS`, por defecto
+   `gpt-4.1-mini`; se llama igual que en `redactor.py`, con `responses.create`). Pide
+   salida JSON: `{"importante": bool, "resumen": "..."}`. Ese consumo se anota con
+   `cerebro.anotar_consumo(...)` y queda atribuido a la persona y a su organización,
+   como el resto.
 5. Si es importante, inserta en `avisos` (el `UNIQUE` evita duplicados) y, si hay número
    de WhatsApp, lo marca `pendiente`. Si no es importante, lo marca `resuelto` en
    `correos_vistos`.
