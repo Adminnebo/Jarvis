@@ -167,3 +167,151 @@ def recibir(evento: dict) -> str:
     nombre = remitente.get("name") or remitente.get("whatsappUsername") or (f"+{telefono}" if telefono else "Alguien")
     _guardar_pendiente(usuario_id, conversacion, mensaje_id, nombre, telefono, texto)
     return "pendiente"
+
+
+# --------------------------------------------------------------------------
+# Agrupar por chat y clasificar
+# --------------------------------------------------------------------------
+
+def _chats_listos() -> list[tuple[str, str]]:
+    ahora = _ahora()
+    calmado = _iso(ahora - timedelta(seconds=calma()))
+    harto = _iso(ahora - timedelta(seconds=MAX_ESPERA))
+    with basedatos.conexion() as con:
+        filas = con.execute(
+            "SELECT usuario_id, conversacion, MIN(recibido) AS primero, MAX(recibido) AS ultimo "
+            "FROM whatsapp_pendientes GROUP BY usuario_id, conversacion").fetchall()
+    return [(f["usuario_id"], f["conversacion"]) for f in filas
+            if f["ultimo"] <= calmado or f["primero"] <= harto]
+
+
+def clasificar_chat(usuario_id: str, conversacion: str) -> None:
+    from . import dispositivos
+
+    with basedatos.conexion() as con:
+        filas = [dict(f) for f in con.execute(
+            "SELECT rowid, * FROM whatsapp_pendientes WHERE usuario_id = ? AND conversacion = ? "
+            "ORDER BY rowid", (usuario_id, conversacion))]
+    if not filas:
+        return
+    ultimo = filas[-1]
+    regla = integraciones.reglas(usuario_id)
+    usuario = dispositivos.usuario_para(usuario_id)
+    if usuario is None or not regla["activo"] or not regla["reglas"].strip():
+        _descartar_chat(usuario_id, conversacion, ultimo["rowid"])
+        return
+
+    nombre = ultimo["remitente"] or (f"+{ultimo['telefono']}" if ultimo["telefono"] else "Alguien")
+    bloque = "\n".join(f"{f['remitente'] or nombre}: {f['texto']}" for f in filas)
+    if len(bloque) > MAX_BLOQUE:
+        bloque = "(recortado)\n" + bloque[-MAX_BLOQUE:]
+    item = {"de": f"{nombre} (+{ultimo['telefono']})" if ultimo["telefono"] else nombre,
+            "asunto": f"WhatsApp de {nombre}", "texto": bloque}
+
+    intentos = avisos._sumar_intento(usuario_id, f"wa-bloque:{ultimo['mensaje_id']}")
+    try:
+        veredicto = avisos.clasificar(regla["reglas"], item, usuario, etiqueta="avisos-whatsapp")
+    except Exception:  # noqa: BLE001 - la IA caida no debe perder el mensaje
+        if intentos < avisos.MAX_INTENTOS:
+            return
+        veredicto = {"importante": True, "resumen": ultimo["texto"][:140]}
+    if veredicto["importante"]:
+        avisos.crear(usuario_id, ultimo["mensaje_id"], conversacion, item["de"], item["asunto"],
+                     veredicto["resumen"] or ultimo["texto"][:140],
+                     con_whatsapp=bool(regla["whatsapp"]), app="whatsapp")
+    # Solo hasta el ultimo clasificado: lo que llego mientras tanto queda para la proxima.
+    _descartar_chat(usuario_id, conversacion, ultimo["rowid"])
+
+
+def agrupar() -> None:
+    for usuario_id, conversacion in _chats_listos():
+        try:
+            clasificar_chat(usuario_id, conversacion)
+        except Exception as error:  # noqa: BLE001 - un chat roto no frena a los demas
+            print(f"  AVISO: fallo la clasificacion del chat {conversacion} de {usuario_id}: {error}")
+
+
+# --------------------------------------------------------------------------
+# Barrido de respaldo: lo que el webhook no entrego
+# --------------------------------------------------------------------------
+
+_ultimo_barrido: dict[str, float] = {}
+
+
+def _momento(texto: str | None) -> float:
+    try:
+        return datetime.fromisoformat(str(texto).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def barrer(usuario_id: str) -> None:
+    desde = _ultimo_barrido.get(usuario_id)
+    ahora = time.time()
+    if desde is not None and ahora - desde < BARRIDO:
+        return
+    _ultimo_barrido[usuario_id] = ahora
+    if desde is None:
+        return   # primera vuelta tras arrancar: solo se marca desde cuando mirar
+    cuenta = integraciones.cuenta_zernio(usuario_id)
+    regla = integraciones.reglas(usuario_id)
+    if not cuenta or not cuenta["cuenta_id"] or not regla["activo"] or not regla["reglas"].strip():
+        return
+    chats, fallo = zernio.conversaciones(cuenta["cuenta_id"], limite=50)
+    if fallo:
+        _desconectado(usuario_id, f"Zernio no puede leer tu WhatsApp: {fallo}")
+        return
+    with basedatos.conexion() as con:
+        en_espera = {f["mensaje_id"] for f in con.execute(
+            "SELECT mensaje_id FROM whatsapp_pendientes WHERE usuario_id = ?", (usuario_id,))}
+    for chat in chats:
+        if not chat.get("unreadCount") or _momento(chat.get("updatedTime")) < desde:
+            continue
+        telefono = re.sub(r"\D", "", str(chat.get("participantId") or ""))
+        for mensaje in zernio.mensajes(chat["id"], cuenta["cuenta_id"], limite=10):
+            mensaje_id = str(mensaje.get("id") or "")
+            if (mensaje.get("direction") != "incoming" or _momento(mensaje.get("createdAt")) < desde
+                    or mensaje_id in en_espera or avisos._resuelto(usuario_id, f"wa:{mensaje_id}")):
+                continue
+            texto = _describir(mensaje.get("message"), mensaje.get("attachments") or [])
+            if texto:
+                nombre = mensaje.get("senderName") or chat.get("participantName") or (f"+{telefono}" if telefono else "Alguien")
+                _guardar_pendiente(usuario_id, chat["id"], mensaje_id, nombre, telefono, texto)
+
+
+# --------------------------------------------------------------------------
+# El hilo de fondo
+# --------------------------------------------------------------------------
+
+def una_vuelta() -> None:
+    for conexion in integraciones.conectados("whatsapp"):
+        try:
+            barrer(conexion["usuario_id"])
+        except Exception as error:  # noqa: BLE001
+            print(f"  AVISO: fallo el barrido de WhatsApp de {conexion['usuario_id']}: {error}")
+    agrupar()
+    try:
+        podar_eventos()
+        avisos.mandar_pendientes()
+    except Exception as error:  # noqa: BLE001
+        print(f"  AVISO: fallo el envio de avisos de WhatsApp: {error}")
+
+
+def cada() -> int:
+    try:
+        return max(10, int(os.getenv("JARVIS_WHATSAPP_CADA", "30")))
+    except ValueError:
+        return 30
+
+
+def arrancar() -> None:
+    if not zernio.configurado():
+        print("  WhatsApp (Zernio): falta ZERNIO_API_KEY; Integraciones > WhatsApp apagado.")
+        return
+
+    def vigilar() -> None:
+        while True:
+            una_vuelta()
+            time.sleep(cada())
+
+    threading.Thread(target=vigilar, name="avisos-whatsapp", daemon=True).start()
