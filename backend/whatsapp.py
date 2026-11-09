@@ -70,6 +70,37 @@ def instancias() -> list[str]:
     return lista
 
 
+# Los numeros de las instancias de Evolution de Jarvis. Si alguien pone su propio
+# WhatsApp (conectado por Zernio) como numero de avisos, cada aviso le entra como
+# mensaje nuevo: whatsapp_chats.py los reconoce con esto y no los clasifica.
+_propios: tuple[float, set[str]] = (0.0, set())
+
+
+def numeros_propios() -> set[str]:
+    """Digitos de los numeros de Evolution de Jarvis (cache de 1 h) + JARVIS_WHATSAPP_PROPIOS."""
+    global _propios
+    if time.time() - _propios[0] < 3600:
+        return _propios[1]
+    numeros = {re.sub(r"\D", "", n) for n in _env("JARVIS_WHATSAPP_PROPIOS").split(",")
+               if re.sub(r"\D", "", n)}
+    if configurado():
+        try:
+            respuesta = httpx.get(f"{_env('EVOLUTION_URL').rstrip('/')}/instance/fetchInstances",
+                                  headers={"apikey": _env("EVOLUTION_API_KEY")}, timeout=15)
+            nuestras = set(instancias())
+            for item in respuesta.json() if respuesta.status_code < 400 else []:
+                datos = item.get("instance", item) if isinstance(item, dict) else {}
+                if (datos.get("name") or datos.get("instanceName")) not in nuestras:
+                    continue
+                dueno = str(datos.get("ownerJid") or datos.get("owner") or "").split("@")[0]
+                if re.sub(r"\D", "", dueno):
+                    numeros.add(re.sub(r"\D", "", dueno))
+        except Exception:  # noqa: BLE001 - sin Evolution solo queda la variable
+            pass
+    _propios = (time.time(), numeros)
+    return numeros
+
+
 # --------------------------------------------------------------------------
 # Numeros
 # --------------------------------------------------------------------------

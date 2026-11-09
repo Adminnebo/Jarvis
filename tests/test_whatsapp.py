@@ -332,3 +332,33 @@ def test_enviar_texto_sin_ninguna_instancia_que_sirva_lanza(configurado, monkeyp
     monkeypatch.setattr(whatsapp.httpx, "post", lambda url, **k: Respuesta())
     with pytest.raises(whatsapp.ErrorEnvio):
         whatsapp.enviar_texto("8095551234", "hola")
+
+
+def test_numeros_propios_de_las_instancias(monkeypatch):
+    import httpx as _httpx
+
+    from backend import whatsapp as wa
+
+    monkeypatch.setenv("EVOLUTION_URL", "https://evo")
+    monkeypatch.setenv("EVOLUTION_API_KEY", "k")
+    monkeypatch.setenv("EVOLUTION_INSTANCIA", "jarvis")
+    monkeypatch.setenv("EVOLUTION_INSTANCIA_RESPALDO", "jarvis2")
+    monkeypatch.setenv("JARVIS_WHATSAPP_PROPIOS", "+1 809 000 0000")
+    monkeypatch.setattr(wa, "_propios", (0.0, set()))
+    respuesta = [
+        {"name": "jarvis", "ownerJid": "18091112222@s.whatsapp.net"},          # Evolution v2
+        {"instance": {"instanceName": "jarvis2", "owner": "18093334444@s.whatsapp.net"}},  # v1
+        {"name": "de-otro", "ownerJid": "15550000000@s.whatsapp.net"},
+    ]
+    monkeypatch.setattr(wa.httpx, "get", lambda *a, **k: _httpx.Response(200, json=respuesta))
+    assert wa.numeros_propios() == {"18091112222", "18093334444", "18090000000"}
+
+
+def test_numeros_propios_sin_evolution_usa_la_variable(monkeypatch):
+    from backend import whatsapp as wa
+
+    for nombre in ("EVOLUTION_URL", "EVOLUTION_API_KEY", "EVOLUTION_INSTANCIA"):
+        monkeypatch.delenv(nombre, raising=False)
+    monkeypatch.setenv("JARVIS_WHATSAPP_PROPIOS", "18095550000")
+    monkeypatch.setattr(wa, "_propios", (0.0, set()))
+    assert wa.numeros_propios() == {"18095550000"}
