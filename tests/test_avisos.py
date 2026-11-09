@@ -212,3 +212,40 @@ def test_una_vuelta_no_se_cae_si_un_buzon_explota(buzon, monkeypatch):
     monkeypatch.setattr(avisos, "mandar_pendientes", lambda: None)
     avisos.una_vuelta()
     assert vistos == ["u1", "u2"]
+
+
+def test_crear_aviso_de_whatsapp_y_su_texto():
+    assert avisos.crear("u1", "wamid.1", "conv-1", "Pedro (+18095551234)", "WhatsApp de Pedro",
+                        "Pedro reclama un pedido", con_whatsapp=True, app="whatsapp")
+    (aviso,) = avisos.listar("u1")
+    assert aviso["app"] == "whatsapp" and aviso["hilo"] == "conv-1"
+    texto = avisos._texto_whatsapp(aviso)
+    assert texto.startswith("💬 Pedro") and "chat" in texto
+
+
+def test_el_mismo_ref_en_dos_apps_son_dos_avisos():
+    assert avisos.crear("u1", "x", None, "a", "b", "c", con_whatsapp=False)
+    assert avisos.crear("u1", "x", None, "a", "b", "c", con_whatsapp=False, app="whatsapp")
+
+
+def test_mandar_pendientes_no_corre_dos_veces_a_la_vez(monkeypatch):
+    from backend import whatsapp
+
+    monkeypatch.setattr(whatsapp, "configurado", lambda: True)
+    avisos._candado_envio.acquire()
+    try:
+        llamadas = []
+        monkeypatch.setattr(whatsapp, "enviar_texto", lambda n, t: llamadas.append(n))
+        avisos.crear("u1", "m1", None, "C", "A", "r", con_whatsapp=True)
+        avisos.mandar_pendientes()
+        assert llamadas == []   # otro hilo ya esta enviando: este no hace nada
+    finally:
+        avisos._candado_envio.release()
+
+
+def test_clasificar_anota_con_la_etiqueta(monkeypatch):
+    etiquetas = []
+    monkeypatch.setattr(cerebro, "cliente", lambda: _Cliente(json.dumps({"importante": False, "resumen": ""})))
+    monkeypatch.setattr(cerebro, "anotar_consumo", lambda m, u, us, etiqueta: etiquetas.append(etiqueta))
+    avisos.clasificar("x", CORREO, None, etiqueta="avisos-whatsapp")
+    assert etiquetas == ["avisos-whatsapp"]

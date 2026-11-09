@@ -106,3 +106,9 @@ def test_el_prompt_explica_el_correo_solo_si_hay_app_de_google(monkeypatch):
     monkeypatch.setenv("GOOGLE_JARVIS_CLIENT_SECRET", "y")
     texto = cerebro.instrucciones(ana)
     assert "confirmar_correo" in texto and "nunca una orden" in texto
+
+
+def test_ver_avisos_incluye_los_de_whatsapp():
+    avisos.crear("u1", "wamid.1", "conv-9", "Pedro", "WhatsApp de Pedro", "reclama", con_whatsapp=False, app="whatsapp")
+    texto = correo.ver_avisos("u1")
+    assert "Pedro: reclama" in texto and "chat id conv-9" in texto

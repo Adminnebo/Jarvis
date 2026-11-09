@@ -122,8 +122,13 @@ def confirmar(usuario_id: str) -> str:
 def ver_avisos(usuario_id: str) -> str:
     lista = avisos.listar(usuario_id, solo_no_vistos=True)
     if not lista:
-        return "No tienes avisos de correo nuevos."
+        return "No tienes avisos nuevos."
     for aviso in lista:
         avisos.marcar_visto(usuario_id, aviso["id"])
-    return "\n".join(f"- {a['remitente']}: {a['resumen']}"
-                     + (f" (correo id {a['ref']})" if a["tipo"] == "correo" else "") for a in lista)
+
+    def detalle(a: dict) -> str:
+        if a["tipo"] != "correo":
+            return ""
+        return f" (chat id {a['hilo']})" if a.get("app") == "whatsapp" else f" (correo id {a['ref']})"
+
+    return "\n".join(f"- {a['remitente']}: {a['resumen']}{detalle(a)}" for a in lista)
