@@ -69,3 +69,104 @@ def test_avisos_solo_los_propios(admin):
     otro = avisos.listar("otro")[0]["id"]
     assert admin.post(f"/api/avisos/{otro}/visto").status_code == 404
     assert admin.post(f"/api/avisos/{aviso['id']}/visto").json() == {"ok": True}
+
+
+import hashlib
+import hmac
+import json
+
+from backend import whatsapp_chats, zernio
+
+
+@pytest.fixture
+def con_zernio(admin, monkeypatch):
+    monkeypatch.setenv("ZERNIO_API_KEY", "z")
+    monkeypatch.setenv("ZERNIO_WEBHOOK_SECRET", "secreto-w")
+    monkeypatch.setattr(zernio, "asegurar_webhook", lambda url: "w1")
+    monkeypatch.setattr(zernio, "perfil_de", lambda u, n: "p1")
+    monkeypatch.setattr(zernio, "url_conexion", lambda perfil, retorno: f"https://meta/x?perfil={perfil}&r={retorno}")
+    return admin
+
+
+def test_conectar_whatsapp_lleva_a_zernio(con_zernio):
+    r = con_zernio.get("/integraciones/whatsapp/conectar", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"].startswith("https://meta/x?perfil=p1")
+    assert "estado=" in r.headers["location"]
+
+
+def test_conectar_whatsapp_sin_zernio_es_503(admin, monkeypatch):
+    monkeypatch.delenv("ZERNIO_API_KEY", raising=False)
+    assert admin.get("/integraciones/whatsapp/conectar", follow_redirects=False).status_code == 503
+
+
+def test_callback_whatsapp_guarda_la_cuenta(con_zernio):
+    integraciones.iniciar_whatsapp("admin", "Admin")
+    estado = gmail.crear_estado("admin")
+    r = TestClient(app).get(
+        f"/integraciones/whatsapp/callback?estado={estado}&connected=whatsapp&profileId=p1"
+        "&accountId=acc-1&username=%2B18095551234", follow_redirects=False)
+    assert r.status_code in (302, 307) and r.headers["location"] == "/?integraciones=whatsapp"
+    assert integraciones.usuario_de_cuenta("acc-1") == "admin"
+
+
+def test_callback_whatsapp_con_otro_perfil_no_guarda(con_zernio):
+    integraciones.iniciar_whatsapp("admin", "Admin")
+    estado = gmail.crear_estado("admin")
+    r = TestClient(app).get(f"/integraciones/whatsapp/callback?estado={estado}&connected=whatsapp"
+                            "&profileId=p-ajeno&accountId=acc-1")
+    assert r.status_code == 400 and integraciones.usuario_de_cuenta("acc-1") is None
+
+
+def test_callback_whatsapp_con_error_lo_explica(con_zernio):
+    estado = gmail.crear_estado("admin")
+    r = TestClient(app).get(f"/integraciones/whatsapp/callback?estado={estado}"
+                            "&error=whatsapp_number_already_connected&platform=whatsapp")
+    assert r.status_code == 400 and "ya esta conectado" in r.text
+
+
+def test_desconectar_whatsapp(con_zernio, monkeypatch):
+    integraciones.iniciar_whatsapp("admin", "Admin")
+    integraciones.guardar_whatsapp("admin", "acc-1", "x")
+    borradas = []
+    monkeypatch.setattr(zernio, "desconectar_cuenta", borradas.append)
+    assert con_zernio.delete("/api/integraciones/whatsapp").json() == {"ok": True}
+    assert borradas == ["acc-1"]
+
+
+def _firmado(cuerpo: dict):
+    datos = json.dumps(cuerpo).encode()
+    return datos, {"x-zernio-signature": hmac.new(b"secreto-w", datos, hashlib.sha256).hexdigest(),
+                   "content-type": "application/json"}
+
+
+def test_webhook_firmado_se_procesa_una_vez(con_zernio, monkeypatch):
+    recibidos = []
+    monkeypatch.setattr(whatsapp_chats, "recibir", lambda ev: recibidos.append(ev["id"]) or "ok")
+    datos, cabeceras = _firmado({"id": "ev-1", "event": "message.received"})
+    sin_sesion = TestClient(app)
+    assert sin_sesion.post("/integraciones/whatsapp/webhook", content=datos, headers=cabeceras).status_code == 200
+    r = sin_sesion.post("/integraciones/whatsapp/webhook", content=datos, headers=cabeceras)
+    assert r.json().get("repetido") and recibidos == ["ev-1"]
+
+
+def test_webhook_sin_firma_es_401(con_zernio):
+    r = TestClient(app).post("/integraciones/whatsapp/webhook", content=b'{"id":"x"}',
+                             headers={"x-zernio-signature": "mala"})
+    assert r.status_code == 401
+
+
+def test_webhook_que_falla_se_puede_reintentar(con_zernio, monkeypatch):
+    def falla(ev):
+        raise RuntimeError("base caida")
+
+    monkeypatch.setattr(whatsapp_chats, "recibir", falla)
+    datos, cabeceras = _firmado({"id": "ev-2", "event": "message.received"})
+    assert TestClient(app).post("/integraciones/whatsapp/webhook", content=datos, headers=cabeceras).status_code == 500
+    assert not whatsapp_chats.ya_procesado("ev-2")   # la marca se borro
+
+
+def test_reglas_por_la_ruta_nueva(admin):
+    r = admin.put("/api/avisos/reglas", json={"reglas": "pagos", "whatsapp": "", "activo": True})
+    assert r.json()["reglas"] == "pagos"
+    assert admin.get("/api/avisos/reglas").json()["reglas"] == "pagos"

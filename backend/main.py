@@ -1,5 +1,6 @@
 """Servidor local de Jarvis. Sirve la interfaz web y la API de chat."""
 
+import json
 import os
 import time
 from pathlib import Path
@@ -52,6 +53,8 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     supabase_sesion,
     version,
     voz_registro,
+    whatsapp_chats,
+    zernio,
 )
 
 WEB = RAIZ / "web"
@@ -83,6 +86,7 @@ def al_arrancar():
     creditos.arrancar()
     # Revisa los Gmail conectados y avisa de lo importante (no arranca sin la app de Google).
     avisos.arrancar()
+    whatsapp_chats.arrancar()
 
     if not supabase_sesion.configurado():
         print(
@@ -1124,7 +1128,7 @@ def archivo_del_avatar(organizacion_id: str, archivo: str, peticion: Request):
                         headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
-# --- Integraciones (Gmail) y avisos ---
+# --- Integraciones (Gmail, WhatsApp) y avisos ---
 
 class ReglasDeAviso(BaseModel):
     reglas: str = ""
@@ -1191,6 +1195,95 @@ def guardar_reglas(peticion: Request, datos: ReglasDeAviso):
                                             datos.whatsapp, datos.activo)
     except ValueError as error:
         return JSONResponse(status_code=400, content={"error": str(error)})
+
+
+@app.get("/api/avisos/reglas")
+def ver_reglas_de_aviso(peticion: Request):
+    return integraciones.reglas(peticion.state.usuario.id)
+
+
+@app.put("/api/avisos/reglas")
+def guardar_reglas_de_aviso(peticion: Request, datos: ReglasDeAviso):
+    return guardar_reglas(peticion, datos)
+
+
+ERRORES_WHATSAPP = {
+    "whatsapp_number_already_connected": "Ese numero ya esta conectado en otro lugar. Desconectalo alli primero.",
+    "whatsapp_number_pinned_to_profile": "Ese numero ya esta conectado en otro lugar. Desconectalo alli primero.",
+    "one_whatsapp_per_profile": "Ya tienes un numero conectado: desconectalo antes de conectar otro.",
+    "connection_cancelled": "Se cancelo la conexion. Puedes intentarlo de nuevo.",
+}
+
+
+@app.get("/integraciones/whatsapp/conectar")
+def conectar_whatsapp(peticion: Request):
+    if not zernio.configurado():
+        return _pagina_simple("WhatsApp no disponible", "Falta configurar Zernio.", 503)
+    usuario = peticion.state.usuario
+    try:
+        zernio.asegurar_webhook(whatsapp_chats.url_webhook())
+        perfil = integraciones.iniciar_whatsapp(usuario.id, usuario.nombre)
+        retorno = f"{whatsapp_chats.retorno()}?estado={gmail.crear_estado(usuario.id)}"
+        return RedirectResponse(zernio.url_conexion(perfil, retorno), status_code=302)
+    except zernio.ErrorZernio as fallo:
+        return _pagina_simple("WhatsApp no se conecto", str(fallo), 502)
+
+
+@app.get("/integraciones/whatsapp/callback")
+def vuelta_de_zernio(estado: str = "", connected: str = "", profileId: str = "",  # noqa: N803 - asi los manda Zernio
+                     accountId: str = "", username: str = "", error: str = ""):  # noqa: N803
+    """Libre (acceso.LIBRES): quien conecta sale del estado firmado, no de la cookie."""
+    usuario_id = gmail.leer_estado(estado)
+    if usuario_id is None:
+        return _pagina_simple("Enlace vencido", "Vuelve a tocar Conectar en Integraciones.", 400)
+    if error or connected != "whatsapp" or not accountId:
+        return _pagina_simple("WhatsApp no se conecto",
+                              ERRORES_WHATSAPP.get(error, "Meta no termino la conexion. Puedes intentarlo de nuevo."), 400)
+    cuenta = integraciones.cuenta_zernio(usuario_id)
+    if not cuenta or cuenta["perfil_id"] != profileId:
+        return _pagina_simple("WhatsApp no se conecto", "La conexion no corresponde a tu cuenta. Intentalo de nuevo.", 400)
+    integraciones.guardar_whatsapp(usuario_id, accountId, username or accountId)
+    return RedirectResponse("/?integraciones=whatsapp", status_code=302)
+
+
+@app.delete("/api/integraciones/whatsapp")
+def desconectar_whatsapp(peticion: Request):
+    cuenta_id = integraciones.desconectar_whatsapp(peticion.state.usuario.id)
+    if cuenta_id:
+        try:
+            zernio.desconectar_cuenta(cuenta_id)
+        except zernio.ErrorZernio as fallo:
+            print(f"  AVISO: Zernio no borro la cuenta {cuenta_id}: {fallo}")
+    return {"ok": True}
+
+
+@app.post("/integraciones/whatsapp/webhook")
+async def webhook_de_zernio(peticion: Request):
+    """Libre (acceso.LIBRES): lo protege la firma HMAC de Zernio."""
+    if not zernio.configurado() or not zernio.secreto_webhook():
+        return JSONResponse(status_code=503, content={"error": "sin configurar"})
+    cuerpo = await peticion.body()
+    firma = peticion.headers.get("x-zernio-signature") or peticion.headers.get("x-late-signature") or ""
+    if not zernio.firma_valida(cuerpo, firma):
+        return JSONResponse(status_code=401, content={"error": "firma invalida"})
+    try:
+        evento = json.loads(cuerpo)
+    except ValueError:
+        return JSONResponse(status_code=400, content={"error": "json invalido"})
+    id_evento = str(evento.get("id") or peticion.headers.get("x-zernio-event-id") or "")
+    if not id_evento:
+        return JSONResponse(status_code=400, content={"error": "sin id"})
+    if whatsapp_chats.ya_procesado(id_evento):
+        return {"ok": True, "repetido": True}
+    try:
+        resultado = whatsapp_chats.recibir(evento)
+    except Exception as fallo:  # noqa: BLE001 - sin 2xx Zernio reintenta
+        whatsapp_chats.olvidar_evento(id_evento)
+        print(f"  AVISO: fallo el webhook de Zernio {evento.get('event')}: {fallo}")
+        return JSONResponse(status_code=500, content={"error": "error procesando"})
+    if resultado not in ("cuenta ajena", "sin accion"):
+        print(f"  WhatsApp {evento.get('event')}: {resultado}")
+    return {"ok": True}
 
 
 @app.get("/api/avisos")

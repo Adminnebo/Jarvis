@@ -432,6 +432,8 @@ LIBRES = (
     "/acceso/cuenta", "/api/dispositivos/vincular", "/privacidad", "/acerca",
     # Vuelve de Google sin cookie garantizada; la protege el state firmado (gmail.py).
     "/integraciones/gmail/callback",
+    # Vuelve de Zernio/Meta (state firmado) y el webhook de Zernio (firma HMAC). Ver whatsapp_chats.py.
+    "/integraciones/whatsapp/callback", "/integraciones/whatsapp/webhook",
     # Entra con su propia clave, no con una sesion: la revisa la ruta (costos.py).
     "/api/costos/resumen",
 )
