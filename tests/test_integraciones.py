@@ -9,7 +9,8 @@ def _tablas():
 
 
 def test_existen_las_tablas_de_integraciones():
-    assert {"integraciones", "reglas_aviso", "avisos", "correos_vistos"} <= _tablas()
+    assert {"integraciones", "reglas_aviso", "avisos", "correos_vistos",
+            "zernio_cuentas", "zernio_eventos", "whatsapp_pendientes"} <= _tablas()
 
 
 def test_guardar_y_leer_la_conexion_con_el_token_cifrado():

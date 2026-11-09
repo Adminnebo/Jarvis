@@ -211,6 +211,36 @@ _ESQUEMA = """
         resuelto INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (usuario_id, ref)
     );
+
+    -- WhatsApp por Zernio (ver whatsapp_chats.py). El perfil de Zernio de cada
+    -- persona (uno por numero, lo exige Zernio) y la cuenta conectada en el.
+    CREATE TABLE IF NOT EXISTS zernio_cuentas (
+        usuario_id TEXT PRIMARY KEY,
+        perfil_id TEXT NOT NULL,
+        cuenta_id TEXT,
+        actualizado TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_zernio_cuenta ON zernio_cuentas (cuenta_id);
+
+    -- Eventos de webhook ya procesados: Zernio entrega "al menos una vez".
+    CREATE TABLE IF NOT EXISTS zernio_eventos (
+        id TEXT PRIMARY KEY,
+        recibido TEXT NOT NULL
+    );
+
+    -- Mensajes entrantes esperando a que su chat se calme para clasificarlos.
+    -- Se borran al clasificarlos: Jarvis no guarda copia de los chats.
+    CREATE TABLE IF NOT EXISTS whatsapp_pendientes (
+        usuario_id TEXT NOT NULL,
+        conversacion TEXT NOT NULL,
+        mensaje_id TEXT NOT NULL,
+        remitente TEXT,
+        telefono TEXT,
+        texto TEXT,
+        recibido TEXT NOT NULL,
+        PRIMARY KEY (usuario_id, mensaje_id)
+    );
 """
 
 
