@@ -436,6 +436,8 @@ LIBRES = (
     "/integraciones/whatsapp/callback", "/integraciones/whatsapp/webhook",
     # Entra con su propia clave, no con una sesion: la revisa la ruta (costos.py).
     "/api/costos/resumen",
+    # El panel de Reactivacion de JH, con su propia clave (puente_reactivacion.py).
+    "/api/puente/reactivacion/ventas",
 )
 
 
