@@ -214,3 +214,14 @@ def test_conectar_gmail_anota_si_dio_el_calendario(monkeypatch):
 
 def test_existe_la_tabla_del_calendario_de_google():
     assert "google_calendario" in _tablas()
+
+
+def test_catalogo_dice_si_gmail_tiene_calendario(monkeypatch):
+    monkeypatch.setattr(gmail, "canjear_codigo", lambda c: {"access_token": "a", "refresh_token": "r",
+                                                           "scope": gmail.CALENDARIO})
+    monkeypatch.setattr(gmail, "perfil", lambda t: {"email": "ana@gmail.com", "historyId": "1"})
+    monkeypatch.setattr(gmail, "revocar", lambda t: None)
+    apps = {a["app"]: a for a in integraciones.catalogo("u1")}
+    assert apps["gmail"]["calendario"] is False and apps["outlook"]["calendario"] is None
+    integraciones.conectar_gmail("u1", "c")
+    assert {a["app"]: a for a in integraciones.catalogo("u1")}["gmail"]["calendario"] is True

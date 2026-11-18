@@ -14,7 +14,8 @@ from . import basedatos, gmail, secretos, whatsapp, zernio
 
 _APPS = [
     {"app": "gmail", "nombre": "Gmail",
-     "descripcion": "Jarvis busca, lee y envia tus correos, y te avisa de los importantes.",
+     "descripcion": "Correo y calendario de Google. Jarvis busca, lee y envia tus correos, te avisa "
+                    "de los importantes y, si das permiso, mira tu agenda y agenda reuniones con Meet.",
      "configurado": gmail.configurado},
     {"app": "whatsapp", "nombre": "WhatsApp",
      "descripcion": "Conecta tu WhatsApp Business y sigue usando la app en tu telefono. "
@@ -110,6 +111,12 @@ def conectar_gmail(usuario_id: str, codigo: str) -> str:
     return cuenta["email"]
 
 
+def quitar_calendario_google(usuario_id: str) -> None:
+    """Google dijo que no hay permiso: hasta que reconecte, no se le pregunta."""
+    with basedatos.conexion() as con:
+        con.execute("DELETE FROM google_calendario WHERE usuario_id = ?", (usuario_id,))
+
+
 def calendario_google(usuario_id: str) -> bool:
     """Si la persona tiene Gmail conectado y dio permiso al calendario."""
     with basedatos.conexion() as con:
@@ -155,6 +162,7 @@ def catalogo(usuario_id: str) -> list[dict]:
             "estado": actual["estado"] if actual else "sin_conectar",
             "cuenta": actual["cuenta"] if actual else None,
             "error": actual["error"] if actual else None,
+            "calendario": calendario_google(usuario_id) if app["app"] == "gmail" else None,
         })
     return salida
 

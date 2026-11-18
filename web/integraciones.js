@@ -10,7 +10,14 @@ const APPS = {
   gmail: {
     conectar: "Conectar Gmail", cambiar: "Cambiar de cuenta",
     ruta: "/integraciones/gmail/conectar", borrar: "/api/integraciones/gmail",
-    adios: (c) => `¿Desconectar ${c}? Jarvis dejará de leer y avisarte.`,
+    adios: (c) => `¿Desconectar ${c}? Jarvis dejará de leer tu correo y tu calendario de Google.`,
+    nota: "Al conectar, marca también la casilla del calendario si quieres que Jarvis use tu agenda de Google.",
+    // El horario va en la tarjeta de Outlook si está conectado; si no, aquí (si dio el calendario).
+    extra: (app, apps) => app.calendario && !apps.some((a) => a.app === "outlook" && a.estado === "conectado")
+      ? formularioDeHorario() : null,
+    avisoConectado: (app) => app.calendario === false
+      ? "Jarvis todavía no puede ver tu calendario de Google: toca Cambiar de cuenta y marca la casilla del calendario."
+      : "",
   },
   whatsapp: {
     conectar: "Conectar WhatsApp", cambiar: "Cambiar número",
@@ -35,7 +42,7 @@ export async function abrirPanelIntegraciones() {
 async function pintar() {
   const { apps } = await (await fetch("/api/integraciones")).json();
   lista.innerHTML = "";
-  for (const app of apps) lista.appendChild(APPS[app.app] ? tarjetaApp(app) : tarjetaBase(app));
+  for (const app of apps) lista.appendChild(APPS[app.app] ? tarjetaApp(app, apps) : tarjetaBase(app));
   if (apps.some((a) => a.estado === "conectado")) lista.appendChild(await tarjetaAvisos());
 }
 
@@ -62,7 +69,7 @@ function textoDeEstado(app) {
   return "Sin conectar.";
 }
 
-function tarjetaApp(app) {
+function tarjetaApp(app, apps) {
   const datos = APPS[app.app];
   const tarjeta = tarjetaBase(app);
   const estado = document.createElement("p");
@@ -70,6 +77,13 @@ function tarjetaApp(app) {
   estado.textContent = textoDeEstado(app);
   tarjeta.appendChild(estado);
 
+  const aviso = app.estado === "conectado" && datos.avisoConectado ? datos.avisoConectado(app) : "";
+  if (aviso) {
+    const nota = document.createElement("p");
+    nota.className = "fuente-destino";
+    nota.textContent = aviso;
+    tarjeta.appendChild(nota);
+  }
   if (datos.nota && app.disponible && app.estado !== "conectado") {
     const nota = document.createElement("p");
     nota.className = "fuente-destino";
@@ -98,7 +112,8 @@ function tarjetaApp(app) {
     acciones.appendChild(desconectar);
   }
   tarjeta.appendChild(acciones);
-  if (datos.extra && app.estado === "conectado") tarjeta.appendChild(datos.extra());
+  const extra = datos.extra && app.estado === "conectado" ? datos.extra(app, apps) : null;
+  if (extra) tarjeta.appendChild(extra);
   return tarjeta;
 }
 
