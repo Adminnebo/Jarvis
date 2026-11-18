@@ -120,3 +120,81 @@ def test_sin_teams_lo_dice(conectado):
 def test_preparar_valida(conectado, titulo, inicio, invitados, motivo):
     with pytest.raises(calendario.ErrorCalendario, match=motivo):
         calendario.preparar("u1", titulo, inicio, "30", invitados)
+
+
+from backend import avisos, dispositivos
+
+
+@pytest.fixture
+def con_reunion(conectado, monkeypatch):
+    monkeypatch.setattr(dispositivos, "usuario_para", lambda u: object() if u == "u1" else None)
+    integraciones.guardar_reglas("u1", "x", "8095551234", True)
+    inicio = (datetime.now(RD) + timedelta(minutes=10)).replace(second=0, microsecond=0)
+    conectado["inicio"] = inicio
+    conectado["eventos"] = [{
+        "id": "e1", "title": "Revision", "start": inicio.isoformat(), "end": (inicio + timedelta(minutes=30)).isoformat(),
+        "participants": [{"email": "ana@contoso.com", "self": True, "status": "accepted"},
+                         {"email": "p@x.com", "name": "Pedro"}],
+        "conferencing": {"url": "https://teams/x"}, "status": "confirmed"}]
+    resumenes = []
+    monkeypatch.setattr(calendario, "_resumen_invitados",
+                        lambda usuario, u, invitados: resumenes.append(invitados) or "Pedro pidio precio")
+    conectado["resumenes"] = resumenes
+    return conectado
+
+
+def test_aviso_previo_sale_una_vez(con_reunion):
+    calendario.revisar("u1")
+    calendario.revisar("u1")
+    (aviso,) = avisos.listar("u1")
+    assert aviso["tipo"] == "reunion" and aviso["asunto"] == "https://teams/x" and aviso["whatsapp"] == "pendiente"
+    assert aviso["resumen"] == f"{con_reunion['inicio']:%H:%M} · Revision. Pedro pidio precio"
+    assert con_reunion["resumenes"] == [[{"email": "p@x.com", "name": "Pedro"}]]
+
+
+def test_si_la_reunion_se_mueve_avisa_otra_vez(con_reunion):
+    calendario.revisar("u1")
+    nuevo = con_reunion["inicio"] + timedelta(minutes=2)
+    con_reunion["eventos"][0]["start"] = nuevo.isoformat()
+    calendario.revisar("u1")
+    assert len(avisos.listar("u1")) == 2
+
+
+@pytest.mark.parametrize("cambio", [
+    {"allDay": True},
+    {"status": "cancelled"},
+    {"participants": [{"email": "ana@contoso.com", "self": True, "status": "declined"}]},
+])
+def test_no_avisa_de_todo_el_dia_cancelada_o_rechazada(con_reunion, cambio):
+    con_reunion["eventos"][0].update(cambio)
+    calendario.revisar("u1")
+    assert avisos.listar("u1") == []
+
+
+def test_no_avisa_si_falta_mucho(con_reunion):
+    lejos = datetime.now(RD) + timedelta(minutes=25)
+    con_reunion["eventos"][0]["start"] = lejos.isoformat()
+    calendario.revisar("u1")
+    assert avisos.listar("u1") == []
+
+
+def test_si_el_resumen_falla_avisa_igual(con_reunion, monkeypatch):
+    def falla(*a):
+        raise RuntimeError("ia caida")
+
+    monkeypatch.setattr(calendario, "_resumen_invitados", falla)
+    calendario.revisar("u1")
+    (aviso,) = avisos.listar("u1")
+    assert aviso["resumen"] == f"{con_reunion['inicio']:%H:%M} · Revision"
+
+
+def test_resumen_invitados_junta_correo_y_chats(monkeypatch):
+    from backend import correo, whatsapp_chats
+
+    monkeypatch.setattr(correo, "buscar", lambda u, q, n: f"correos con {q}")
+    monkeypatch.setattr(whatsapp_chats, "buscar", lambda u, t: f"chats con {t}")
+    vistos = []
+    monkeypatch.setattr(calendario, "_resumir", lambda usuario, texto: vistos.append(texto) or "listo")
+    assert calendario._resumen_invitados(object(), "u1", [{"email": "p@x.com", "name": "Pedro"}]) == "listo"
+    assert "INVITADO: Pedro" in vistos[0] and "correos con p@x.com" in vistos[0] and "chats con Pedro" in vistos[0]
+    assert calendario._resumen_invitados(object(), "u1", []) == ""

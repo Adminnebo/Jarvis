@@ -44,6 +44,12 @@ def crear(usuario_id: str, ref: str, hilo: str | None, remitente: str, asunto: s
         return cursor.rowcount == 1
 
 
+def existe(usuario_id: str, app: str, ref: str) -> bool:
+    with basedatos.conexion() as con:
+        return con.execute("SELECT 1 FROM avisos WHERE usuario_id = ? AND app = ? AND ref = ?",
+                           (usuario_id, app, ref)).fetchone() is not None
+
+
 def listar(usuario_id: str, solo_no_vistos: bool = False, limite: int = 50) -> list[dict]:
     filtro = " AND visto = 0" if solo_no_vistos else ""
     with basedatos.conexion() as con:
@@ -216,6 +222,9 @@ def revisar_buzon(conexion: dict) -> None:
 def _texto_whatsapp(aviso: dict) -> str:
     if aviso["tipo"] == "sistema":
         return f"⚠️ {aviso['resumen']}"
+    if aviso["tipo"] == "reunion":
+        enlace = aviso["asunto"] if (aviso["asunto"] or "").startswith("http") else ""
+        return f"📅 {aviso['resumen']}" + (f"\nTeams: {enlace}" if enlace else "")
     remitente = (aviso["remitente"] or "").split("<")[0].split(" (+")[0].strip().strip('"') or aviso["remitente"]
     if aviso.get("app") == "whatsapp":
         return (f"💬 {remitente}: {aviso['resumen']}\n"
