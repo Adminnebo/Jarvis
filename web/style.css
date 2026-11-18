@@ -1359,11 +1359,14 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
 .integracion-reglas { display: grid; gap: 10px; margin-top: 12px; }
 .integracion-reglas label { display: grid; gap: 4px; }
 .integracion-reglas label > span { font-size: 13px; color: var(--tenue); }
-.integracion-reglas textarea, .integracion-reglas input[inputmode] {
+.integracion-dias { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.integracion-reglas textarea, .integracion-reglas input[inputmode], .integracion-reglas input[type="time"] {
   width: 100%; box-sizing: border-box; font: inherit; background: var(--fondo); color: var(--texto);
   border: 1px solid var(--borde); border-radius: var(--radio-chico); padding: 8px 10px; resize: vertical;
 }
-.integracion-reglas textarea:focus, .integracion-reglas input[inputmode]:focus {
+.integracion-reglas input[type="time"] { max-width: 160px; color-scheme: dark; }
+.integracion-reglas textarea:focus, .integracion-reglas input[inputmode]:focus,
+.integracion-reglas input[type="time"]:focus {
   outline: none; border-color: var(--acento); box-shadow: 0 0 0 3px var(--acento-suave);
 }
 .integracion-reglas input[type="checkbox"] { accent-color: var(--acento); }

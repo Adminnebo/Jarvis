@@ -1,6 +1,6 @@
-/* Panel de Integraciones: una tarjeta por app (Gmail, WhatsApp) y, si hay
-   alguna conectada, la tarjeta "Avisos" con las reglas de "importante" y el
-   WhatsApp donde llegan los avisos. */
+/* Panel de Integraciones: una tarjeta por app (Gmail, WhatsApp, Outlook) y, si
+   hay alguna conectada, la tarjeta "Avisos" con las reglas de "importante" y el
+   WhatsApp donde llegan los avisos. Outlook trae además el horario laboral. */
 
 const $$ = (id) => document.getElementById(id);
 const panel = $$("panel-integraciones");
@@ -17,6 +17,13 @@ const APPS = {
     ruta: "/integraciones/whatsapp/conectar", borrar: "/api/integraciones/whatsapp",
     adios: (c) => `¿Desconectar ${c}? Seguirás usando WhatsApp en tu teléfono, pero Jarvis dejará de leer y avisarte.`,
     nota: "Escanearás un código QR con WhatsApp Business. Ábrelo al menos una vez cada 14 días o Meta corta la conexión.",
+  },
+  outlook: {
+    conectar: "Conectar Outlook", cambiar: "Reconectar",
+    ruta: "/integraciones/outlook/conectar", borrar: "/api/integraciones/outlook",
+    adios: (c) => `¿Desconectar ${c}? Jarvis dejará de leer tu correo y tu calendario de Outlook.`,
+    nota: "Entrarás con tu cuenta de Microsoft. Si tu empresa usa Microsoft 365, puede que su administrador tenga que aprobar la app la primera vez.",
+    extra: () => formularioDeHorario(),
   },
 };
 
@@ -91,6 +98,7 @@ function tarjetaApp(app) {
     acciones.appendChild(desconectar);
   }
   tarjeta.appendChild(acciones);
+  if (datos.extra && app.estado === "conectado") tarjeta.appendChild(datos.extra());
   return tarjeta;
 }
 
@@ -125,6 +133,43 @@ async function formularioDeReglas() {
     const r = await fetch("/api/avisos/reglas", {
       method: "PUT", headers: { "content-type": "application/json" },
       body: JSON.stringify({ reglas: form.reglas.value, whatsapp: form.whatsapp.value, activo: form.activo.checked }),
+    });
+    const datos = await r.json();
+    mensaje.textContent = r.ok ? "Guardado." : datos.error;
+    mensaje.classList.toggle("mal", !r.ok);
+  });
+  return form;
+}
+
+const NOMBRES_DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+function formularioDeHorario() {
+  const form = document.createElement("form");
+  form.className = "integracion-reglas";
+  form.innerHTML = `
+    <span class="fuente-destino">Horario laboral (para buscar huecos libres en tu calendario)</span>
+    <div class="integracion-dias">${NOMBRES_DIAS.map((d, i) =>
+      `<label class="casilla"><input type="checkbox" name="dia" value="${i + 1}"> ${d}</label>`).join("")}</div>
+    <label><span>Entrada</span><input name="inicio" type="time" required></label>
+    <label><span>Salida</span><input name="fin" type="time" required></label>
+    <div class="fuente-acciones"><button class="boton-mini" type="submit">Guardar horario</button>
+      <span class="integracion-mensaje" role="status"></span></div>`;
+  fetch("/api/integraciones/outlook/horario").then((r) => r.json()).then((h) => {
+    form.inicio.value = h.inicio;
+    form.fin.value = h.fin;
+    form.dataset.zona = h.zona;
+    for (const casilla of form.querySelectorAll('input[name="dia"]')) {
+      casilla.checked = h.dias.includes(Number(casilla.value));
+    }
+  });
+  form.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const mensaje = form.querySelector(".integracion-mensaje");
+    const dias = [...form.querySelectorAll('input[name="dia"]:checked')].map((c) => Number(c.value));
+    const r = await fetch("/api/integraciones/outlook/horario", {
+      method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ inicio: form.inicio.value, fin: form.fin.value, dias,
+                             zona: form.dataset.zona || "America/Santo_Domingo" }),
     });
     const datos = await r.json();
     mensaje.textContent = r.ok ? "Guardado." : datos.error;
