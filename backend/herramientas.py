@@ -661,7 +661,7 @@ def confirmar_envio_whatsapp(usuario: str = "") -> str:
 
 
 # --------------------------------------------------------------------------
-# Correo (Gmail de quien habla)
+# Correo (Gmail y/o Outlook de quien habla)
 # --------------------------------------------------------------------------
 
 def _gmail_disponible() -> bool:
@@ -676,8 +676,12 @@ def _zernio_disponible() -> bool:
     return zernio.configurado()
 
 
-def _avisos_disponible() -> bool:
+def _correo_disponible() -> bool:
     return _gmail_disponible() or _zernio_disponible()
+
+
+def _avisos_disponible() -> bool:
+    return _correo_disponible()
 
 
 
@@ -702,11 +706,13 @@ def ver_avisos(usuario: str = "") -> str:
 
 
 @herramienta(
-    "Busca en el Gmail de la persona. Acepta la sintaxis de Gmail: 'from:carlos', "
-    "'factura octubre', 'is:unread newer_than:2d'. Devuelve id, fecha, remitente y asunto.",
-    disponible=_gmail_disponible,
-    consulta="Lo que se busca, en sintaxis de busqueda de Gmail.",
-    cuantos="Opcional: cuantos traer (1 a 25, por defecto 10).",
+    "Busca en el correo de la persona (su Gmail y/o su Outlook, los que conecto en "
+    "Integraciones). En Gmail acepta su sintaxis ('from:carlos', 'is:unread newer_than:2d'); "
+    "en Outlook, palabras o KQL ('from:carlos', 'subject:factura'). Devuelve id, fecha, "
+    "remitente y asunto; los ids de Outlook empiezan con 'o:'.",
+    disponible=_correo_disponible,
+    consulta="Lo que se busca.",
+    cuantos="Opcional: cuantos traer por buzon (1 a 25, por defecto 10).",
 )
 def buscar_correos(consulta: str, cuantos: str = "10", usuario: str = "") -> str:
     from . import correo
@@ -715,10 +721,10 @@ def buscar_correos(consulta: str, cuantos: str = "10", usuario: str = "") -> str
 
 
 @herramienta(
-    "Lee un correo completo (con su hilo) del Gmail de la persona. El id sale de "
+    "Lee un correo completo (con su hilo), de Gmail o de Outlook. El id sale de "
     "buscar_correos o de ver_avisos. Resume al leerlo en voz alta.",
-    disponible=_gmail_disponible,
-    id="El id del correo.",
+    disponible=_correo_disponible,
+    id="El id del correo, tal cual (con 'o:' si es de Outlook).",
 )
 def leer_correo(id: str, usuario: str = "") -> str:  # noqa: A002 - es el nombre que ve el modelo
     from . import correo
@@ -727,31 +733,101 @@ def leer_correo(id: str, usuario: str = "") -> str:  # noqa: A002 - es el nombre
 
 
 @herramienta(
-    "Prepara un correo o una respuesta desde el Gmail de la persona. NO lo envia: "
-    "devuelve el borrador para leerselo. Para responder, pasa responder_a con el id "
-    "del correo (para y asunto se completan solos).",
-    disponible=_gmail_disponible,
+    "Prepara un correo o una respuesta. NO lo envia: devuelve el borrador para leerselo. "
+    "Para responder, pasa responder_a con el id del correo (para, asunto y buzon se completan "
+    "solos). Si la persona tiene Gmail y Outlook y es un correo nuevo, pregunta desde cual y "
+    "pasalo en desde.",
+    disponible=_correo_disponible,
     para="Direccion(es) de correo, separadas por coma. Vacio si se responde.",
     asunto="Asunto. Vacio si se responde.",
     cuerpo="El texto del correo, ya redactado.",
     responder_a="Opcional: id del correo al que se responde.",
+    desde="Opcional: 'gmail' u 'outlook', desde que correo se manda uno nuevo.",
 )
-def preparar_correo(para: str, asunto: str, cuerpo: str, responder_a: str = "",
+def preparar_correo(para: str, asunto: str, cuerpo: str, responder_a: str = "", desde: str = "",
                     usuario: str = "") -> str:
     from . import correo
 
-    return _correo(correo.preparar, usuario, para, asunto, cuerpo, responder_a)
+    return _correo(correo.preparar, usuario, para, asunto, cuerpo, responder_a, desde)
 
 
 @herramienta(
     "Envia el correo que preparo preparar_correo. Usala SOLO despues de que la persona "
     "escucho el borrador y dijo que si.",
-    disponible=_gmail_disponible,
+    disponible=_correo_disponible,
 )
 def confirmar_correo(usuario: str = "") -> str:
     from . import correo
 
     return _correo(correo.confirmar, usuario)
+
+
+# --------------------------------------------------------------------------
+# Calendario de Outlook (Zernio)
+# --------------------------------------------------------------------------
+
+def _cal(funcion, *args) -> str:
+    from . import calendario
+
+    try:
+        return funcion(*args)
+    except calendario.ErrorCalendario as error:
+        return str(error)
+
+
+@herramienta(
+    "Lee la agenda del calendario de Outlook de la persona: eventos con hora, invitados y "
+    "enlace de Teams. Sin fechas trae hoy y manana.",
+    disponible=_zernio_disponible,
+    desde="Opcional: primer dia, AAAA-MM-DD (por defecto hoy).",
+    hasta="Opcional: ultimo dia, AAAA-MM-DD, incluido (por defecto manana).",
+)
+def ver_agenda(desde: str = "", hasta: str = "", usuario: str = "") -> str:
+    from . import calendario
+
+    return _cal(calendario.ver_agenda, usuario, desde, hasta)
+
+
+@herramienta(
+    "Busca huecos libres en el calendario de Outlook de la persona, dentro de su horario "
+    "laboral. Sin fechas busca en los proximos 7 dias.",
+    disponible=_zernio_disponible,
+    desde="Opcional: primer dia, AAAA-MM-DD.",
+    hasta="Opcional: ultimo dia, AAAA-MM-DD, incluido.",
+    duracion="Opcional: minutos de la reunion (por defecto 30).",
+)
+def ver_disponibilidad(desde: str = "", hasta: str = "", duracion: str = "30", usuario: str = "") -> str:
+    from . import calendario
+
+    return _cal(calendario.ver_disponibilidad, usuario, desde, hasta, duracion)
+
+
+@herramienta(
+    "Prepara una reunion con Teams en el calendario de Outlook de la persona. NO la crea: "
+    "devuelve la frase para leersela. Si necesitas la fecha de hoy, usa hora_actual antes.",
+    disponible=_zernio_disponible,
+    titulo="Titulo de la reunion.",
+    inicio="Inicio en la hora de la persona: AAAA-MM-DD HH:MM.",
+    duracion="Opcional: minutos (por defecto 30).",
+    invitados="Opcional: correos de los invitados, separados por coma.",
+    notas="Opcional: texto para la descripcion del evento.",
+)
+def preparar_reunion(titulo: str, inicio: str, duracion: str = "30", invitados: str = "",
+                     notas: str = "", usuario: str = "") -> str:
+    from . import calendario
+
+    return _cal(calendario.preparar, usuario, titulo, inicio, duracion, invitados, notas)
+
+
+@herramienta(
+    "Crea la reunion que preparo preparar_reunion. Usala SOLO despues de que la persona "
+    "escucho los datos y dijo que si.",
+    disponible=_zernio_disponible,
+)
+def confirmar_reunion(usuario: str = "") -> str:
+    from . import calendario
+
+    return _cal(calendario.confirmar, usuario)
 
 
 # --------------------------------------------------------------------------

@@ -132,6 +132,10 @@ def recibir(evento: dict) -> str:
 
     tipo = evento.get("event") or ""
     cuenta_id = (evento.get("account") or {}).get("accountId")
+    if cuenta_id and integraciones.usuario_de_outlook(cuenta_id):
+        from . import outlook   # el mismo webhook de Zernio trae el correo de Outlook
+
+        return outlook.recibir(evento)
     usuario_id = integraciones.usuario_de_cuenta(cuenta_id) if cuenta_id else None
     if usuario_id is None:
         return "cuenta ajena"   # otro perfil de la cuenta compartida de Zernio

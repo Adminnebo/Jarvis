@@ -123,3 +123,72 @@ def test_la_misma_cuenta_en_otra_persona_se_mueve(monkeypatch):
     integraciones.guardar_whatsapp("u1", "acc-1", "x")
     integraciones.guardar_whatsapp("u2", "acc-1", "x")
     assert integraciones.usuario_de_cuenta("acc-1") == "u2"
+
+
+from backend import zernio as zernio_mod
+
+
+def test_existen_las_tablas_de_outlook():
+    assert {"outlook_cuentas", "horario_laboral"} <= _tablas()
+
+
+def test_outlook_guardar_buscar_y_desconectar():
+    integraciones.guardar_outlook("u1", "acc-o1", "ana@contoso.com")
+    assert integraciones.cuenta_outlook("u1") == "acc-o1"
+    assert integraciones.usuario_de_outlook("acc-o1") == "u1"
+    fila = integraciones.conexion("u1", "outlook")
+    assert fila["cuenta"] == "ana@contoso.com" and fila["estado"] == "conectado" and fila["cursor"]
+    assert integraciones.desconectar_outlook("u1") == "acc-o1"
+    assert integraciones.cuenta_outlook("u1") is None
+    assert integraciones.usuario_de_outlook("acc-o1") is None
+    assert integraciones.conexion("u1", "outlook")["estado"] == "desconectado"
+    assert integraciones.desconectar_outlook("u1") is None
+
+
+def test_outlook_marcado_desconectado_sigue_ubicable_para_el_webhook():
+    integraciones.guardar_outlook("u1", "acc-o1", "ana@contoso.com")
+    integraciones.marcar_desconectado("u1", "permiso", app="outlook")
+    assert integraciones.cuenta_outlook("u1") is None
+    assert integraciones.usuario_de_outlook("acc-o1") == "u1"
+
+
+def test_outlook_la_misma_cuenta_en_otra_persona_se_mueve():
+    integraciones.guardar_outlook("u1", "acc-o1", "a@x.com")
+    integraciones.guardar_outlook("u2", "acc-o1", "a@x.com")
+    assert integraciones.usuario_de_outlook("acc-o1") == "u2"
+    assert integraciones.cuenta_outlook("u1") is None
+    assert integraciones.conexion("u1", "outlook")["estado"] == "desconectado"
+
+
+def test_catalogo_trae_outlook(monkeypatch):
+    monkeypatch.setenv("ZERNIO_API_KEY", "z")
+    apps = {a["app"]: a for a in integraciones.catalogo("u1")}
+    assert apps["outlook"]["disponible"] and apps["outlook"]["estado"] == "sin_conectar"
+
+
+def test_perfil_zernio_es_el_mismo_que_el_de_whatsapp(monkeypatch):
+    llamadas = []
+    monkeypatch.setattr(zernio_mod, "perfil_de", lambda u, n: llamadas.append(u) or "p1")
+    assert integraciones.perfil_zernio("u1", "Ana") == "p1"
+    assert integraciones.iniciar_whatsapp("u1", "Ana") == "p1"
+    assert llamadas == ["u1"]
+
+
+def test_horario_por_defecto_y_guardado():
+    assert integraciones.horario("u1") == {"inicio": "08:00", "fin": "18:00", "dias": [1, 2, 3, 4, 5],
+                                           "zona": "America/Santo_Domingo"}
+    h = integraciones.guardar_horario("u1", "09:00", "17:30", [6, 1, 1], "America/New_York")
+    assert h == {"inicio": "09:00", "fin": "17:30", "dias": [1, 6], "zona": "America/New_York"}
+    assert integraciones.horario("u1") == h
+
+
+@pytest.mark.parametrize("inicio, fin, dias, zona", [
+    ("9", "17:00", [1], ""),
+    ("18:00", "08:00", [1], ""),
+    ("08:00", "18:00", [], ""),
+    ("08:00", "18:00", [8], ""),
+    ("08:00", "18:00", [1], "Marte/Olimpo"),
+])
+def test_horario_malo_es_valueerror(inicio, fin, dias, zona):
+    with pytest.raises(ValueError):
+        integraciones.guardar_horario("u1", inicio, fin, dias, zona)

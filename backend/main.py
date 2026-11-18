@@ -33,6 +33,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     acceso,
     archivos,
     basedatos,
+    calendario,
     cerebro,
     conectores,
     consumo,
@@ -50,6 +51,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     herramientas,
     integraciones,
     memoria,
+    outlook,
     rutas,
     supabase_sesion,
     version,
@@ -88,6 +90,8 @@ def al_arrancar():
     # Revisa los Gmail conectados y avisa de lo importante (no arranca sin la app de Google).
     avisos.arrancar()
     whatsapp_chats.arrancar()
+    outlook.arrancar()
+    calendario.arrancar()
 
     if not supabase_sesion.configurado():
         print(
@@ -1286,6 +1290,70 @@ def desconectar_whatsapp(peticion: Request):
     return {"ok": True}
 
 
+class HorarioLaboral(BaseModel):
+    inicio: str
+    fin: str
+    dias: list[int]
+    zona: str = "America/Santo_Domingo"
+
+
+@app.get("/integraciones/outlook/conectar")
+def conectar_outlook(peticion: Request):
+    if not zernio.configurado():
+        return _pagina_simple("Outlook no disponible", "Falta configurar Zernio.", 503)
+    usuario = peticion.state.usuario
+    try:
+        zernio.asegurar_webhook(whatsapp_chats.url_webhook())
+        perfil = integraciones.perfil_zernio(usuario.id, usuario.nombre)
+        retorno = f"{outlook.retorno()}?estado={gmail.crear_estado(usuario.id)}"
+        return RedirectResponse(zernio.url_conexion_microsoft(perfil, retorno), status_code=302)
+    except zernio.ErrorZernio as fallo:
+        return _pagina_simple("Outlook no se conecto", str(fallo), 502)
+
+
+@app.get("/integraciones/outlook/callback")
+def vuelta_de_outlook(estado: str = "", connected: str = "", profileId: str = "",  # noqa: N803 - asi los manda Zernio
+                      accountId: str = "", username: str = "", error: str = ""):  # noqa: N803
+    """Libre (acceso.LIBRES): quien conecta sale del estado firmado, no de la cookie."""
+    usuario_id = gmail.leer_estado(estado)
+    if usuario_id is None:
+        return _pagina_simple("Enlace vencido", "Vuelve a tocar Conectar en Integraciones.", 400)
+    if error or connected != "microsoft" or not accountId:
+        return _pagina_simple("Outlook no se conecto",
+                              "Microsoft no termino la conexion. Si tu empresa usa Microsoft 365, puede que "
+                              "su administrador tenga que aprobar la app primero. Puedes intentarlo de nuevo.", 400)
+    cuenta = integraciones.cuenta_zernio(usuario_id)
+    if not cuenta or cuenta["perfil_id"] != profileId:
+        return _pagina_simple("Outlook no se conecto", "La conexion no corresponde a tu cuenta. Intentalo de nuevo.", 400)
+    integraciones.guardar_outlook(usuario_id, accountId, username or accountId)
+    return RedirectResponse("/?integraciones=outlook", status_code=302)
+
+
+@app.delete("/api/integraciones/outlook")
+def desconectar_outlook(peticion: Request):
+    cuenta_id = integraciones.desconectar_outlook(peticion.state.usuario.id)
+    if cuenta_id:
+        try:
+            zernio.desconectar_cuenta(cuenta_id)
+        except zernio.ErrorZernio as fallo:
+            print(f"  AVISO: Zernio no borro la cuenta de Outlook {cuenta_id}: {fallo}")
+    return {"ok": True}
+
+
+@app.get("/api/integraciones/outlook/horario")
+def ver_horario(peticion: Request):
+    return integraciones.horario(peticion.state.usuario.id)
+
+
+@app.put("/api/integraciones/outlook/horario")
+def guardar_horario(peticion: Request, datos: HorarioLaboral):
+    try:
+        return integraciones.guardar_horario(peticion.state.usuario.id, datos.inicio, datos.fin,
+                                             datos.dias, datos.zona)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+
+
 @app.post("/integraciones/whatsapp/webhook")
 async def webhook_de_zernio(peticion: Request):
     """Libre (acceso.LIBRES): lo protege la firma HMAC de Zernio."""
@@ -1310,8 +1378,8 @@ async def webhook_de_zernio(peticion: Request):
         whatsapp_chats.olvidar_evento(id_evento)
         print(f"  AVISO: fallo el webhook de Zernio {evento.get('event')}: {fallo}")
         return JSONResponse(status_code=500, content={"error": "error procesando"})
-    if resultado not in ("cuenta ajena", "sin accion"):
-        print(f"  WhatsApp {evento.get('event')}: {resultado}")
+    if resultado not in ("cuenta ajena", "sin accion", "por revisar"):
+        print(f"  Zernio {evento.get('event')}: {resultado}")
     return {"ok": True}
 
 

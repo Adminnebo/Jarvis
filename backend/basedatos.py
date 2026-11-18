@@ -241,6 +241,26 @@ _ESQUEMA = """
         recibido TEXT NOT NULL,
         PRIMARY KEY (usuario_id, mensaje_id)
     );
+
+    -- Outlook por Zernio (ver outlook.py): la cuenta de Microsoft de cada
+    -- persona, en el mismo perfil de Zernio que su WhatsApp. El accountId va en
+    -- claro: sin la clave de Zernio no sirve, y hace falta para saber de quien
+    -- es un webhook.
+    CREATE TABLE IF NOT EXISTS outlook_cuentas (
+        usuario_id TEXT PRIMARY KEY,
+        cuenta_id TEXT NOT NULL UNIQUE,
+        actualizado TEXT NOT NULL
+    );
+
+    -- Horario laboral para los huecos libres (ver calendario.py). Sin fila =
+    -- lunes a viernes de 8 a 6 en Santo Domingo. dias: 1 = lunes ... 7 = domingo.
+    CREATE TABLE IF NOT EXISTS horario_laboral (
+        usuario_id TEXT PRIMARY KEY,
+        inicio TEXT NOT NULL,
+        fin TEXT NOT NULL,
+        dias TEXT NOT NULL,
+        zona TEXT NOT NULL
+    );
 """
 
 

@@ -249,3 +249,12 @@ def test_clasificar_anota_con_la_etiqueta(monkeypatch):
     monkeypatch.setattr(cerebro, "anotar_consumo", lambda m, u, us, etiqueta: etiquetas.append(etiqueta))
     avisos.clasificar("x", CORREO, None, etiqueta="avisos-whatsapp")
     assert etiquetas == ["avisos-whatsapp"]
+
+
+def test_existe_y_texto_de_reunion():
+    assert not avisos.existe("u1", "outlook", "reunion:e1@x")
+    avisos.crear("u1", "reunion:e1@x", None, "Revision", "https://teams/x", "15:00 · Revision. Pedro pidio precio",
+                 con_whatsapp=False, tipo="reunion", app="outlook")
+    assert avisos.existe("u1", "outlook", "reunion:e1@x")
+    (aviso,) = avisos.listar("u1")
+    assert avisos._texto_whatsapp(aviso) == "📅 15:00 · Revision. Pedro pidio precio\nTeams: https://teams/x"

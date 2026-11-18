@@ -434,6 +434,8 @@ LIBRES = (
     "/integraciones/gmail/callback",
     # Vuelve de Zernio/Meta (state firmado) y el webhook de Zernio (firma HMAC). Ver whatsapp_chats.py.
     "/integraciones/whatsapp/callback", "/integraciones/whatsapp/webhook",
+    # Vuelve de Zernio/Microsoft (state firmado). Ver outlook.py.
+    "/integraciones/outlook/callback",
     # Entra con su propia clave, no con una sesion: la revisa la ruta (costos.py).
     "/api/costos/resumen",
     # El panel de Reactivacion de JH, con su propia clave (puente_reactivacion.py).
