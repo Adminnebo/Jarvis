@@ -171,3 +171,20 @@ def test_enviar_respuesta_va_en_el_hilo(google):
     crudo = base64.urlsafe_b64decode(cuerpo["raw"] + "==").decode()
     assert "In-Reply-To: <abc@jh.com>" in crudo and "To: carlos@jh.com" in crudo
     assert pedidos[-1].headers["authorization"] == "Bearer t"
+
+
+CALENDARIO = "https://www.googleapis.com/auth/calendar.events"
+
+
+def test_la_url_pide_tambien_el_calendario(google):
+    q = parse_qs(urlparse(gmail.url_de_autorizacion("org:ana")).query)
+    assert CALENDARIO in q["scope"][0]
+
+
+def test_el_calendario_es_opcional_al_canjear(google):
+    respuestas, _ = google
+    respuestas[("POST", "/token")] = (200, {"access_token": "a", "refresh_token": "r",
+                                            "expires_in": 3600, "scope": f"openid {LEER} {ENVIAR}"})
+    assert gmail.canjear_codigo("codigo")["refresh_token"] == "r"
+    assert not gmail.tiene_calendario({"scope": f"openid {LEER} {ENVIAR}"})
+    assert gmail.tiene_calendario({"scope": f"{LEER} {ENVIAR} {CALENDARIO}"})

@@ -252,6 +252,13 @@ _ESQUEMA = """
         actualizado TEXT NOT NULL
     );
 
+    -- Quien dio permiso al calendario de Google al conectar Gmail (la casilla
+    -- es opcional). Ver google_calendario.py.
+    CREATE TABLE IF NOT EXISTS google_calendario (
+        usuario_id TEXT PRIMARY KEY,
+        concedido TEXT NOT NULL
+    );
+
     -- Horario laboral para los huecos libres (ver calendario.py). Sin fila =
     -- lunes a viernes de 8 a 6 en Santo Domingo. dias: 1 = lunes ... 7 = domingo.
     CREATE TABLE IF NOT EXISTS horario_laboral (
