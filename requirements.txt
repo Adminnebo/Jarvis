@@ -15,3 +15,6 @@ psycopg[binary]>=3.2
 
 # Conexion a Microsoft SQL Server. Habla TDS directo, no necesita ODBC.
 pymssql>=2.3
+
+# Zonas horarias (America/Santo_Domingo) en la imagen slim y en Windows.
+tzdata>=2024.1

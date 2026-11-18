@@ -148,3 +148,95 @@ def test_asegurar_webhook_actualiza_el_propio(api):
     respuestas[("PUT", "/webhooks/settings")] = (200, {"webhook": {"_id": "w1"}})
     assert zernio.asegurar_webhook(url) == "w1"
     assert json.loads(pedidos[1].content)["_id"] == "w1"
+
+
+def test_conectar_outlook_pide_correo_y_calendario(api):
+    pedidos, respuestas = api
+    respuestas[("GET", "/connect/microsoft")] = (200, {"authUrl": "https://login.microsoftonline.com/x"})
+    assert zernio.url_conexion_microsoft("p1", "https://j/cb?estado=e") == "https://login.microsoftonline.com/x"
+    p = pedidos[0].url.params
+    assert p["profileId"] == "p1" and p["scopes"] == "email,calendar" and p["redirect_url"] == "https://j/cb?estado=e"
+
+
+def test_conectar_outlook_sin_enlace_es_error(api):
+    _, respuestas = api
+    respuestas[("GET", "/connect/microsoft")] = (200, {})
+    with pytest.raises(zernio.ErrorZernio):
+        zernio.url_conexion_microsoft("p1", "https://j/cb")
+
+
+def test_hilos_busca_con_kql_o_desde_el_cursor(api):
+    pedidos, respuestas = api
+    respuestas[("GET", "/email/threads")] = (200, {"data": [{"id": "t1"}]})
+    assert zernio.hilos("acc", buscar="from:carlos") == [{"id": "t1"}]
+    zernio.hilos("acc", despues="2026-11-18T10:00:00+00:00", limite=20, ascendente=True)
+    a, b = pedidos[0].url.params, pedidos[1].url.params
+    assert a["searchQueryNative"] == "from:carlos" and "after" not in a and a["accountId"] == "acc"
+    assert a["sortOrder"] == "desc"
+    assert b["after"] == "2026-11-18T10:00:00+00:00" and b["limit"] == "20" and b["sortOrder"] == "asc"
+    assert "searchQueryNative" not in b
+
+
+def test_hilo_codifica_el_id_y_pide_texto_limpio(api):
+    pedidos, respuestas = api
+    respuestas[("GET", "/email/threads/AAQk/x=")] = (200, {"data": {"id": "AAQk/x=", "messages": []}})
+    assert zernio.hilo("AAQk/x=", "acc")["id"] == "AAQk/x="
+    assert b"/email/threads/AAQk%2Fx%3D" in pedidos[0].url.raw_path
+    assert pedidos[0].url.params["clean"] == "true" and pedidos[0].url.params["accountId"] == "acc"
+
+
+def test_enviar_correo_nuevo_y_respuesta(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/email/messages")] = (201, {"data": {"id": "n1"}})
+    respuestas[("POST", "/email/messages/m9/reply")] = (201, {"data": {"id": "n2"}})
+    assert zernio.enviar_correo("acc", ["c@jh.com"], "Hola", "Texto", "clave-1") == "n1"
+    assert zernio.enviar_correo("acc", ["c@jh.com"], "Re: Hola", "Va", "clave-2", responder_a="m9") == "n2"
+    nuevo, respuesta = json.loads(pedidos[0].content), json.loads(pedidos[1].content)
+    assert nuevo == {"accountId": "acc", "to": [{"email": "c@jh.com"}], "subject": "Hola", "text": "Texto"}
+    assert respuesta["subject"] == "Re: Hola" and respuesta["to"] == [{"email": "c@jh.com"}]
+    assert pedidos[0].headers["idempotency-key"] == "clave-1"
+
+
+def test_eventos_sigue_el_cursor_y_no_repite(api, monkeypatch):
+    paginas = [
+        {"data": [{"id": "e2", "start": "2026-11-18T15:00:00-04:00"}, {"id": "e1", "start": "2026-11-18T09:00:00-04:00"}],
+         "pagination": {"hasMore": True, "nextCursor": "c2"}},
+        {"data": [{"id": "e1", "start": "2026-11-18T09:00:00-04:00"}], "pagination": {"hasMore": False, "nextCursor": None}},
+    ]
+    pedidos = []
+
+    def manejar(pedido):
+        pedidos.append(pedido)
+        return httpx.Response(200, json=paginas[len(pedidos) - 1])
+
+    monkeypatch.setattr(zernio, "_http", lambda: httpx.Client(transport=httpx.MockTransport(manejar)))
+    eventos = zernio.eventos("acc", "2026-11-18T00:00:00-04:00", "2026-11-19T00:00:00-04:00", "America/Santo_Domingo")
+    assert [e["id"] for e in eventos] == ["e1", "e2"]
+    assert pedidos[0].url.params["timezone"] == "America/Santo_Domingo"
+    assert pedidos[1].url.params["cursor"] == "c2"
+
+
+def test_huecos_manda_el_horario_con_domingo_cero(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/calendar/availability")] = (200, {"data": {"timeSlots": [{"from": "a", "to": "b"}]}})
+    horario = {"inicio": "08:00", "fin": "18:00", "dias": [1, 2, 7], "zona": "America/Santo_Domingo"}
+    assert zernio.huecos("acc", "2026-11-18T08:00:00-04:00", "2026-11-25T00:00:00-04:00", 30, horario) == [
+        {"from": "a", "to": "b"}]
+    cuerpo = json.loads(pedidos[0].content)
+    (participante,) = cuerpo["participants"]
+    assert participante["accountId"] == "acc"
+    assert participante["openHours"] == [{"days": [0, 1, 2], "timezone": "America/Santo_Domingo",
+                                          "start": "08:00", "end": "18:00"}]
+    assert cuerpo["durationMinutes"] == 30
+
+
+def test_crear_evento_con_teams(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/calendar/events")] = (201, {"data": {"id": "ev1", "conferencing": {"url": "https://teams/x"}}})
+    evento = zernio.crear_evento("acc", "Revision", "2026-11-20T15:00:00-04:00", "2026-11-20T15:30:00-04:00",
+                                 "America/Santo_Domingo", ["p@x.com"], "Traer <contrato>")
+    assert evento["conferencing"]["url"] == "https://teams/x"
+    cuerpo = json.loads(pedidos[0].content)
+    assert cuerpo["conferencing"] == "teams" and cuerpo["participants"] == [{"email": "p@x.com"}]
+    assert cuerpo["timezone"] == "America/Santo_Domingo" and cuerpo["title"] == "Revision"
+    assert cuerpo["description"] == "Traer &lt;contrato&gt;"

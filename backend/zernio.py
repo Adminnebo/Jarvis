@@ -1,16 +1,18 @@
-"""Cliente de la API de Zernio para el WhatsApp de cada persona (coexistencia).
+"""Cliente de la API de Zernio: el WhatsApp (coexistencia) y el Outlook de cada persona.
 
 La cuenta de Zernio es de Nebo y la comparten otros paneles (JDL, Supletodo):
 este modulo NUNCA adopta un perfil por su nombre ni toca webhooks ajenos. El
 perfil de cada persona se reconoce por externalId = "jarvis:<usuario_id>" y el
 webhook por su nombre "Jarvis <host>". Solo habla con Zernio: no sabe de
-avisos ni de la base. Ver docs/superpowers/specs/2026-11-09-integraciones-whatsapp-design.md.
+avisos ni de la base. Ver docs/superpowers/specs/2026-11-09-integraciones-whatsapp-design.md
+y docs/superpowers/specs/2026-11-18-integraciones-outlook-calendario-design.md.
 """
 
 import hashlib
 import hmac
+import html
 import os
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -179,3 +181,87 @@ def asegurar_webhook(url: str) -> str:
         _llamar("PUT", "/webhooks/settings", cuerpo={"_id": actual["_id"], **cuerpo})
         return actual["_id"]
     return str((_llamar("POST", "/webhooks/settings", cuerpo=cuerpo).get("webhook") or {}).get("_id") or "")
+
+
+# --------------------------------------------------------------------------
+# Outlook (Microsoft): correo y calendario. Los ids van en la ruta: se
+# codifican porque los de Microsoft traen "/", "+" y "=".
+# --------------------------------------------------------------------------
+
+def _id(valor: str) -> str:
+    return quote(str(valor), safe="")
+
+
+def url_conexion_microsoft(perfil_id: str, retorno: str) -> str:
+    datos = _llamar("GET", "/connect/microsoft", params={
+        "profileId": perfil_id, "scopes": "email,calendar", "redirect_url": retorno})
+    if not datos.get("authUrl"):
+        raise ErrorZernio("Zernio no devolvio la direccion para conectar.")
+    return datos["authUrl"]
+
+
+def hilos(cuenta_id: str, *, buscar: str = "", despues: str | None = None, limite: int = 10,
+          ascendente: bool = False) -> list[dict]:
+    """Hilos de la bandeja de entrada. `buscar` va como KQL (Microsoft no lo deja
+    combinar con otros filtros); `despues` trae los que tienen correo nuevo desde ahi."""
+    params = {"accountId": cuenta_id, "limit": str(limite), "sortOrder": "asc" if ascendente else "desc"}
+    if buscar.strip():
+        params["searchQueryNative"] = buscar.strip()[:500]
+    elif despues:
+        params["after"] = despues
+    return list(_llamar("GET", "/email/threads", params=params).get("data") or [])
+
+
+def hilo(hilo_id: str, cuenta_id: str) -> dict:
+    """El hilo con sus mensajes, del mas viejo al mas nuevo (con `clean.text`)."""
+    datos = _llamar("GET", f"/email/threads/{_id(hilo_id)}", params={"accountId": cuenta_id, "clean": "true"})
+    return datos.get("data") or {}
+
+
+def enviar_correo(cuenta_id: str, para: list[str], asunto: str, texto: str, clave: str,
+                  responder_a: str | None = None) -> str:
+    """Correo nuevo, o respuesta al mensaje `responder_a`. `clave` evita mandarlo dos veces."""
+    cuerpo = {"accountId": cuenta_id, "to": [{"email": d} for d in para], "subject": asunto, "text": texto}
+    ruta = f"/email/messages/{_id(responder_a)}/reply" if responder_a else "/email/messages"
+    datos = _llamar("POST", ruta, cuerpo=cuerpo, cabeceras={"Idempotency-Key": clave})
+    return str((datos.get("data") or {}).get("id") or "")
+
+
+def eventos(cuenta_id: str, desde: str, hasta: str, zona: str, maximo: int = 200) -> list[dict]:
+    """Eventos del calendario principal entre `desde` y `hasta` (ISO), ordenados por inicio.
+    Zernio entrega por paginas y un evento en el borde puede venir dos veces."""
+    vistos, salida, cursor = set(), [], None
+    for _ in range(5):
+        datos = _llamar("GET", "/calendar/events", params={
+            "accountId": cuenta_id, "from": desde, "to": hasta, "timezone": zona,
+            "limit": "100", "cursor": cursor})
+        for evento in datos.get("data") or []:
+            if evento.get("id") not in vistos:
+                vistos.add(evento.get("id"))
+                salida.append(evento)
+        cursor = (datos.get("pagination") or {}).get("nextCursor")
+        if not cursor or len(salida) >= maximo:
+            break
+    return sorted(salida, key=lambda e: e.get("start") or "")[:maximo]
+
+
+def huecos(cuenta_id: str, desde: str, hasta: str, minutos: int, horario: dict) -> list[dict]:
+    """Huecos libres de `minutos` dentro del horario laboral. Para Zernio 0 = domingo;
+    en Jarvis los dias van de 1 (lunes) a 7 (domingo)."""
+    dias = sorted({int(d) % 7 for d in horario["dias"]})
+    cuerpo = {
+        "participants": [{"accountId": cuenta_id, "openHours": [{
+            "days": dias, "timezone": horario["zona"], "start": horario["inicio"], "end": horario["fin"]}]}],
+        "from": desde, "to": hasta, "durationMinutes": minutos, "intervalMinutes": 30,
+    }
+    return list((_llamar("POST", "/calendar/availability", cuerpo=cuerpo).get("data") or {}).get("timeSlots") or [])
+
+
+def crear_evento(cuenta_id: str, titulo: str, inicio: str, fin: str, zona: str,
+                 invitados: list[str], notas: str = "") -> dict:
+    """Crea la reunion con Teams. Devuelve el evento (con `conferencing.url` si hubo Teams)."""
+    cuerpo = {"accountId": cuenta_id, "title": titulo, "start": inicio, "end": fin, "timezone": zona,
+              "conferencing": "teams", "participants": [{"email": d} for d in invitados]}
+    if notas:
+        cuerpo["description"] = html.escape(notas).replace("\n", "<br>")
+    return _llamar("POST", "/calendar/events", cuerpo=cuerpo).get("data") or {}
