@@ -42,22 +42,31 @@ engancha el bot de grabación.
   no afecta porque el aviso lo da Jarvis.
 - Si el tenant no tiene Teams, la reunión se crea sin enlace y Jarvis lo dice.
 
-## A verificar antes de construir (paso 0 del plan)
+## API de Zernio que se usa (sacada de https://zernio.com/openapi.json, 2026-11-18)
 
-Con una cuenta de prueba conectada al perfil "Nebo" de Zernio:
+| Para qué | Llamada |
+|---|---|
+| Conectar | `GET /v1/connect/microsoft?profileId&scopes=email,calendar&redirect_url` → `authUrl`; vuelve con `connected=microsoft`, `profileId`, `accountId`, `username` |
+| Buscar / listar hilos | `GET /v1/email/threads?accountId&searchQueryNative&after&limit&sortOrder=desc` → `data[]` (`id`, `subject`, `snippet`, `participants`, `latestMessageReceivedAt`) |
+| Leer hilo | `GET /v1/email/threads/{id}?accountId&clean=true` → `data.messages[]` (`id`, `from`, `to`, `subject`, `text`, `html`, `date`, `clean.text`) |
+| Enviar | `POST /v1/email/messages` `{accountId, to:[{email}], subject, text}` + `Idempotency-Key` |
+| Responder | `POST /v1/email/messages/{id}/reply` `{accountId, to, subject, text}` + `Idempotency-Key` |
+| Agenda | `GET /v1/calendar/events?accountId&from&to&timezone&limit` → `data[]`, `pagination.nextCursor` |
+| Huecos libres | `POST /v1/calendar/availability` `{participants:[{accountId, openHours:[{days (0=domingo), timezone, start, end}]}], from, to, durationMinutes}` → `data.timeSlots[]` |
+| Crear reunión | `POST /v1/calendar/events` `{accountId, title, start, end, timezone, participants:[{email}], description, conferencing:"teams"}` → `data` con `conferencing.url` |
+| Correo nuevo | webhook `message.received` con `account.platform = "microsoft"` y `account.accountId` |
 
-1. Rutas exactas de email: listar/buscar hilos, leer mensaje, enviar, responder.
-   La doc solo nombra `/email/list-email-threads`; envío ya probado en
-   correo-servicio (`POST /v1/email/messages`).
-2. Si leer correo exige el add-on de Inbox (ya contratado para WhatsApp; confirmar).
-3. Forma del webhook `message.received` para correo: `platform`, id de cuenta,
-   id de hilo/mensaje.
-4. Rutas de calendario: `GET /v1/calendar/events` y `POST /v1/calendar/events`
-   confirmadas en la doc; buscar si hay endpoint de free-busy/disponibilidad y
-   los nombres de campos del cuerpo de creación (`participants`, `timezone`,
-   `start`/`end`, `conferencing`).
+Los campos del mensaje dentro del webhook de correo no están documentados, así
+que el webhook **no se lee**: solo marca a la persona "por revisar" y el hilo de
+Outlook lista los hilos nuevos desde su cursor.
 
-Lo que salga de aquí se anota en este spec antes de seguir.
+## A verificar con la primera cuenta real
+
+Jorge todavía no tiene un Outlook de prueba; todo se construye contra la API
+documentada y Zernio simulado en pytest. Con la primera cuenta real (perfil
+"Nebo" de Zernio) se comprueba: que leer correo no pida otro add-on, que el
+webhook llegue con `account.platform = "microsoft"`, y que la reunión vuelva con
+`conferencing.url`. Hasta entonces la rama no se fusiona a `main`.
 
 ## Arquitectura
 
@@ -97,11 +106,15 @@ contenedor jarvis (EC2 54.174.88.26)
    redirección a `GET /connect/microsoft` con `profileId`,
    `scopes=email,calendar` y `redirect_url=/integraciones/outlook/callback?estado=…`
    (mismo estado firmado que WhatsApp).
-3. **Callback**: valida el estado, guarda `integraciones(app='outlook')` con
-   `cuenta` = dirección de correo y `token` = `accountId` de Zernio cifrado con
-   `secretos.cifrar`. Sin cambios de esquema en `integraciones`.
-4. **Desconectar**: `zernio.desconectar_cuenta(accountId)` y fila en
-   `desconectado`. El perfil se conserva (lo comparte WhatsApp).
+3. **Callback**: valida el estado y que `profileId` sea el de la persona;
+   guarda `integraciones(app='outlook')` con `cuenta` = dirección de correo,
+   `token` NULL y `cursor` = ahora (no avisa de correo viejo), y el `accountId`
+   en una tabla nueva `outlook_cuentas(usuario_id PK, cuenta_id UNIQUE,
+   actualizado)`. El `accountId` no es secreto (sin la clave de Zernio no sirve)
+   y va en claro para poder buscar de quién es un webhook.
+4. **Desconectar**: `zernio.desconectar_cuenta(accountId)`, se borra la fila de
+   `outlook_cuentas` y `integraciones` queda en `desconectado`. El perfil se
+   conserva (lo comparte WhatsApp).
 5. **Pérdida de permiso**: `412 account_scope_missing`, 401/404 de la cuenta o
    evento `account.disconnected` de una cuenta de Outlook →
    `marcar_desconectado(usuario, motivo, app='outlook')` y aviso en la campanita
@@ -109,24 +122,27 @@ contenedor jarvis (EC2 54.174.88.26)
 
 ## Correo
 
-- **Ids con proveedor**: `correo.py` antepone `g:` (Gmail) u `o:` (Outlook) a los
-  ids que devuelve. Un id sin prefijo se toma como Gmail (compatibilidad con
+- **Ids con proveedor**: los de Outlook llevan `o:` delante y son siempre ids de
+  **hilo**; los de Gmail quedan como hoy, sin prefijo (así siguen valiendo los
   avisos ya creados).
-- **buscar**: consulta todos los proveedores conectados; une por fecha
-  (más reciente primero), respeta `cuantos` en total y marca cada línea con
-  `[Gmail]` / `[Outlook]`. La consulta va como texto libre; los operadores de
-  Gmail (`from:`, `subject:`) solo aplican a Gmail.
-- **leer / responder**: por el prefijo del id.
+- **buscar**: consulta cada buzón conectado (`cuantos` por buzón) y, si hay dos,
+  los muestra en dos bloques, `[Gmail]` y `[Outlook]`. En Outlook la consulta va
+  como `searchQueryNative` (KQL: palabras, `from:carlos`, `subject:factura`).
+- **leer**: por el prefijo. **Responder** en Outlook contesta al último mensaje
+  del hilo que no mandó la persona.
 - **correo nuevo** (sin `responder_a`): con un solo proveedor, sale de ese; con
   dos, `preparar_correo` devuelve "¿Lo mando desde Gmail (x@…) o desde Outlook
   (y@…)?" y acepta un parámetro nuevo opcional `desde` (`gmail`/`outlook`).
 - El borrador y su vigencia (10 min) no cambian; el `Borrador` guarda el proveedor.
-- **Avisos**: `outlook.recibir(evento)` toma `message.received` de correo,
-  descarta lo enviado por la persona, clasifica con `avisos.clasificar(reglas,
-  correo, usuario, etiqueta="avisos-outlook")` y crea el aviso con
-  `app='outlook'`. `zernio_eventos` ya evita procesar dos veces.
-- **Barrido de respaldo** cada 30 min por persona conectada: hilos recibidos
-  desde el último visto (cursor en `integraciones.cursor`), mismo filtro.
+- **Avisos**: `outlook.recibir(evento)` solo anota a la persona como "por
+  revisar". El hilo `avisos-outlook` (cada 30 s) revisa a quien esté anotado y,
+  de respaldo, a todos cada 30 min: lista los hilos con
+  `after = cursor`, salta los que no tienen mensajes nuevos de otros, clasifica
+  el último mensaje con `avisos.clasificar(..., etiqueta="avisos-outlook")` y
+  crea el aviso con `app='outlook'`, `ref = ol:<hilo>:<latestMessageReceivedAt>`
+  (un mensaje nuevo en el mismo hilo es otro aviso) y `hilo = o:<hilo>`. Mismo
+  manejo de reintentos que Gmail (`correos_vistos`, 3 intentos). El cursor solo
+  avanza si todo salió bien.
 
 ## Calendario
 
@@ -135,8 +151,8 @@ Herramientas (disponibles si la persona tiene Outlook conectado):
 - `ver_agenda(desde, hasta)`: por defecto hoy y mañana. Hora local, título,
   invitados, enlace de Teams.
 - `ver_disponibilidad(desde, hasta, duracion)`: huecos libres dentro del horario
-  laboral. Usa el endpoint de disponibilidad de Zernio si existe; si no, resta
-  los eventos (no los rechazados ni los marcados "libre") al horario.
+  laboral con `POST /calendar/availability` (Zernio ya descuenta lo ocupado).
+  Devuelve hasta 8 huecos.
 - `preparar_reunion(titulo, inicio, duracion, invitados, notas)`: valida, guarda
   borrador (10 min) y devuelve la frase para leer: "Reunión con Pedro el jueves
   20 de noviembre de 3:00 a 3:30, con Teams. ¿La creo?". No crea nada.
@@ -162,24 +178,14 @@ Sin fila = valores por defecto. Se edita en la tarjeta de Outlook.
 
 - Hilo `calendario.arrancar()` (se lanza junto a los de avisos y WhatsApp), cada
   5 min. Por cada persona con Outlook conectado: eventos de los próximos 30 min.
-- Avisa cuando faltan ≤ `JARVIS_AVISO_REUNION_MIN` (15) minutos y no hay fila en:
-
-```sql
-CREATE TABLE IF NOT EXISTS reuniones_avisadas (
-    usuario_id TEXT NOT NULL,
-    evento_id TEXT NOT NULL,
-    inicio TEXT NOT NULL,
-    avisado TEXT NOT NULL,
-    PRIMARY KEY (usuario_id, evento_id, inicio)
-);
-```
-
-  Si la reunión se mueve, cambia `inicio` y vuelve a avisar. Filas de más de
-  7 días se podan.
+- Avisa cuando faltan ≤ `JARVIS_AVISO_REUNION_MIN` (15) minutos y todavía no
+  existe el aviso `ref = reunion:<evento_id>@<inicio>` (la restricción UNIQUE de
+  `avisos` ya impide duplicarlo; se consulta antes para no pagar la IA de más).
+  Si la reunión se mueve, cambia `inicio` y vuelve a avisar.
 - Se omiten eventos de todo el día, rechazados y cancelados.
-- Aviso `tipo='reunion'`, `app='outlook'`, `ref=evento_id@inicio`: hora, título,
-  enlace de Teams y, si hay invitados que no son la persona, un resumen de 2-3
-  líneas. Para cada invitado (máx. 3) se busca lo último en correo
+- Aviso `tipo='reunion'`, `app='outlook'`: `remitente` = título, `asunto` =
+  enlace de Teams, `resumen` = hora, título y, si hay invitados que no son la
+  persona, un resumen de 2-3 líneas. En WhatsApp sale como "📅 …" con el enlace. Para cada invitado (máx. 3) se busca lo último en correo
   (`correo.buscar` por su dirección) y en WhatsApp (`whatsapp_chats.buscar` por
   nombre); la IA de avisos (`avisos.modelo()`) resume. Si no hay nada: "Sin
   historial con <invitado>".
