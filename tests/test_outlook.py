@@ -86,3 +86,90 @@ def test_limite_de_uso_no_desconecta(conectado):
     with pytest.raises(outlook.ErrorOutlook, match="momento"):
         outlook.buscar("u1", "x", 10)
     assert integraciones.cuenta_outlook("u1") == "acc-o1"
+
+
+from backend import dispositivos
+
+
+def _hilo_lista(id_, recibido):
+    return {"id": id_, "subject": f"Asunto {id_}", "latestMessageReceivedAt": recibido}
+
+
+@pytest.fixture
+def buzon(conectado, monkeypatch):
+    integraciones.guardar_reglas("u1", "clientes que piden precio", "8095551234", True)
+    integraciones.mover_cursor("u1", "2026-11-18T09:00:00+00:00", app="outlook")
+    monkeypatch.setattr(dispositivos, "usuario_para", lambda u: object() if u == "u1" else None)
+    conectado["veredicto"], conectado["clasificados"] = True, []
+
+    def clasificar(reglas, correo, usuario, etiqueta="avisos-gmail"):
+        conectado["clasificados"].append((correo["asunto"], etiqueta))
+        if isinstance(conectado["veredicto"], Exception):
+            raise conectado["veredicto"]
+        return {"importante": conectado["veredicto"], "resumen": "resumen de " + correo["asunto"]}
+
+    monkeypatch.setattr(avisos, "clasificar", clasificar)
+    outlook._por_revisar.clear()
+    outlook._ultimo_barrido.clear()
+    return conectado
+
+
+def test_webhook_de_outlook_solo_anota(buzon):
+    ev = {"event": "message.received", "account": {"accountId": "acc-o1", "platform": "microsoft"}}
+    assert outlook.recibir(ev) == "por revisar" and "u1" in outlook._por_revisar
+    assert outlook.recibir({**ev, "account": {"accountId": "otra"}}) == "cuenta ajena"
+
+
+def test_webhook_de_desconexion(buzon):
+    ev = {"event": "account.disconnected", "account": {"accountId": "acc-o1"}}
+    assert outlook.recibir(ev) == "desconectado"
+    assert integraciones.cuenta_outlook("u1") is None
+
+
+def test_revisar_avisa_y_mueve_el_cursor(buzon):
+    buzon["hilos"] = [_hilo_lista("t1", "2026-11-18T10:00:00Z")]
+    outlook.revisar("u1")
+    (aviso,) = avisos.listar("u1")
+    assert aviso["app"] == "outlook" and aviso["hilo"] == "o:t1" and aviso["resumen"] == "resumen de Pedido"
+    assert aviso["ref"] == "ol:t1:2026-11-18T10:00:00Z" and aviso["whatsapp"] == "pendiente"
+    assert buzon["clasificados"] == [("Pedido", "avisos-outlook")]
+    assert buzon["kw"] == {"despues": "2026-11-18T09:00:00+00:00", "limite": 21, "ascendente": True}
+    assert integraciones.conexion("u1", "outlook")["cursor"] == "2026-11-18T10:00:00Z"
+
+
+def test_revisar_salta_hilos_sin_correo_nuevo_y_lo_propio(buzon):
+    buzon["hilos"] = [_hilo_lista("viejo", "2026-11-18T08:00:00Z"), _hilo_lista("t1", "2026-11-18T10:00:00Z")]
+    buzon["hilo"] = {"id": "t1", "messages": [{"id": "m2", "from": {"email": "ana@contoso.com"}, "subject": "x"}]}
+    outlook.revisar("u1")
+    assert buzon["clasificados"] == [] and avisos.listar("u1") == []
+    assert integraciones.conexion("u1", "outlook")["cursor"] == "2026-11-18T10:00:00Z"
+
+
+def test_si_la_ia_falla_no_avanza_y_a_los_tres_avisa_igual(buzon):
+    buzon["hilos"] = [_hilo_lista("t1", "2026-11-18T10:00:00Z")]
+    buzon["veredicto"] = RuntimeError("caida")
+    for _ in range(2):
+        outlook.revisar("u1")
+        assert integraciones.conexion("u1", "outlook")["cursor"] == "2026-11-18T09:00:00+00:00"
+    outlook.revisar("u1")
+    (aviso,) = avisos.listar("u1")
+    assert aviso["resumen"] == "Pedido"
+
+
+def test_sin_reglas_solo_mueve_el_cursor(buzon):
+    integraciones.guardar_reglas("u1", "", "", True)
+    buzon["hilos"] = [_hilo_lista("t1", "2026-11-18T10:00:00Z")]
+    outlook.revisar("u1")
+    assert buzon["clasificados"] == []
+    assert integraciones.conexion("u1", "outlook")["cursor"] != "2026-11-18T09:00:00+00:00"
+
+
+def test_una_vuelta_revisa_anotados_y_barre_cada_media_hora(buzon, monkeypatch):
+    revisados = []
+    monkeypatch.setattr(outlook, "revisar", revisados.append)
+    monkeypatch.setattr(avisos, "mandar_pendientes", lambda: None)
+    outlook.una_vuelta()                     # primera vez: barrido
+    outlook.una_vuelta()                     # nada anotado y barrido reciente: no revisa
+    outlook._por_revisar.add("u1")
+    outlook.una_vuelta()                     # anotado por el webhook
+    assert revisados == ["u1", "u1"]

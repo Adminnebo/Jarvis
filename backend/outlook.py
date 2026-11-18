@@ -166,3 +166,139 @@ def enviar(usuario_id: str, para: list[str], asunto: str, texto: str, clave: str
         zernio.enviar_correo(cuenta_id, para, asunto, texto, clave, responder_a)
     except zernio.ErrorZernio as error:
         raise explicar(usuario_id, error) from error
+
+
+# --------------------------------------------------------------------------
+# Avisos de correo nuevo
+# --------------------------------------------------------------------------
+
+_por_revisar: set[str] = set()
+_ultimo_barrido: dict[str, float] = {}
+_candado = threading.Lock()
+
+
+def recibir(evento: dict) -> str:
+    """Evento del webhook de Zernio de una cuenta de Outlook. No lee el mensaje
+    (su forma no esta documentada para correo): anota a la persona para revisar."""
+    cuenta_id = (evento.get("account") or {}).get("accountId")
+    usuario_id = integraciones.usuario_de_outlook(cuenta_id) if cuenta_id else None
+    if usuario_id is None:
+        return "cuenta ajena"
+    tipo = evento.get("event") or ""
+    if tipo == "account.disconnected":
+        desconectado(usuario_id, "Microsoft o Zernio cortaron la conexion.")
+        return "desconectado"
+    if tipo != "message.received":
+        return "sin accion"
+    with _candado:
+        _por_revisar.add(usuario_id)
+    return "por revisar"
+
+
+def _procesar(usuario, usuario_id: str, cuenta_id: str, propia: str, h: dict, ref: str, regla: dict) -> bool:
+    """True si el hilo quedo resuelto (avisado o descartado)."""
+    try:
+        datos = zernio.hilo(h.get("id"), cuenta_id)
+    except zernio.ErrorZernio as error:
+        if error.status == 404:   # lo borraron antes de que lo miraramos
+            avisos._resolver(usuario_id, ref)
+            return True
+        explicar(usuario_id, error)
+        return False
+    recibidos = [m for m in datos.get("messages") or [] if _de_otro(m, propia)]
+    if not recibidos:
+        avisos._resolver(usuario_id, ref)
+        return True
+    m = recibidos[-1]
+    correo = {"de": _persona(m.get("from")), "asunto": m.get("subject") or h.get("subject") or "",
+              "texto": _texto(m)}
+    intentos = avisos._sumar_intento(usuario_id, ref)
+    try:
+        veredicto = avisos.clasificar(regla["reglas"], correo, usuario, etiqueta="avisos-outlook")
+    except Exception:  # noqa: BLE001 - la IA caida no debe perder el correo
+        if intentos < avisos.MAX_INTENTOS:
+            return False
+        veredicto = {"importante": True, "resumen": correo["asunto"] or "(sin asunto)"}
+    if veredicto["importante"]:
+        avisos.crear(usuario_id, ref, f"o:{h.get('id')}", correo["de"], correo["asunto"],
+                     veredicto["resumen"] or correo["asunto"], con_whatsapp=bool(regla["whatsapp"]),
+                     app="outlook")
+    avisos._resolver(usuario_id, ref)
+    return True
+
+
+def revisar(usuario_id: str) -> None:
+    """Hilos con correo nuevo desde el cursor, del mas viejo al mas nuevo. El
+    cursor avanza hasta el ultimo resuelto: si la IA falla, se retoma desde ahi."""
+    from . import dispositivos
+
+    conexion = integraciones.conexion(usuario_id, "outlook")
+    cuenta_id = integraciones.cuenta_outlook(usuario_id)
+    if not conexion or not cuenta_id:
+        return
+    usuario = dispositivos.usuario_para(usuario_id)
+    if usuario is None:
+        return   # ya no tiene acceso a Jarvis: no se lee su correo
+    regla = integraciones.reglas(usuario_id)
+    if not regla["activo"] or not regla["reglas"].strip():
+        integraciones.mover_cursor(usuario_id, _ahora(), app="outlook")
+        return
+    desde = conexion["cursor"] or _ahora()
+    try:
+        lista = zernio.hilos(cuenta_id, despues=desde, limite=MAX_POR_VUELTA + 1, ascendente=True)
+    except zernio.ErrorZernio as error:
+        explicar(usuario_id, error)
+        return   # 429/5xx: se intenta en la proxima vuelta
+    propia = (conexion["cuenta"] or "").lower()
+    nuevos = sorted((h for h in lista if _cuando(h.get("latestMessageReceivedAt")) > _cuando(desde)),
+                    key=lambda h: _cuando(h.get("latestMessageReceivedAt")))
+    cursor = desde
+    for h in nuevos[:MAX_POR_VUELTA]:
+        recibido = h.get("latestMessageReceivedAt") or ""
+        ref = f"ol:{h.get('id')}:{recibido}"
+        if not avisos._resuelto(usuario_id, ref) and not _procesar(usuario, usuario_id, cuenta_id, propia,
+                                                                     h, ref, regla):
+            break
+        cursor = recibido
+    if cursor != desde:
+        integraciones.mover_cursor(usuario_id, cursor, app="outlook")
+
+
+def una_vuelta() -> None:
+    ahora = time.time()
+    with _candado:
+        anotados = set(_por_revisar)
+        _por_revisar.clear()
+    for conexion in integraciones.conectados("outlook"):
+        usuario_id = conexion["usuario_id"]
+        if usuario_id not in anotados and ahora - _ultimo_barrido.get(usuario_id, 0) < BARRIDO:
+            continue
+        _ultimo_barrido[usuario_id] = ahora
+        try:
+            revisar(usuario_id)
+        except Exception as error:  # noqa: BLE001 - un buzon roto no frena a los demas
+            print(f"  AVISO: fallo la revision de Outlook de {usuario_id}: {error}")
+    try:
+        avisos.mandar_pendientes()
+    except Exception as error:  # noqa: BLE001
+        print(f"  AVISO: fallo el envio de avisos de Outlook: {error}")
+
+
+def cada() -> int:
+    try:
+        return max(10, int(os.getenv("JARVIS_OUTLOOK_CADA", "30")))
+    except ValueError:
+        return 30
+
+
+def arrancar() -> None:
+    if not zernio.configurado():
+        print("  Outlook (Zernio): falta ZERNIO_API_KEY; Integraciones > Outlook apagado.")
+        return
+
+    def vigilar() -> None:
+        while True:
+            una_vuelta()
+            time.sleep(cada())
+
+    threading.Thread(target=vigilar, name="avisos-outlook", daemon=True).start()

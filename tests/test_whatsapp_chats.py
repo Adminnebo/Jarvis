@@ -301,3 +301,14 @@ def test_el_prompt_explica_whatsapp_solo_si_hay_zernio(monkeypatch):
     monkeypatch.setenv("ZERNIO_API_KEY", "z")
     texto = cerebro.instrucciones(ana)
     assert "responder_chat" in texto and "confirmar_respuesta_chat" in texto
+
+
+def test_evento_de_una_cuenta_de_outlook_va_a_outlook(conectado, monkeypatch):
+    from backend import outlook
+
+    integraciones.guardar_outlook("u1", "acc-o1", "ana@contoso.com")
+    monkeypatch.setattr(outlook, "recibir", lambda ev: "por revisar")
+    ev = {"id": "e1", "event": "message.received", "account": {"accountId": "acc-o1", "platform": "microsoft"},
+          "message": {"platform": "email"}}
+    assert whatsapp_chats.recibir(ev) == "por revisar"
+    assert pendientes() == []
