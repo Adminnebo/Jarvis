@@ -1,11 +1,14 @@
-"""Las apps que cada persona conecta a Jarvis: Gmail y WhatsApp (Zernio).
+"""Las apps que cada persona conecta a Jarvis: Gmail, WhatsApp y Outlook (Zernio).
 
-Guarda la conexion (el refresh token cifrado) y las reglas de aviso. No habla
-con Google: eso es gmail.py. Agregar otra app = otra entrada en _APPS y su
-propio modulo.
+Guarda la conexion (el refresh token cifrado de Gmail, la cuenta de Zernio de
+WhatsApp y de Outlook), las reglas de aviso y el horario laboral. No habla con
+Google ni con Microsoft: eso es gmail.py, outlook.py y calendario.py. Agregar
+otra app = otra entrada en _APPS y su propio modulo.
 """
 
+import re
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from . import basedatos, gmail, secretos, whatsapp, zernio
 
@@ -16,6 +19,10 @@ _APPS = [
     {"app": "whatsapp", "nombre": "WhatsApp",
      "descripcion": "Conecta tu WhatsApp Business y sigue usando la app en tu telefono. "
                     "Jarvis lee tus chats, responde con tu permiso y te avisa de lo importante.",
+     "configurado": zernio.configurado},
+    {"app": "outlook", "nombre": "Outlook",
+     "descripcion": "Correo y calendario de Microsoft 365 / Outlook.com. Jarvis lee y responde "
+                    "tus correos, mira tu agenda, agenda reuniones con Teams y te avisa antes de cada una.",
      "configurado": zernio.configurado},
 ]
 
@@ -150,7 +157,12 @@ def usuario_de_cuenta(cuenta_id: str) -> str | None:
 
 
 def iniciar_whatsapp(usuario_id: str, nombre: str) -> str:
-    """El perfil de Zernio de la persona (lo crea la primera vez). Lanza zernio.ErrorZernio."""
+    return perfil_zernio(usuario_id, nombre)
+
+
+def perfil_zernio(usuario_id: str, nombre: str) -> str:
+    """El perfil de Zernio de la persona (lo crea la primera vez). Lo comparten
+    WhatsApp y Outlook. Lanza zernio.ErrorZernio."""
     actual = cuenta_zernio(usuario_id)
     if actual:
         return actual["perfil_id"]
@@ -188,3 +200,104 @@ def desconectar_whatsapp(usuario_id: str) -> str | None:
         con.execute("UPDATE integraciones SET estado = 'desconectado', error = NULL "
                     "WHERE usuario_id = ? AND app = 'whatsapp'", (usuario_id,))
     return actual["cuenta_id"]
+
+
+# --------------------------------------------------------------------------
+# Outlook (Zernio): la cuenta de Microsoft de cada persona
+# --------------------------------------------------------------------------
+
+def guardar_outlook(usuario_id: str, cuenta_id: str, correo: str) -> None:
+    """Conecta la cuenta. El cursor arranca ahora: no se avisa de correo viejo."""
+    ahora = _ahora()
+    with basedatos.conexion() as con:
+        # Una cuenta que se conecta en otra persona deja de ser de la anterior.
+        for fila in con.execute("SELECT usuario_id FROM outlook_cuentas WHERE cuenta_id = ? "
+                                "AND usuario_id != ?", (cuenta_id, usuario_id)).fetchall():
+            con.execute("UPDATE integraciones SET estado = 'desconectado', error = NULL "
+                        "WHERE usuario_id = ? AND app = 'outlook'", (fila["usuario_id"],))
+        con.execute("DELETE FROM outlook_cuentas WHERE cuenta_id = ? AND usuario_id != ?",
+                    (cuenta_id, usuario_id))
+        con.execute("INSERT INTO outlook_cuentas (usuario_id, cuenta_id, actualizado) VALUES (?, ?, ?) "
+                    "ON CONFLICT (usuario_id) DO UPDATE SET cuenta_id = excluded.cuenta_id, "
+                    "actualizado = excluded.actualizado", (usuario_id, cuenta_id, ahora))
+        con.execute(
+            "INSERT INTO integraciones (usuario_id, app, cuenta, token, cursor, estado, error, conectado) "
+            "VALUES (?, 'outlook', ?, NULL, ?, 'conectado', NULL, ?) "
+            "ON CONFLICT (usuario_id, app) DO UPDATE SET cuenta = excluded.cuenta, "
+            "cursor = excluded.cursor, estado = 'conectado', error = NULL, conectado = excluded.conectado",
+            (usuario_id, correo, ahora, ahora))
+
+
+def cuenta_outlook(usuario_id: str) -> str | None:
+    """El accountId de Zernio, solo si la conexion esta en pie."""
+    with basedatos.conexion() as con:
+        fila = con.execute(
+            "SELECT o.cuenta_id FROM outlook_cuentas o JOIN integraciones i "
+            "ON i.usuario_id = o.usuario_id AND i.app = 'outlook' "
+            "WHERE o.usuario_id = ? AND i.estado = 'conectado'", (usuario_id,)).fetchone()
+    return fila["cuenta_id"] if fila else None
+
+
+def usuario_de_outlook(cuenta_id: str) -> str | None:
+    """De quien es una cuenta (aunque este desconectada: el webhook la necesita)."""
+    with basedatos.conexion() as con:
+        fila = con.execute("SELECT usuario_id FROM outlook_cuentas WHERE cuenta_id = ?",
+                           (cuenta_id,)).fetchone()
+    return fila["usuario_id"] if fila else None
+
+
+def desconectar_outlook(usuario_id: str) -> str | None:
+    """Suelta la cuenta y devuelve su id (para borrarla en Zernio). El perfil se conserva."""
+    with basedatos.conexion() as con:
+        fila = con.execute("SELECT cuenta_id FROM outlook_cuentas WHERE usuario_id = ?",
+                           (usuario_id,)).fetchone()
+        if not fila:
+            return None
+        con.execute("DELETE FROM outlook_cuentas WHERE usuario_id = ?", (usuario_id,))
+        con.execute("UPDATE integraciones SET estado = 'desconectado', error = NULL "
+                    "WHERE usuario_id = ? AND app = 'outlook'", (usuario_id,))
+    return fila["cuenta_id"]
+
+
+# --------------------------------------------------------------------------
+# Horario laboral (para los huecos libres del calendario)
+# --------------------------------------------------------------------------
+
+HORARIO_DEFECTO = {"inicio": "08:00", "fin": "18:00", "dias": [1, 2, 3, 4, 5],
+                   "zona": "America/Santo_Domingo"}
+_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def horario(usuario_id: str) -> dict:
+    with basedatos.conexion() as con:
+        fila = con.execute("SELECT * FROM horario_laboral WHERE usuario_id = ?", (usuario_id,)).fetchone()
+    if not fila:
+        return {**HORARIO_DEFECTO, "dias": list(HORARIO_DEFECTO["dias"])}
+    return {"inicio": fila["inicio"], "fin": fila["fin"],
+            "dias": [int(d) for d in fila["dias"].split(",") if d], "zona": fila["zona"]}
+
+
+def guardar_horario(usuario_id: str, inicio: str, fin: str, dias, zona: str) -> dict:
+    """Lanza ValueError con un mensaje para la persona si algo no cuadra."""
+    inicio, fin = (inicio or "").strip(), (fin or "").strip()
+    zona = (zona or "").strip() or HORARIO_DEFECTO["zona"]
+    if not _HORA.match(inicio) or not _HORA.match(fin):
+        raise ValueError("Las horas van como 08:00.")
+    if inicio >= fin:
+        raise ValueError("La hora de salida tiene que ser despues de la de entrada.")
+    try:
+        lista = sorted({int(d) for d in dias})
+    except (TypeError, ValueError):
+        raise ValueError("Los dias van del 1 (lunes) al 7 (domingo).") from None
+    if not lista or any(d < 1 or d > 7 for d in lista):
+        raise ValueError("Marca al menos un dia, del 1 (lunes) al 7 (domingo).")
+    try:
+        ZoneInfo(zona)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValueError(f"No conozco la zona horaria {zona}.") from None
+    with basedatos.conexion() as con:
+        con.execute("INSERT INTO horario_laboral (usuario_id, inicio, fin, dias, zona) VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT (usuario_id) DO UPDATE SET inicio = excluded.inicio, fin = excluded.fin, "
+                    "dias = excluded.dias, zona = excluded.zona",
+                    (usuario_id, inicio, fin, ",".join(str(d) for d in lista), zona))
+    return horario(usuario_id)
