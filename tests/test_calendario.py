@@ -198,3 +198,15 @@ def test_resumen_invitados_junta_correo_y_chats(monkeypatch):
     assert calendario._resumen_invitados(object(), "u1", [{"email": "p@x.com", "name": "Pedro"}]) == "listo"
     assert "INVITADO: Pedro" in vistos[0] and "correos con p@x.com" in vistos[0] and "chats con Pedro" in vistos[0]
     assert calendario._resumen_invitados(object(), "u1", []) == ""
+
+
+def test_herramientas_de_calendario(conectado):
+    import json
+
+    from backend import herramientas
+
+    nombres = {e["name"] for e in herramientas.esquemas()}
+    assert {"ver_agenda", "ver_disponibilidad", "preparar_reunion", "confirmar_reunion"} <= nombres
+    assert "No tienes nada" in herramientas.ejecutar("ver_agenda", json.dumps({"desde": "2026-11-20"}), "u1")
+    assert "Integraciones" in herramientas.ejecutar("ver_agenda", "{}", "otro")
+    assert "pendiente" in herramientas.ejecutar("confirmar_reunion", "{}", "u1")

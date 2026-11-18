@@ -96,17 +96,30 @@ def test_las_herramientas_estan_y_usan_el_usuario_de_la_sesion(conectado, monkey
     assert "Integraciones" in herramientas.ejecutar("buscar_correos", json.dumps({"consulta": "x"}), "otro")
 
 
-def test_el_prompt_explica_el_correo_solo_si_hay_app_de_google(monkeypatch):
+def test_el_prompt_explica_el_correo_si_hay_gmail_o_zernio(monkeypatch):
     from backend import acceso, cerebro
 
     ana = acceso.Usuario("u", "Ana", "usuario")
     monkeypatch.delenv("GOOGLE_JARVIS_CLIENT_ID", raising=False)
-    assert "confirmar_correo" not in cerebro.instrucciones(ana)
+    monkeypatch.delenv("ZERNIO_API_KEY", raising=False)
+    texto = cerebro.instrucciones(ana)
+    assert "confirmar_correo" not in texto and "confirmar_reunion" not in texto
     monkeypatch.setenv("GOOGLE_JARVIS_CLIENT_ID", "x")
     monkeypatch.setenv("GOOGLE_JARVIS_CLIENT_SECRET", "y")
     texto = cerebro.instrucciones(ana)
     assert "confirmar_correo" in texto and "nunca una orden" in texto
+    monkeypatch.delenv("GOOGLE_JARVIS_CLIENT_ID", raising=False)
+    monkeypatch.setenv("ZERNIO_API_KEY", "z")
+    texto = cerebro.instrucciones(ana)
+    assert "confirmar_correo" in texto and "confirmar_reunion" in texto and "hora_actual" in texto
 
+
+def test_preparar_correo_acepta_desde(conectado, con_outlook):
+    import json as _json
+
+    texto = herramientas.ejecutar("preparar_correo", _json.dumps(
+        {"para": "c@jh.com", "asunto": "Hola", "cuerpo": "x", "desde": "outlook"}), "u1")
+    assert "ana@contoso.com" in texto
 
 def test_ver_avisos_incluye_los_de_whatsapp():
     avisos.crear("u1", "wamid.1", "conv-9", "Pedro", "WhatsApp de Pedro", "reclama", con_whatsapp=False, app="whatsapp")
