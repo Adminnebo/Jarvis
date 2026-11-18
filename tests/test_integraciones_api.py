@@ -170,3 +170,69 @@ def test_reglas_por_la_ruta_nueva(admin):
     r = admin.put("/api/avisos/reglas", json={"reglas": "pagos", "whatsapp": "", "activo": True})
     assert r.json()["reglas"] == "pagos"
     assert admin.get("/api/avisos/reglas").json()["reglas"] == "pagos"
+
+
+from backend import outlook
+
+
+def test_conectar_outlook_lleva_a_microsoft(con_zernio, monkeypatch):
+    pedidos = []
+    monkeypatch.setattr(zernio, "url_conexion_microsoft",
+                        lambda perfil, retorno: pedidos.append((perfil, retorno)) or "https://login.microsoftonline.com/x")
+    r = con_zernio.get("/integraciones/outlook/conectar", follow_redirects=False)
+    assert r.status_code in (302, 307) and r.headers["location"] == "https://login.microsoftonline.com/x"
+    assert pedidos[0][0] == "p1" and "/integraciones/outlook/callback?estado=" in pedidos[0][1]
+
+
+def test_conectar_outlook_sin_zernio_es_503(admin, monkeypatch):
+    monkeypatch.delenv("ZERNIO_API_KEY", raising=False)
+    assert admin.get("/integraciones/outlook/conectar", follow_redirects=False).status_code == 503
+
+
+def test_callback_outlook_guarda_la_cuenta(con_zernio):
+    integraciones.perfil_zernio("admin", "Admin")
+    estado = gmail.crear_estado("admin")
+    r = TestClient(app).get(
+        f"/integraciones/outlook/callback?estado={estado}&connected=microsoft&profileId=p1"
+        "&accountId=acc-o1&username=ana%40contoso.com", follow_redirects=False)
+    assert r.status_code in (302, 307) and r.headers["location"] == "/?integraciones=outlook"
+    assert integraciones.cuenta_outlook("admin") == "acc-o1"
+    assert integraciones.conexion("admin", "outlook")["cuenta"] == "ana@contoso.com"
+
+
+def test_callback_outlook_con_otro_perfil_o_error_no_guarda(con_zernio):
+    integraciones.perfil_zernio("admin", "Admin")
+    estado = gmail.crear_estado("admin")
+    r = TestClient(app).get(f"/integraciones/outlook/callback?estado={estado}&connected=microsoft"
+                            "&profileId=p-ajeno&accountId=acc-o1")
+    assert r.status_code == 400
+    estado = gmail.crear_estado("admin")   # el estado es de un solo uso
+    r = TestClient(app).get(f"/integraciones/outlook/callback?estado={estado}&error=access_denied")
+    assert r.status_code == 400 and "administrador" in r.text
+    assert integraciones.usuario_de_outlook("acc-o1") is None
+
+
+def test_desconectar_outlook(con_zernio, monkeypatch):
+    integraciones.guardar_outlook("admin", "acc-o1", "a@x.com")
+    borradas = []
+    monkeypatch.setattr(zernio, "desconectar_cuenta", borradas.append)
+    assert con_zernio.delete("/api/integraciones/outlook").json() == {"ok": True}
+    assert borradas == ["acc-o1"] and integraciones.cuenta_outlook("admin") is None
+
+
+def test_horario_por_api(con_zernio):
+    assert con_zernio.get("/api/integraciones/outlook/horario").json()["inicio"] == "08:00"
+    r = con_zernio.put("/api/integraciones/outlook/horario",
+                       json={"inicio": "09:00", "fin": "17:00", "dias": [1, 2, 3], "zona": "America/Santo_Domingo"})
+    assert r.status_code == 200 and r.json()["dias"] == [1, 2, 3]
+    r = con_zernio.put("/api/integraciones/outlook/horario", json={"inicio": "18:00", "fin": "08:00", "dias": [1]})
+    assert r.status_code == 400 and r.json()["error"]
+
+
+def test_webhook_de_outlook_anota_para_revisar(con_zernio):
+    integraciones.guardar_outlook("admin", "acc-o1", "a@x.com")
+    outlook._por_revisar.clear()
+    datos, cabeceras = _firmado({"id": "ev-ol-1", "event": "message.received",
+                                 "account": {"accountId": "acc-o1", "platform": "microsoft"}})
+    r = TestClient(app).post("/integraciones/whatsapp/webhook", content=datos, headers=cabeceras)
+    assert r.status_code == 200 and "admin" in outlook._por_revisar
