@@ -192,3 +192,36 @@ def test_horario_por_defecto_y_guardado():
 def test_horario_malo_es_valueerror(inicio, fin, dias, zona):
     with pytest.raises(ValueError):
         integraciones.guardar_horario("u1", inicio, fin, dias, zona)
+
+
+def test_conectar_gmail_anota_si_dio_el_calendario(monkeypatch):
+    escopo = {"scope": ""}
+    monkeypatch.setattr(gmail, "canjear_codigo",
+                        lambda c: {"access_token": "a", "refresh_token": "r", **escopo})
+    monkeypatch.setattr(gmail, "perfil", lambda t: {"email": "ana@gmail.com", "historyId": "1"})
+    monkeypatch.setattr(gmail, "revocar", lambda t: None)
+    integraciones.conectar_gmail("u1", "c")
+    assert not integraciones.calendario_google("u1")
+    escopo["scope"] = "https://www.googleapis.com/auth/calendar.events"
+    integraciones.conectar_gmail("u1", "c")
+    assert integraciones.calendario_google("u1")
+    integraciones.marcar_desconectado("u1", "x")
+    assert not integraciones.calendario_google("u1")
+    integraciones.conectar_gmail("u1", "c")
+    integraciones.desconectar("u1")
+    assert not integraciones.calendario_google("u1")
+
+
+def test_existe_la_tabla_del_calendario_de_google():
+    assert "google_calendario" in _tablas()
+
+
+def test_catalogo_dice_si_gmail_tiene_calendario(monkeypatch):
+    monkeypatch.setattr(gmail, "canjear_codigo", lambda c: {"access_token": "a", "refresh_token": "r",
+                                                           "scope": gmail.CALENDARIO})
+    monkeypatch.setattr(gmail, "perfil", lambda t: {"email": "ana@gmail.com", "historyId": "1"})
+    monkeypatch.setattr(gmail, "revocar", lambda t: None)
+    apps = {a["app"]: a for a in integraciones.catalogo("u1")}
+    assert apps["gmail"]["calendario"] is False and apps["outlook"]["calendario"] is None
+    integraciones.conectar_gmail("u1", "c")
+    assert {a["app"]: a for a in integraciones.catalogo("u1")}["gmail"]["calendario"] is True

@@ -29,7 +29,9 @@ URL_REVOCAR = "https://oauth2.googleapis.com/revoke"
 URL_GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me"
 LEER = "https://www.googleapis.com/auth/gmail.readonly"
 ENVIAR = "https://www.googleapis.com/auth/gmail.send"
-PERMISOS = ("openid", "email", LEER, ENVIAR)
+# Opcional: si la persona no marca la casilla, Gmail funciona igual (ver google_calendario.py).
+CALENDARIO = "https://www.googleapis.com/auth/calendar.events"
+PERMISOS = ("openid", "email", LEER, ENVIAR, CALENDARIO)
 RETORNO = "https://asistente.neboaiconsulting.com/integraciones/gmail/callback"
 VIGENCIA_ESTADO = 600
 
@@ -148,6 +150,11 @@ def canjear_codigo(codigo: str) -> dict:
                          "myaccount.google.com/permissions y vuelve a conectar.")
     _guardar_en_cache(datos["refresh_token"], datos["access_token"], datos.get("expires_in"))
     return datos
+
+
+def tiene_calendario(datos: dict) -> bool:
+    """Si en la respuesta del canje Google concedio el permiso del calendario."""
+    return CALENDARIO in set(str(datos.get("scope", "")).split())
 
 
 def token_de_acceso(refresh: str) -> str:

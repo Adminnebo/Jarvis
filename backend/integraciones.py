@@ -14,7 +14,8 @@ from . import basedatos, gmail, secretos, whatsapp, zernio
 
 _APPS = [
     {"app": "gmail", "nombre": "Gmail",
-     "descripcion": "Jarvis busca, lee y envia tus correos, y te avisa de los importantes.",
+     "descripcion": "Correo y calendario de Google. Jarvis busca, lee y envia tus correos, te avisa "
+                    "de los importantes y, si das permiso, mira tu agenda y agenda reuniones con Meet.",
      "configurado": gmail.configurado},
     {"app": "whatsapp", "nombre": "WhatsApp",
      "descripcion": "Conecta tu WhatsApp Business y sigue usando la app en tu telefono. "
@@ -88,6 +89,8 @@ def desconectar(usuario_id: str, app: str = "gmail") -> str | None:
     with basedatos.conexion() as con:
         con.execute("UPDATE integraciones SET token = NULL, estado = 'desconectado', error = NULL "
                     "WHERE usuario_id = ? AND app = ?", (usuario_id, app))
+        if app == "gmail":
+            con.execute("DELETE FROM google_calendario WHERE usuario_id = ?", (usuario_id,))
     return actual["token"]
 
 
@@ -96,9 +99,32 @@ def conectar_gmail(usuario_id: str, codigo: str) -> str:
     datos = gmail.canjear_codigo(codigo)
     cuenta = gmail.perfil(datos["access_token"])
     anterior = guardar_gmail(usuario_id, cuenta["email"], datos["refresh_token"], cuenta["historyId"])
+    with basedatos.conexion() as con:
+        if gmail.tiene_calendario(datos):
+            con.execute("INSERT INTO google_calendario (usuario_id, concedido) VALUES (?, ?) "
+                        "ON CONFLICT (usuario_id) DO UPDATE SET concedido = excluded.concedido",
+                        (usuario_id, _ahora()))
+        else:
+            con.execute("DELETE FROM google_calendario WHERE usuario_id = ?", (usuario_id,))
     if anterior:
         gmail.revocar(anterior)
     return cuenta["email"]
+
+
+def quitar_calendario_google(usuario_id: str) -> None:
+    """Google dijo que no hay permiso: hasta que reconecte, no se le pregunta."""
+    with basedatos.conexion() as con:
+        con.execute("DELETE FROM google_calendario WHERE usuario_id = ?", (usuario_id,))
+
+
+def calendario_google(usuario_id: str) -> bool:
+    """Si la persona tiene Gmail conectado y dio permiso al calendario."""
+    with basedatos.conexion() as con:
+        fila = con.execute(
+            "SELECT 1 FROM google_calendario g JOIN integraciones i "
+            "ON i.usuario_id = g.usuario_id AND i.app = 'gmail' "
+            "WHERE g.usuario_id = ? AND i.estado = 'conectado'", (usuario_id,)).fetchone()
+    return fila is not None
 
 
 def reglas(usuario_id: str) -> dict:
@@ -136,6 +162,7 @@ def catalogo(usuario_id: str) -> list[dict]:
             "estado": actual["estado"] if actual else "sin_conectar",
             "cuenta": actual["cuenta"] if actual else None,
             "error": actual["error"] if actual else None,
+            "calendario": calendario_google(usuario_id) if app["app"] == "gmail" else None,
         })
     return salida
 

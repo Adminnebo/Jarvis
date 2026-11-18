@@ -763,8 +763,12 @@ def confirmar_correo(usuario: str = "") -> str:
 
 
 # --------------------------------------------------------------------------
-# Calendario de Outlook (Zernio)
+# Calendario (Outlook por Zernio y/o Google con el token del Gmail)
 # --------------------------------------------------------------------------
+
+def _calendario_disponible() -> bool:
+    return _correo_disponible()
+
 
 def _cal(funcion, *args) -> str:
     from . import calendario
@@ -776,9 +780,9 @@ def _cal(funcion, *args) -> str:
 
 
 @herramienta(
-    "Lee la agenda del calendario de Outlook de la persona: eventos con hora, invitados y "
-    "enlace de Teams. Sin fechas trae hoy y manana.",
-    disponible=_zernio_disponible,
+    "Lee la agenda de la persona (su calendario de Outlook y/o de Google): eventos con hora, "
+    "invitados y enlace de Teams o Meet. Sin fechas trae hoy y manana.",
+    disponible=_calendario_disponible,
     desde="Opcional: primer dia, AAAA-MM-DD (por defecto hoy).",
     hasta="Opcional: ultimo dia, AAAA-MM-DD, incluido (por defecto manana).",
 )
@@ -789,9 +793,9 @@ def ver_agenda(desde: str = "", hasta: str = "", usuario: str = "") -> str:
 
 
 @herramienta(
-    "Busca huecos libres en el calendario de Outlook de la persona, dentro de su horario "
-    "laboral. Sin fechas busca en los proximos 7 dias.",
-    disponible=_zernio_disponible,
+    "Busca huecos libres en el calendario de la persona (Outlook y/o Google; si tiene los dos, "
+    "libre en ambos), dentro de su horario laboral. Sin fechas busca en los proximos 7 dias.",
+    disponible=_calendario_disponible,
     desde="Opcional: primer dia, AAAA-MM-DD.",
     hasta="Opcional: ultimo dia, AAAA-MM-DD, incluido.",
     duracion="Opcional: minutos de la reunion (por defecto 30).",
@@ -803,26 +807,28 @@ def ver_disponibilidad(desde: str = "", hasta: str = "", duracion: str = "30", u
 
 
 @herramienta(
-    "Prepara una reunion con Teams en el calendario de Outlook de la persona. NO la crea: "
-    "devuelve la frase para leersela. Si necesitas la fecha de hoy, usa hora_actual antes.",
-    disponible=_zernio_disponible,
+    "Prepara una reunion en el calendario de la persona: con Teams en Outlook o con Meet en "
+    "Google. NO la crea: devuelve la frase para leersela. Si tiene los dos calendarios, "
+    "pregunta en cual y pasalo en desde. Si necesitas la fecha de hoy, usa hora_actual antes.",
+    disponible=_calendario_disponible,
     titulo="Titulo de la reunion.",
     inicio="Inicio en la hora de la persona: AAAA-MM-DD HH:MM.",
     duracion="Opcional: minutos (por defecto 30).",
     invitados="Opcional: correos de los invitados, separados por coma.",
     notas="Opcional: texto para la descripcion del evento.",
+    desde="Opcional: 'outlook' o 'google', en que calendario se crea.",
 )
 def preparar_reunion(titulo: str, inicio: str, duracion: str = "30", invitados: str = "",
-                     notas: str = "", usuario: str = "") -> str:
+                     notas: str = "", desde: str = "", usuario: str = "") -> str:
     from . import calendario
 
-    return _cal(calendario.preparar, usuario, titulo, inicio, duracion, invitados, notas)
+    return _cal(calendario.preparar, usuario, titulo, inicio, duracion, invitados, notas, desde)
 
 
 @herramienta(
     "Crea la reunion que preparo preparar_reunion. Usala SOLO despues de que la persona "
     "escucho los datos y dijo que si.",
-    disponible=_zernio_disponible,
+    disponible=_calendario_disponible,
 )
 def confirmar_reunion(usuario: str = "") -> str:
     from . import calendario
