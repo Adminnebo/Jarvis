@@ -236,3 +236,59 @@ def test_webhook_de_outlook_anota_para_revisar(con_zernio):
                                  "account": {"accountId": "acc-o1", "platform": "microsoft"}})
     r = TestClient(app).post("/integraciones/whatsapp/webhook", content=datos, headers=cabeceras)
     assert r.status_code == 200 and "admin" in outlook._por_revisar
+
+
+# --- WhatsApp por Evolution ---
+
+from backend import evolution_wa  # noqa: E402
+
+
+@pytest.fixture
+def con_evolution(admin, monkeypatch):
+    monkeypatch.setenv("EVOLUTION_URL", "https://evo")
+    monkeypatch.setenv("EVOLUTION_API_KEY", "k")
+    whatsapp_chats._qr.clear()
+    return admin
+
+
+def test_vincular_devuelve_el_qr(con_evolution, monkeypatch):
+    monkeypatch.setattr(evolution_wa, "estado", lambda inst: None)
+    monkeypatch.setattr(evolution_wa, "crear", lambda inst, url, numero="": {"qr": "data:image/png;base64,QQ", "codigo": None})
+    r = con_evolution.post("/api/integraciones/whatsapp/vincular", json={})
+    assert r.status_code == 200 and r.json() == {"estado": "esperando", "qr": "data:image/png;base64,QQ", "codigo": None}
+
+
+def test_vincular_con_numero_malo_es_400(con_evolution):
+    r = con_evolution.post("/api/integraciones/whatsapp/vincular", json={"numero": "123"})
+    assert r.status_code == 400 and r.json()["error"]
+
+
+def test_sondear_el_vinculo(con_evolution, monkeypatch):
+    assert con_evolution.get("/api/integraciones/whatsapp/vincular").json() == {"estado": "sin_conectar"}
+    integraciones.preparar_evolution("admin")
+    monkeypatch.setattr(evolution_wa, "estado", lambda inst: "open")
+    monkeypatch.setattr(evolution_wa, "numero", lambda inst: "18095551234")
+    assert con_evolution.get("/api/integraciones/whatsapp/vincular").json()["estado"] == "conectado"
+
+
+def test_desconectar_borra_la_instancia(con_evolution, monkeypatch):
+    integraciones.preparar_evolution("admin")
+    integraciones.conectar_evolution("admin", "18095551234")
+    borradas = []
+    monkeypatch.setattr(evolution_wa, "borrar", borradas.append)
+    assert con_evolution.delete("/api/integraciones/whatsapp").json() == {"ok": True}
+    assert borradas == ["jarvis-admin"]
+
+
+def test_webhook_de_evolution_sin_sesion(con_evolution, monkeypatch):
+    fila = integraciones.preparar_evolution("admin")
+    vistos = []
+    monkeypatch.setattr(whatsapp_chats, "recibir_evolution", lambda ev, clave: vistos.append((ev["event"], clave)) or "qr")
+    sin_sesion = TestClient(app)
+    r = sin_sesion.post(f"/integraciones/whatsapp/evolution?clave={fila['clave']}", json={"event": "qrcode.updated"})
+    assert r.status_code == 200 and vistos == [("qrcode.updated", fila["clave"])]
+
+
+def test_webhook_de_evolution_con_clave_mala_es_401(con_evolution):
+    r = TestClient(app).post("/integraciones/whatsapp/evolution?clave=mala", json={"event": "x"})
+    assert r.status_code == 401

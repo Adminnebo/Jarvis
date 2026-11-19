@@ -44,6 +44,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     cuentas,
     dispositivos,
     esquema,
+    evolution_wa,
     fotos,
     fuentes,
     puente_reactivacion,
@@ -1279,8 +1280,51 @@ def vuelta_de_zernio(estado: str = "", connected: str = "", profileId: str = "",
     return RedirectResponse("/?integraciones=whatsapp", status_code=302)
 
 
+class VincularWhatsApp(BaseModel):
+    numero: str = ""
+
+
+@app.post("/api/integraciones/whatsapp/vincular")
+def vincular_whatsapp(peticion: Request, datos: VincularWhatsApp):
+    """Evolution: crea la instancia de la persona y devuelve el QR (o el codigo, con numero)."""
+    if not evolution_wa.configurado():
+        return JSONResponse(status_code=503, content={"error": "WhatsApp no esta configurado."})
+    try:
+        return whatsapp_chats.vincular(peticion.state.usuario.id, datos.numero)
+    except whatsapp_chats.ErrorChat as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+
+
+@app.get("/api/integraciones/whatsapp/vincular")
+def sondear_vinculo_whatsapp(peticion: Request):
+    try:
+        return whatsapp_chats.estado_vinculo(peticion.state.usuario.id)
+    except whatsapp_chats.ErrorChat as error:
+        return JSONResponse(status_code=502, content={"error": str(error)})
+
+
+@app.post("/integraciones/whatsapp/evolution")
+async def webhook_de_evolution(peticion: Request, clave: str = ""):
+    """Libre (acceso.LIBRES): lo protege la clave de cada instancia en la URL."""
+    if integraciones.usuario_de_clave(clave) is None:
+        return JSONResponse(status_code=401, content={"error": "clave invalida"})
+    try:
+        evento = json.loads(await peticion.body())
+    except ValueError:
+        return JSONResponse(status_code=400, content={"error": "json invalido"})
+    try:
+        resultado = whatsapp_chats.recibir_evolution(evento, clave)
+    except Exception as fallo:  # noqa: BLE001 - un evento roto no tumba el webhook
+        print(f"  AVISO: fallo el webhook de Evolution {evento.get('event')}: {fallo}")
+        return JSONResponse(status_code=500, content={"error": "error procesando"})
+    if resultado not in ("qr", "sin accion", "grupo", "viejo"):
+        print(f"  WhatsApp (Evolution) {evento.get('event')}: {resultado}")
+    return {"ok": True}
+
+
 @app.delete("/api/integraciones/whatsapp")
 def desconectar_whatsapp(peticion: Request):
+    whatsapp_chats.desvincular(peticion.state.usuario.id)
     cuenta_id = integraciones.desconectar_whatsapp(peticion.state.usuario.id)
     if cuenta_id:
         try:
