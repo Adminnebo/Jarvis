@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from . import basedatos, gmail, secretos, whatsapp, zernio
+from . import basedatos, evolution_wa, gmail, secretos, whatsapp, zernio
 
 _APPS = [
     {"app": "gmail", "nombre": "Gmail",
@@ -20,7 +20,7 @@ _APPS = [
     {"app": "whatsapp", "nombre": "WhatsApp",
      "descripcion": "Conecta tu WhatsApp Business y sigue usando la app en tu telefono. "
                     "Jarvis lee tus chats, responde con tu permiso y te avisa de lo importante.",
-     "configurado": zernio.configurado},
+     "configurado": lambda: evolution_wa.configurado() or zernio.configurado()},
     {"app": "outlook", "nombre": "Outlook",
      "descripcion": "Correo y calendario de Microsoft 365 / Outlook.com. Jarvis lee y responde "
                     "tus correos, mira tu agenda, agenda reuniones con Teams y te avisa antes de cada una.",
@@ -164,7 +164,16 @@ def catalogo(usuario_id: str) -> list[dict]:
             "error": actual["error"] if actual else None,
             "calendario": calendario_google(usuario_id) if app["app"] == "gmail" else None,
         })
+        if app["app"] == "whatsapp" and evolution_wa.configurado():
+            # Con Evolution se vincula como WhatsApp Web: QR o codigo, sin Facebook.
+            salida[-1]["vincular"] = True
+            salida[-1]["descripcion"] = DESCRIPCION_EVOLUTION
     return salida
+
+
+DESCRIPCION_EVOLUTION = ("Vincula tu WhatsApp escaneando un codigo QR, como WhatsApp Web. Sirve con "
+                         "WhatsApp normal o Business. Jarvis lee tus chats, responde con tu permiso "
+                         "y te avisa de lo importante.")
 
 
 # --------------------------------------------------------------------------
@@ -328,3 +337,62 @@ def guardar_horario(usuario_id: str, inicio: str, fin: str, dias, zona: str) -> 
                     "dias = excluded.dias, zona = excluded.zona",
                     (usuario_id, inicio, fin, ",".join(str(d) for d in lista), zona))
     return horario(usuario_id)
+
+
+# --------------------------------------------------------------------------
+# WhatsApp (Evolution): la instancia de cada persona
+# --------------------------------------------------------------------------
+
+def instancia_evolution(usuario_id: str) -> dict | None:
+    with basedatos.conexion() as con:
+        fila = con.execute("SELECT * FROM evolution_instancias WHERE usuario_id = ?", (usuario_id,)).fetchone()
+    return dict(fila) if fila else None
+
+
+def preparar_evolution(usuario_id: str) -> dict:
+    """La instancia de la persona (nombre y secreto del webhook); la anota la primera vez."""
+    import secrets as _secrets
+
+    actual = instancia_evolution(usuario_id)
+    if actual:
+        return actual
+    with basedatos.conexion() as con:
+        con.execute("INSERT INTO evolution_instancias (usuario_id, instancia, clave, actualizado) "
+                    "VALUES (?, ?, ?, ?)",
+                    (usuario_id, evolution_wa.nombre_instancia(usuario_id), _secrets.token_urlsafe(32), _ahora()))
+    return instancia_evolution(usuario_id)
+
+
+def usuario_de_clave(clave: str) -> tuple[str, str] | None:
+    """(usuario_id, instancia) del webhook que trae esta clave."""
+    if not clave:
+        return None
+    with basedatos.conexion() as con:
+        fila = con.execute("SELECT usuario_id, instancia FROM evolution_instancias WHERE clave = ?",
+                           (clave,)).fetchone()
+    return (fila["usuario_id"], fila["instancia"]) if fila else None
+
+
+def conectar_evolution(usuario_id: str, numero: str) -> None:
+    cuenta = whatsapp.legible(numero) if numero else "tu WhatsApp"
+    with basedatos.conexion() as con:
+        con.execute("UPDATE evolution_instancias SET numero = ?, actualizado = ? WHERE usuario_id = ?",
+                    (numero or None, _ahora(), usuario_id))
+        con.execute(
+            "INSERT INTO integraciones (usuario_id, app, cuenta, token, cursor, estado, error, conectado) "
+            "VALUES (?, 'whatsapp', ?, NULL, NULL, 'conectado', NULL, ?) "
+            "ON CONFLICT (usuario_id, app) DO UPDATE SET cuenta = excluded.cuenta, "
+            "estado = 'conectado', error = NULL, conectado = excluded.conectado",
+            (usuario_id, cuenta, _ahora()))
+
+
+def borrar_evolution(usuario_id: str) -> str | None:
+    """Olvida la instancia y devuelve su nombre (para borrarla en Evolution)."""
+    actual = instancia_evolution(usuario_id)
+    if not actual:
+        return None
+    with basedatos.conexion() as con:
+        con.execute("DELETE FROM evolution_instancias WHERE usuario_id = ?", (usuario_id,))
+        con.execute("UPDATE integraciones SET estado = 'desconectado', error = NULL "
+                    "WHERE usuario_id = ? AND app = 'whatsapp'", (usuario_id,))
+    return actual["instancia"]

@@ -242,6 +242,16 @@ _ESQUEMA = """
         PRIMARY KEY (usuario_id, mensaje_id)
     );
 
+    -- WhatsApp por Evolution (ver evolution_wa.py): la instancia de cada persona
+    -- y el secreto que lleva su webhook (?clave=), que dice de quien es cada evento.
+    CREATE TABLE IF NOT EXISTS evolution_instancias (
+        usuario_id TEXT PRIMARY KEY,
+        instancia TEXT NOT NULL UNIQUE,
+        clave TEXT NOT NULL UNIQUE,
+        numero TEXT,
+        actualizado TEXT NOT NULL
+    );
+
     -- Outlook por Zernio (ver outlook.py): la cuenta de Microsoft de cada
     -- persona, en el mismo perfil de Zernio que su WhatsApp. El accountId va en
     -- claro: sin la clave de Zernio no sirve, y hace falta para saber de quien

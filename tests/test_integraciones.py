@@ -225,3 +225,36 @@ def test_catalogo_dice_si_gmail_tiene_calendario(monkeypatch):
     assert apps["gmail"]["calendario"] is False and apps["outlook"]["calendario"] is None
     integraciones.conectar_gmail("u1", "c")
     assert {a["app"]: a for a in integraciones.catalogo("u1")}["gmail"]["calendario"] is True
+
+
+# --- WhatsApp por Evolution ---
+
+def test_preparar_evolution_crea_la_fila_una_vez():
+    from backend import evolution_wa  # noqa: F401 - asegura que el modulo carga
+
+    primera = integraciones.preparar_evolution("u1")
+    assert primera["instancia"] == "jarvis-u1" and len(primera["clave"]) >= 30
+    assert integraciones.preparar_evolution("u1") == primera
+    assert integraciones.usuario_de_clave(primera["clave"]) == ("u1", "jarvis-u1")
+    assert integraciones.usuario_de_clave("otra") is None
+    assert integraciones.usuario_de_clave("") is None
+
+
+def test_conectar_y_borrar_evolution():
+    integraciones.preparar_evolution("u1")
+    integraciones.conectar_evolution("u1", "18095551234")
+    c = integraciones.conexion("u1", "whatsapp")
+    assert c["estado"] == "conectado" and c["cuenta"] == "+1 809-555-1234"
+    assert integraciones.instancia_evolution("u1")["numero"] == "18095551234"
+    assert integraciones.borrar_evolution("u1") == "jarvis-u1"
+    assert integraciones.instancia_evolution("u1") is None
+    assert integraciones.conexion("u1", "whatsapp")["estado"] == "desconectado"
+    assert integraciones.borrar_evolution("u1") is None
+
+
+def test_catalogo_whatsapp_con_evolution(monkeypatch):
+    monkeypatch.delenv("ZERNIO_API_KEY", raising=False)
+    monkeypatch.setenv("EVOLUTION_URL", "https://evo")
+    monkeypatch.setenv("EVOLUTION_API_KEY", "k")
+    wa = {a["app"]: a for a in integraciones.catalogo("u1")}["whatsapp"]
+    assert wa["disponible"] and wa["vincular"] and "QR" in wa["descripcion"]
