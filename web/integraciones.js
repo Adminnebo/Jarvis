@@ -23,7 +23,8 @@ const APPS = {
     conectar: "Conectar WhatsApp", cambiar: "Cambiar número",
     ruta: "/integraciones/whatsapp/conectar", borrar: "/api/integraciones/whatsapp",
     adios: (c) => `¿Desconectar ${c}? Seguirás usando WhatsApp en tu teléfono, pero Jarvis dejará de leer y avisarte.`,
-    nota: "Escanearás un código QR con WhatsApp Business. Ábrelo al menos una vez cada 14 días o Meta corta la conexión.",
+    // Con Zernio (plan B) se escanea con WhatsApp Business; con Evolution, desde "Dispositivos vinculados".
+    nota: "Escanearás un código QR desde tu teléfono. Si pasas más de 14 días sin abrir WhatsApp, se desvincula y tendrás que conectarlo de nuevo.",
   },
   outlook: {
     conectar: "Conectar Outlook", cambiar: "Reconectar",
@@ -93,7 +94,17 @@ function tarjetaApp(app, apps) {
 
   const acciones = document.createElement("div");
   acciones.className = "fuente-acciones";
-  if (app.disponible) {
+  if (app.disponible && app.vincular) {
+    // WhatsApp por Evolution: se vincula aquí mismo con un QR (o un código), sin salir de Jarvis.
+    const conectar = document.createElement("button");
+    conectar.className = "boton-mini";
+    conectar.textContent = app.estado === "conectado" ? datos.cambiar : datos.conectar;
+    conectar.addEventListener("click", () => {
+      acciones.hidden = true;
+      tarjeta.appendChild(bloqueDeVinculo(() => { acciones.hidden = false; }));
+    });
+    acciones.appendChild(conectar);
+  } else if (app.disponible) {
     const conectar = document.createElement("a");
     conectar.className = "boton-mini";
     conectar.href = datos.ruta;
@@ -115,6 +126,106 @@ function tarjetaApp(app, apps) {
   const extra = datos.extra && app.estado === "conectado" ? datos.extra(app, apps) : null;
   if (extra) tarjeta.appendChild(extra);
   return tarjeta;
+}
+
+/* Vincular WhatsApp: muestra el QR que da Evolution (se renueva solo) o, si la
+   persona está en el mismo teléfono, un código de 8 letras para "Vincular con
+   número de teléfono". Sondea cada 3 s hasta que queda conectado. */
+function bloqueDeVinculo(alCerrar) {
+  const bloque = document.createElement("div");
+  bloque.className = "vinculo";
+  bloque.innerHTML = `
+    <p class="vinculo-mensaje" role="status">Preparando…</p>
+    <img class="vinculo-qr" alt="Código QR para vincular WhatsApp" hidden>
+    <p class="vinculo-codigo" hidden></p>
+    <ol class="vinculo-pasos fuente-destino">
+      <li>Abre WhatsApp en tu teléfono.</li>
+      <li>Toca <b>⋮</b> (o Ajustes) → <b>Dispositivos vinculados</b> → <b>Vincular un dispositivo</b>.</li>
+      <li class="vinculo-paso-qr">Apunta la cámara a este código.</li>
+      <li class="vinculo-paso-codigo" hidden>Toca <b>Vincular con número de teléfono</b> y escribe el código.</li>
+    </ol>
+    <form class="integracion-reglas vinculo-numero" hidden>
+      <label><span>Tu número de WhatsApp</span><input name="numero" inputmode="tel" placeholder="809 555 1234"></label>
+      <div class="fuente-acciones"><button class="boton-mini" type="submit">Pedir código</button></div>
+    </form>
+    <div class="fuente-acciones">
+      <button type="button" class="boton-mini vinculo-cambiar">Estoy en este teléfono: usar un código</button>
+      <button type="button" class="boton-mini vinculo-cancelar">Cancelar</button>
+    </div>`;
+  const $ = (sel) => bloque.querySelector(sel);
+  let temporizador = null;
+  let vivo = true;
+
+  const cerrar = () => {
+    vivo = false;
+    clearTimeout(temporizador);
+    bloque.remove();
+    alCerrar();
+  };
+
+  function mostrar(datos) {
+    if (!vivo) return;
+    if (datos.error) {
+      $(".vinculo-mensaje").textContent = datos.error;
+      $(".vinculo-mensaje").classList.add("integracion-mensaje", "mal");
+      return;
+    }
+    if (datos.estado === "conectado") {
+      vivo = false;
+      clearTimeout(temporizador);
+      $(".vinculo-mensaje").textContent = `Listo: conectado como ${datos.cuenta}.`;
+      setTimeout(pintar, 1200);
+      return;
+    }
+    if (datos.estado === "sin_conectar") return;
+    const conCodigo = Boolean(datos.codigo);
+    $(".vinculo-mensaje").classList.remove("integracion-mensaje", "mal");
+    $(".vinculo-mensaje").textContent = conCodigo ? "Tu código para vincular:" : "Escanea este código con WhatsApp:";
+    $(".vinculo-qr").hidden = conCodigo || !datos.qr;
+    if (datos.qr && !conCodigo) $(".vinculo-qr").src = datos.qr;
+    $(".vinculo-codigo").hidden = !conCodigo;
+    if (conCodigo) $(".vinculo-codigo").textContent = datos.codigo.replace(/^(.{4})(.{4})$/, "$1-$2");
+    $(".vinculo-paso-qr").hidden = conCodigo;
+    $(".vinculo-paso-codigo").hidden = !conCodigo;
+  }
+
+  async function pedir(metodo, cuerpo) {
+    try {
+      const r = await fetch("/api/integraciones/whatsapp/vincular", metodo === "POST"
+        ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(cuerpo) }
+        : {});
+      return await r.json();
+    } catch {
+      return { error: "Sin conexión con Jarvis. Reintentando…" };
+    }
+  }
+
+  async function sondear() {
+    if (!vivo) return;
+    mostrar(await pedir("GET"));
+    if (vivo) temporizador = setTimeout(sondear, 3000);
+  }
+
+  $(".vinculo-cancelar").addEventListener("click", cerrar);
+  $(".vinculo-cambiar").addEventListener("click", () => {
+    $(".vinculo-cambiar").hidden = true;
+    $(".vinculo-numero").hidden = false;
+    $(".vinculo-numero").numero.focus();
+  });
+  $(".vinculo-numero").addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    clearTimeout(temporizador);
+    $(".vinculo-mensaje").textContent = "Pidiendo el código…";
+    const datos = await pedir("POST", { numero: $(".vinculo-numero").numero.value });
+    mostrar(datos);
+    if (!datos.error) { $(".vinculo-numero").hidden = true; temporizador = setTimeout(sondear, 3000); }
+  });
+
+  pedir("POST", {}).then((datos) => {
+    mostrar(datos);
+    if (!datos.error) temporizador = setTimeout(sondear, 3000);
+  });
+  return bloque;
 }
 
 async function tarjetaAvisos() {

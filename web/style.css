@@ -1372,6 +1372,14 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
 .integracion-reglas input[type="checkbox"] { accent-color: var(--acento); }
 .integracion-reglas .casilla { display: flex; gap: 8px; align-items: center; }
 .integracion-mensaje.mal { color: var(--peligro); }
+/* hidden tiene que ganarle a los display de .fuente-acciones e .integracion-reglas */
+.integracion [hidden] { display: none !important; }
+.vinculo { display: grid; gap: 10px; margin-top: 12px; }
+.vinculo-qr { width: 240px; max-width: 100%; aspect-ratio: 1; background: #fff; padding: 10px;
+  border-radius: var(--radio-chico); box-sizing: border-box; }
+.vinculo-codigo { font: 600 28px/1.2 ui-monospace, monospace; letter-spacing: 3px; margin: 0; }
+.vinculo-pasos { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.vinculo-mensaje { margin: 0; }
 #lista-avisos { display: grid; gap: 6px; }
 .aviso {
   display: grid; gap: 2px; text-align: left; width: 100%; padding: 10px 12px; font: inherit;
