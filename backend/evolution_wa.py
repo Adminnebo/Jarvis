@@ -14,7 +14,7 @@ from urllib.parse import quote
 
 import httpx
 
-EVENTOS = ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "QRCODE_UPDATED"]
+EVENTOS = ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "SEND_MESSAGE", "CONNECTION_UPDATE", "QRCODE_UPDATED"]
 
 _cliente = httpx.Client(timeout=30)
 
@@ -188,6 +188,7 @@ def chats(instancia: str, limite: int = 50) -> list[dict]:
             continue
         ultimo = c.get("lastMessage") or {}
         clave = {"remoteJid": jid, **(ultimo.get("key") or {})}
+        normalizado = normalizar_mensaje({**ultimo, "key": clave}) if ultimo else None
         salida.append({
             "id": jid,
             "nombre": c.get("pushName") or (ultimo.get("pushName") if not (ultimo.get("key") or {}).get("fromMe") else None),
@@ -195,6 +196,8 @@ def chats(instancia: str, limite: int = 50) -> list[dict]:
             "ultimo": texto_de(ultimo.get("message")),
             "ultimo_id": (ultimo.get("key") or {}).get("id"),
             "ultimo_mio": bool((ultimo.get("key") or {}).get("fromMe")),
+            "ultimo_estado": (normalizado or {}).get("estado"),
+            "ultimo_tipo": (normalizado or {}).get("tipo"),
             "no_leidos": int(c.get("unreadCount") or 0),
             "actualizado": _momento(c.get("updatedAt")),
         })
@@ -285,7 +288,67 @@ def mensajes(instancia: str, jid: str, limite: int = 30, pagina: int = 1) -> lis
     return salida
 
 
-def enviar(instancia: str, jid: str, texto: str) -> str:
-    destino = jid.split("@")[0] if jid.endswith("@s.whatsapp.net") else jid
-    datos = _llamar("POST", f"/message/sendText/{_q(instancia)}", cuerpo={"number": destino, "text": texto}) or {}
-    return str((datos.get("key") or {}).get("id") or "")
+def _destino(jid: str) -> str:
+    return jid.split("@")[0] if jid.endswith("@s.whatsapp.net") else jid
+
+
+def _citado(cita: dict | None) -> dict | None:
+    if not cita or not cita.get("id"):
+        return None
+    return {"key": {"id": cita["id"]}, "message": {"conversation": cita.get("texto") or ""}}
+
+
+def _id_enviado(datos) -> str:
+    return str(((datos or {}).get("key") or {}).get("id") or "")
+
+
+def enviar(instancia: str, jid: str, texto: str, cita: dict | None = None) -> str:
+    cuerpo = {"number": _destino(jid), "text": texto}
+    if _citado(cita):
+        cuerpo["quoted"] = _citado(cita)
+    return _id_enviado(_llamar("POST", f"/message/sendText/{_q(instancia)}", cuerpo=cuerpo))
+
+
+def enviar_archivo(instancia: str, jid: str, mime: str, nombre: str, base64: str, pie: str = "",
+                   cita: dict | None = None) -> str:
+    """Foto, video o documento (base64 sin el prefijo data:)."""
+    tipo = "image" if mime.startswith("image/") else "video" if mime.startswith("video/") else "document"
+    cuerpo = {"number": _destino(jid), "mediatype": tipo, "mimetype": mime, "fileName": nombre,
+              "media": base64, "caption": pie or ""}
+    if _citado(cita):
+        cuerpo["quoted"] = _citado(cita)
+    return _id_enviado(_llamar("POST", f"/message/sendMedia/{_q(instancia)}", cuerpo=cuerpo))
+
+
+def enviar_nota(instancia: str, jid: str, base64: str, cita: dict | None = None) -> str:
+    """Nota de voz (la convierte Evolution); llega con el microfono, como las del telefono."""
+    cuerpo = {"number": _destino(jid), "audio": base64}
+    if _citado(cita):
+        cuerpo["quoted"] = _citado(cita)
+    return _id_enviado(_llamar("POST", f"/message/sendWhatsAppAudio/{_q(instancia)}", cuerpo=cuerpo))
+
+
+def archivo(instancia: str, id_mensaje: str) -> dict:
+    """El archivo de un mensaje, descargado y descifrado por Evolution."""
+    datos = _llamar("POST", f"/chat/getBase64FromMediaMessage/{_q(instancia)}",
+                    cuerpo={"message": {"key": {"id": id_mensaje}}, "convertToMp4": False}) or {}
+    return {"mime": datos.get("mimetype") or "application/octet-stream",
+            "nombre": datos.get("fileName"), "base64": datos.get("base64") or ""}
+
+
+def foto_perfil(instancia: str, jid: str) -> str | None:
+    datos = _llamar("POST", f"/chat/fetchProfilePictureUrl/{_q(instancia)}", cuerpo={"number": jid}) or {}
+    return datos.get("profilePictureUrl") or None
+
+
+def marcar_leido(instancia: str, jid: str, ids: list[str]) -> None:
+    if not ids:
+        return
+    _llamar("POST", f"/chat/markMessageAsRead/{_q(instancia)}", cuerpo={"readMessages": [
+        {"remoteJid": jid, "fromMe": False, "id": i} for i in ids]})
+
+
+def asegurar_eventos(instancia: str, webhook: str) -> None:
+    """Pone el webhook con todos los eventos que usa la vista (las instancias viejas no los tenian)."""
+    _llamar("POST", f"/webhook/set/{_q(instancia)}", cuerpo={"webhook": {
+        "url": webhook, "enabled": True, "byEvents": False, "base64": False, "events": EVENTOS}})

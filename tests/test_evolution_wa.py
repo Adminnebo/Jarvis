@@ -52,7 +52,7 @@ def test_crear_configura_todo_y_devuelve_el_qr(api):
     assert cuerpo["alwaysOnline"] is False and cuerpo["syncFullHistory"] is False
     gancho = cuerpo["webhook"]
     assert gancho["url"].endswith("clave=s") and gancho["enabled"] is True
-    assert set(gancho["events"]) == {"MESSAGES_UPSERT", "CONNECTION_UPDATE", "QRCODE_UPDATED"}
+    assert set(gancho["events"]) == {"MESSAGES_UPSERT", "MESSAGES_UPDATE", "SEND_MESSAGE", "CONNECTION_UPDATE", "QRCODE_UPDATED"}
 
 
 def test_crear_con_numero_pide_codigo(api):
@@ -232,3 +232,78 @@ def test_mensajes_con_pagina(api):
     lista = evolution_wa.mensajes("jarvis-u1", "18097778888@s.whatsapp.net", 30, pagina=2)
     assert [m["id"] for m in lista] == ["a", "b"]
     assert json.loads(pedidos[0].content)["page"] == 2
+
+
+def test_chats_traen_estado_y_tipo_del_ultimo(api):
+    _, respuestas = api
+    respuestas[("POST", "/chat/findChats/jarvis-u1")] = (200, [
+        {"remoteJid": "18097778888@s.whatsapp.net", "updatedAt": "2026-11-19T10:00:00.000Z",
+         "lastMessage": {"key": {"fromMe": True, "id": "m1"}, "messageType": "imageMessage",
+                         "message": {"imageMessage": {"caption": ""}}, "MessageUpdate": [{"status": "READ"}],
+                         "messageTimestamp": 1700000000}}])
+    (chat,) = evolution_wa.chats("jarvis-u1")
+    assert chat["ultimo_estado"] == "leido" and chat["ultimo_tipo"] == "imagen"
+
+
+# --- acciones de la vista ---
+
+def test_archivo_de_un_mensaje(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/chat/getBase64FromMediaMessage/jarvis-u1")] = (200, {
+        "mimetype": "image/jpeg", "fileName": "foto.jpg", "base64": "QUJD"})
+    assert evolution_wa.archivo("jarvis-u1", "m1") == {"mime": "image/jpeg", "nombre": "foto.jpg", "base64": "QUJD"}
+    assert json.loads(pedidos[0].content) == {"message": {"key": {"id": "m1"}}, "convertToMp4": False}
+
+
+def test_foto_de_perfil(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/chat/fetchProfilePictureUrl/jarvis-u1")] = (200, {"profilePictureUrl": "https://pps/x.jpg"})
+    assert evolution_wa.foto_perfil("jarvis-u1", "18097778888@s.whatsapp.net") == "https://pps/x.jpg"
+    assert json.loads(pedidos[0].content) == {"number": "18097778888@s.whatsapp.net"}
+    respuestas[("POST", "/chat/fetchProfilePictureUrl/jarvis-u1")] = (200, {"profilePictureUrl": None})
+    assert evolution_wa.foto_perfil("jarvis-u1", "x@s.whatsapp.net") is None
+
+
+def test_marcar_leido(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/chat/markMessageAsRead/jarvis-u1")] = (200, {"message": "Read messages"})
+    evolution_wa.marcar_leido("jarvis-u1", "1809@s.whatsapp.net", ["a", "b"])
+    assert json.loads(pedidos[0].content) == {"readMessages": [
+        {"remoteJid": "1809@s.whatsapp.net", "fromMe": False, "id": "a"},
+        {"remoteJid": "1809@s.whatsapp.net", "fromMe": False, "id": "b"}]}
+    evolution_wa.marcar_leido("jarvis-u1", "1809@s.whatsapp.net", [])
+    assert len(pedidos) == 1   # sin ids no llama
+
+
+def test_enviar_con_cita(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/message/sendText/jarvis-u1")] = (201, {"key": {"id": "nuevo"}})
+    assert evolution_wa.enviar("jarvis-u1", "18097778888@s.whatsapp.net", "si", cita={"id": "m0", "texto": "va?"}) == "nuevo"
+    cuerpo = json.loads(pedidos[0].content)
+    assert cuerpo["number"] == "18097778888" and cuerpo["text"] == "si"
+    assert cuerpo["quoted"] == {"key": {"id": "m0"}, "message": {"conversation": "va?"}}
+
+
+def test_enviar_archivo_y_nota(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/message/sendMedia/jarvis-u1")] = (201, {"key": {"id": "f1"}})
+    respuestas[("POST", "/message/sendWhatsAppAudio/jarvis-u1")] = (201, {"key": {"id": "n1"}})
+    assert evolution_wa.enviar_archivo("jarvis-u1", "18097778888@s.whatsapp.net", "application/pdf",
+                                       "factura.pdf", "QUJD", "la factura") == "f1"
+    cuerpo = json.loads(pedidos[0].content)
+    assert cuerpo == {"number": "18097778888", "mediatype": "document", "mimetype": "application/pdf",
+                      "fileName": "factura.pdf", "media": "QUJD", "caption": "la factura"}
+    evolution_wa.enviar_archivo("jarvis-u1", "1@s.whatsapp.net", "image/png", "a.png", "X", "")
+    assert json.loads(pedidos[1].content)["mediatype"] == "image"
+    assert evolution_wa.enviar_nota("jarvis-u1", "18097778888@s.whatsapp.net", "T0dH", cita={"id": "m0", "texto": "x"}) == "n1"
+    nota = json.loads(pedidos[2].content)
+    assert nota["audio"] == "T0dH" and nota["number"] == "18097778888" and nota["quoted"]["key"]["id"] == "m0"
+
+
+def test_asegurar_eventos(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/webhook/set/jarvis-u1")] = (201, {})
+    evolution_wa.asegurar_eventos("jarvis-u1", "https://j/w?clave=s")
+    gancho = json.loads(pedidos[0].content)["webhook"]
+    assert gancho["url"] == "https://j/w?clave=s" and gancho["enabled"] is True
+    assert {"MESSAGES_UPDATE", "SEND_MESSAGE", "MESSAGES_UPSERT"} <= set(gancho["events"])
