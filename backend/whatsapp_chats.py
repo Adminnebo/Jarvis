@@ -648,7 +648,7 @@ def _leer_evolution(instancia: str, jid: str) -> str:
     for m in mensajes:
         quien = (m["nombre"] or "Cliente") if m["entrante"] else "Tu"
         cuando = datetime.fromtimestamp(m["momento"], zona).strftime("%Y-%m-%d %H:%M") if m["momento"] else ""
-        lineas.append(f"[{cuando}] {quien}: {m['texto'] or '(sin texto)'}")
+        lineas.append(f"[{cuando}] {quien}: {m.get('descripcion') or m['texto'] or '(sin texto)'}")
     texto = "\n".join(lineas)
     if len(texto) > MAX_LECTURA:
         texto = "(recortado: solo lo mas reciente)\n" + texto[-MAX_LECTURA:]

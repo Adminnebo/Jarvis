@@ -202,20 +202,87 @@ def chats(instancia: str, limite: int = 50) -> list[dict]:
     return salida[:limite]
 
 
-def mensajes(instancia: str, jid: str, limite: int = 30) -> list[dict]:
-    """Los ultimos mensajes de un chat, del mas viejo al mas nuevo."""
+_TIPOS = {
+    "conversation": "texto", "extendedTextMessage": "texto", "imageMessage": "imagen",
+    "videoMessage": "video", "audioMessage": "audio", "documentMessage": "documento",
+    "stickerMessage": "sticker",
+}
+_ESTADOS = {"PENDING": 0, "SERVER_ACK": 1, "DELIVERY_ACK": 2, "READ": 3, "PLAYED": 3}
+_NOMBRE_ESTADO = {0: "pendiente", 1: "enviado", 2: "entregado", 3: "leido"}
+
+
+def estado_de(status: str | None) -> str | None:
+    """SERVER_ACK/DELIVERY_ACK/READ de Evolution -> enviado/entregado/leido."""
+    nivel = _ESTADOS.get(str(status or "").upper())
+    return _NOMBRE_ESTADO.get(nivel) if nivel is not None else None
+
+
+def _numero(valor) -> int | None:
+    if isinstance(valor, dict):   # los Long de protobuf: {low, high}
+        return int(valor.get("low") or 0) + (int(valor.get("high") or 0) << 32)
+    try:
+        return int(valor) if valor is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def normalizar_mensaje(registro: dict) -> dict | None:
+    """Un mensaje de Evolution en la forma que usa la vista de WhatsApp. None si no se muestra
+    (reacciones, mensajes de protocolo...)."""
+    clave = registro.get("key") or {}
+    contenido = registro.get("message") or {}
+    if "documentWithCaptionMessage" in contenido:
+        contenido = (contenido["documentWithCaptionMessage"] or {}).get("message") or {}
+    clase = next((c for c in _TIPOS if c in contenido), None)
+    if clase is None:
+        return None
+    datos = contenido[clase] if isinstance(contenido[clase], dict) else {}
+    tipo = _TIPOS[clase]
+    if clase == "audioMessage" and datos.get("ptt"):
+        tipo = "nota"
+    if tipo == "texto":
+        texto = str(contenido.get("conversation") or datos.get("text") or "")
+    else:
+        texto = str(datos.get("caption") or "")
+
+    archivo = None
+    if tipo != "texto":
+        miniatura = datos.get("jpegThumbnail")
+        archivo = {
+            "mime": datos.get("mimetype"), "nombre": datos.get("fileName") or datos.get("title"),
+            "tamano": _numero(datos.get("fileLength")), "segundos": _numero(datos.get("seconds")),
+            "miniatura": f"data:image/jpeg;base64,{miniatura}" if isinstance(miniatura, str) and miniatura else None,
+            "ancho": _numero(datos.get("width")), "alto": _numero(datos.get("height")),
+        }
+
+    contexto = registro.get("contextInfo") or datos.get("contextInfo") or {}
+    cita = None
+    if contexto.get("stanzaId") and contexto.get("quotedMessage"):
+        citado = contexto["quotedMessage"]
+        cita = {"id": contexto["stanzaId"], "texto": texto_de(citado) or "Mensaje"}
+
+    estado = None
+    if clave.get("fromMe"):
+        niveles = [_ESTADOS.get(str(u.get("status") or "").upper(), -1) for u in registro.get("MessageUpdate") or []]
+        niveles.append(_ESTADOS.get(str(registro.get("status") or "").upper(), 1))
+        estado = _NOMBRE_ESTADO[max(max(niveles), 1)]
+
+    return {
+        "id": clave.get("id"), "jid": clave.get("remoteJid"), "entrante": not clave.get("fromMe"),
+        "nombre": registro.get("pushName"), "momento": _momento(registro.get("messageTimestamp")),
+        "tipo": tipo, "texto": texto, "descripcion": texto_de(registro.get("message")),
+        "estado": estado, "cita": cita, "archivo": archivo,
+    }
+
+
+def mensajes(instancia: str, jid: str, limite: int = 30, pagina: int = 1) -> list[dict]:
+    """Una pagina de mensajes de un chat (la 1 = los mas nuevos), del mas viejo al mas nuevo."""
     datos = _llamar("POST", f"/chat/findMessages/{_q(instancia)}",
-                    cuerpo={"where": {"key": {"remoteJid": jid}}, "limit": limite, "page": 1}) or {}
+                    cuerpo={"where": {"key": {"remoteJid": jid}}, "limit": limite, "page": max(1, pagina)}) or {}
     registros = ((datos.get("messages") or {}).get("records") or []) if isinstance(datos, dict) else []
-    salida = [{
-        "id": (m.get("key") or {}).get("id"),
-        "entrante": not (m.get("key") or {}).get("fromMe"),
-        "nombre": m.get("pushName"),
-        "texto": texto_de(m.get("message")),
-        "momento": _momento(m.get("messageTimestamp")),
-    } for m in registros]
+    salida = [m for m in (normalizar_mensaje(r) for r in registros) if m]
     salida.sort(key=lambda m: m["momento"])
-    return salida[-limite:]
+    return salida
 
 
 def enviar(instancia: str, jid: str, texto: str) -> str:

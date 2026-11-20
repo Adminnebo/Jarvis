@@ -128,7 +128,7 @@ def test_mensajes_en_orden_y_con_adjuntos(api):
     ]}})
     mensajes = evolution_wa.mensajes("jarvis-u1", "18097778888@s.whatsapp.net", 30)
     assert [m["id"] for m in mensajes] == ["a", "b"]
-    assert mensajes[0]["texto"] == "[nota de voz]" and mensajes[0]["entrante"] and mensajes[0]["nombre"] == "Pedro"
+    assert mensajes[0]["descripcion"] == "[nota de voz]" and mensajes[0]["entrante"] and mensajes[0]["nombre"] == "Pedro"
     assert mensajes[1]["texto"] == "va en camino" and not mensajes[1]["entrante"]
     cuerpo = json.loads(pedidos[0].content)
     assert cuerpo["where"]["key"]["remoteJid"] == "18097778888@s.whatsapp.net" and cuerpo["limit"] == 30
@@ -157,3 +157,78 @@ def test_telefono_con_lid():
     assert evolution_wa.telefono_de({"remoteJid": "18097778888@s.whatsapp.net"}) == "18097778888"
     assert evolution_wa.telefono_de({"remoteJid": "555@lid", "remoteJidAlt": "18091112222@s.whatsapp.net"}) == "18091112222"
     assert evolution_wa.telefono_de({"remoteJid": "555@lid"}) == ""
+
+
+# --- mensajes con todos sus detalles (vista de WhatsApp) ---
+
+def registro(tipo, contenido, desde_mi=False, actualizaciones=(), contexto=None, id_="m1", jid="18097778888@s.whatsapp.net"):
+    return {"key": {"id": id_, "fromMe": desde_mi, "remoteJid": jid}, "pushName": "Pedro",
+            "messageType": tipo, "message": {tipo: contenido} if tipo != "conversation" else {"conversation": contenido},
+            "messageTimestamp": 1795179971, "contextInfo": contexto,
+            "MessageUpdate": [{"status": s} for s in actualizaciones]}
+
+
+def test_normalizar_texto_con_estado_y_cita():
+    m = evolution_wa.normalizar_mensaje(registro(
+        "conversation", "va en camino", desde_mi=True, actualizaciones=["SERVER_ACK", "READ", "DELIVERY_ACK"],
+        contexto={"stanzaId": "m0", "quotedMessage": {"conversation": "y el pedido?"}}))
+    assert m["id"] == "m1" and m["jid"] == "18097778888@s.whatsapp.net" and not m["entrante"]
+    assert m["tipo"] == "texto" and m["texto"] == "va en camino" and m["estado"] == "leido"
+    assert m["cita"] == {"id": "m0", "texto": "y el pedido?"} and m["momento"] == 1795179971
+    assert m["archivo"] is None
+
+
+def test_normalizar_estados():
+    def estado(*a):
+        return evolution_wa.normalizar_mensaje(registro("conversation", "x", desde_mi=True, actualizaciones=a))["estado"]
+    assert estado() == "enviado" and estado("DELIVERY_ACK") == "entregado" and estado("PLAYED") == "leido"
+    assert evolution_wa.normalizar_mensaje(registro("conversation", "x"))["estado"] is None   # entrante
+
+
+def test_normalizar_imagen_con_miniatura():
+    m = evolution_wa.normalizar_mensaje(registro("imageMessage", {
+        "caption": "mira", "mimetype": "image/jpeg", "fileLength": {"low": 2048, "high": 0},
+        "jpegThumbnail": "QUJD", "width": 800, "height": 600}))
+    assert m["tipo"] == "imagen" and m["texto"] == "mira"
+    assert m["archivo"] == {"mime": "image/jpeg", "nombre": None, "tamano": 2048, "segundos": None,
+                            "miniatura": "data:image/jpeg;base64,QUJD", "ancho": 800, "alto": 600}
+
+
+@pytest.mark.parametrize("tipo, contenido, esperado, texto", [
+    ("audioMessage", {"ptt": True, "seconds": 7, "mimetype": "audio/ogg; codecs=opus"}, "nota", ""),
+    ("audioMessage", {"ptt": False, "seconds": 70, "mimetype": "audio/mpeg"}, "audio", ""),
+    ("videoMessage", {"caption": "", "seconds": 12, "mimetype": "video/mp4"}, "video", ""),
+    ("documentMessage", {"fileName": "factura.pdf", "mimetype": "application/pdf", "caption": "la factura"},
+     "documento", "la factura"),
+    ("stickerMessage", {"mimetype": "image/webp"}, "sticker", ""),
+    ("extendedTextMessage", {"text": "un link"}, "texto", "un link"),
+])
+def test_normalizar_tipos(tipo, contenido, esperado, texto):
+    m = evolution_wa.normalizar_mensaje(registro(tipo, contenido))
+    assert m["tipo"] == esperado and m["texto"] == texto
+    if esperado in ("nota", "audio", "video"):
+        assert m["archivo"]["segundos"] == contenido["seconds"]
+    if esperado == "documento":
+        assert m["archivo"]["nombre"] == "factura.pdf"
+
+
+def test_documento_con_pie_viene_envuelto():
+    m = evolution_wa.normalizar_mensaje(registro("documentWithCaptionMessage", {"message": {
+        "documentMessage": {"fileName": "x.pdf", "caption": "va", "mimetype": "application/pdf"}}}))
+    assert m["tipo"] == "documento" and m["archivo"]["nombre"] == "x.pdf" and m["texto"] == "va"
+
+
+def test_reacciones_y_protocolo_no_son_mensajes():
+    assert evolution_wa.normalizar_mensaje(registro("reactionMessage", {"text": "👍"})) is None
+    assert evolution_wa.normalizar_mensaje(registro("protocolMessage", {})) is None
+
+
+def test_mensajes_con_pagina(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/chat/findMessages/jarvis-u1")] = (200, {"messages": {"records": [
+        registro("conversation", "nuevo", id_="b") | {"messageTimestamp": 20},
+        registro("reactionMessage", {"text": "x"}, id_="r") | {"messageTimestamp": 15},
+        registro("conversation", "viejo", id_="a") | {"messageTimestamp": 10}]}})
+    lista = evolution_wa.mensajes("jarvis-u1", "18097778888@s.whatsapp.net", 30, pagina=2)
+    assert [m["id"] for m in lista] == ["a", "b"]
+    assert json.loads(pedidos[0].content)["page"] == 2
