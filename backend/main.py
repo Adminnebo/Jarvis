@@ -1317,7 +1317,7 @@ async def webhook_de_evolution(peticion: Request, clave: str = ""):
     except Exception as fallo:  # noqa: BLE001 - un evento roto no tumba el webhook
         print(f"  AVISO: fallo el webhook de Evolution {evento.get('event')}: {fallo}")
         return JSONResponse(status_code=500, content={"error": "error procesando"})
-    if resultado not in ("qr", "sin accion", "grupo", "viejo"):
+    if resultado not in ("qr", "sin accion", "grupo", "viejo", "enviado"):
         print(f"  WhatsApp (Evolution) {evento.get('event')}: {resultado}")
     return {"ok": True}
 

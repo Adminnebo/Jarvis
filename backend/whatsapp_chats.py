@@ -557,7 +557,20 @@ def recibir_evolution(evento: dict, clave: str) -> str:
         return "otra instancia"
     tipo = str(evento.get("event") or "").lower().replace("_", ".")
     datos = evento.get("data") or {}
+    try:   # la vista de WhatsApp abierta en el navegador se entera al instante
+        from . import apps_whatsapp
 
+        para_la_vista = apps_whatsapp.evento_de_webhook(evento)
+        if para_la_vista:
+            apps_whatsapp.publicar(usuario_id, para_la_vista)
+    except Exception as error:  # noqa: BLE001 - la vista nunca frena los avisos
+        print(f"  AVISO: no se pudo avisar a la vista de WhatsApp: {error}")
+
+    if tipo == "send.message":   # lo mando desde Jarvis: ese chat ya esta atendido
+        jid = str(((datos[0] if isinstance(datos, list) and datos else datos).get("key") or {}).get("remoteJid") or "")
+        if jid:
+            _descartar_chat(usuario_id, jid)
+        return "enviado"
     if tipo == "qrcode.updated":
         qr = datos.get("qrcode") or datos
         anterior = _qr.get(usuario_id) or {}
