@@ -74,7 +74,7 @@ def mensajes(jid: str, peticion: Request, pagina: int = 1):
     if fallo:
         return fallo
     lista, fallo = _evolution(evolution_wa.mensajes, instancia, jid, POR_PAGINA, pagina=max(1, pagina))
-    return fallo or {"mensajes": lista}
+    return fallo or {"mensajes": lista, "jid": jid}
 
 
 class Leidos(BaseModel):

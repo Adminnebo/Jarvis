@@ -61,7 +61,9 @@ def test_mensajes_con_pagina(conectado, monkeypatch):
     monkeypatch.setattr(evolution_wa, "mensajes", lambda inst, jid, limite=30, pagina=1:
                         pedidos.append((inst, jid, pagina)) or [{"id": "m1"}])
     r = conectado.get(f"/api/apps/whatsapp/chats/{JID}/mensajes?pagina=2")
-    assert r.json() == {"mensajes": [{"id": "m1"}]} and pedidos == [("jarvis-admin", JID, 2)]
+    assert r.json() == {"mensajes": [{"id": "m1"}], "jid": JID} and pedidos == [("jarvis-admin", JID, 2)]
+    nuevo = conectado.get("/api/apps/whatsapp/chats/8097778888/mensajes").json()
+    assert nuevo["jid"] == JID
 
 
 def test_grupo_es_400(conectado):

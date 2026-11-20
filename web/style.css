@@ -1394,3 +1394,4 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
 }
 
 a.boton-mini { display: inline-block; text-decoration: none; color: inherit; }
+a.boton-texto { text-decoration: none; display: inline-flex; align-items: center; }

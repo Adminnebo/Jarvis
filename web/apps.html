@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#202c33">
+  <title>WhatsApp · Jarvis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/apps/whatsapp.css">
+</head>
+<body>
+  <!-- La barra de Jarvis: siempre a la vista, para volver sin salir de la aplicacion. -->
+  <header class="jarvis-barra">
+    <a href="/" class="jarvis-volver" aria-label="Volver a Jarvis">&larr; Jarvis</a>
+    <span class="jarvis-titulo">WhatsApp<span id="cuenta"></span></span>
+  </header>
+
+  <div id="franja" class="franja" hidden>Reconectando…</div>
+
+  <main id="app" class="wa">
+    <!-- Lista de chats -->
+    <section class="wa-lado" aria-label="Chats">
+      <header class="wa-cabecera">
+        <div class="avatar avatar-propio" id="avatar-propio"></div>
+        <div class="wa-cabecera-acciones">
+          <button id="btn-nuevo" class="icono" type="button" title="Nuevo chat" aria-label="Nuevo chat">
+            <svg viewBox="0 0 24 24"><path d="M19.005 3.175H4.674C3.642 3.175 3 3.789 3 4.821V21.02l3.544-3.514h12.461c1.033 0 2.064-1.06 2.064-2.093V4.821c-.001-1.032-1.032-1.646-2.064-1.646zm-4.989 9.869H7.041V11.1h6.975v1.944zm3-4H7.041V7.1h9.975v1.944z"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="wa-buscar">
+        <label class="wa-buscar-caja">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.009 13.805h-.636l-.22-.219a5.184 5.184 0 0 0 1.256-3.386 5.207 5.207 0 1 0-5.207 5.208 5.183 5.183 0 0 0 3.385-1.255l.221.22v.635l4.004 3.999 1.194-1.195-3.997-4.007zm-4.808 0a3.605 3.605 0 1 1 0-7.21 3.605 3.605 0 0 1 0 7.21z"/></svg>
+          <input id="buscar" type="search" placeholder="Buscar un chat o iniciar uno nuevo" autocomplete="off">
+        </label>
+      </div>
+      <ul id="lista" class="wa-lista" role="list"></ul>
+      <button id="btn-nuevo-flotante" class="flotante" type="button" aria-label="Nuevo chat">
+        <svg viewBox="0 0 24 24"><path d="M19.005 3.175H4.674C3.642 3.175 3 3.789 3 4.821V21.02l3.544-3.514h12.461c1.033 0 2.064-1.06 2.064-2.093V4.821c-.001-1.032-1.032-1.646-2.064-1.646zm-4.989 9.869H7.041V11.1h6.975v1.944zm3-4H7.041V7.1h9.975v1.944z"/></svg>
+      </button>
+    </section>
+
+    <!-- Conversacion -->
+    <section class="wa-chat" id="chat" aria-label="Conversación">
+      <div class="wa-vacio" id="vacio">
+        <div class="wa-vacio-dibujo" aria-hidden="true">
+          <svg viewBox="0 0 64 64"><rect x="6" y="12" width="40" height="28" rx="3"/><rect x="40" y="20" width="18" height="32" rx="3"/><path d="M18 46h16"/></svg>
+        </div>
+        <h2>Tu WhatsApp en Jarvis</h2>
+        <p>Envía y recibe mensajes sin salir de Jarvis. Tu teléfono sigue funcionando igual.</p>
+      </div>
+
+      <div class="wa-conversacion" id="conversacion" hidden>
+        <header class="wa-cabecera wa-cabecera-chat">
+          <button id="btn-atras" class="icono atras" type="button" aria-label="Volver a los chats">
+            <svg viewBox="0 0 24 24"><path d="M12 4l1.4 1.4L7.8 11H20v2H7.8l5.6 5.6L12 20l-8-8 8-8z"/></svg>
+          </button>
+          <div class="avatar" id="chat-avatar"></div>
+          <div class="wa-cabecera-texto">
+            <div class="wa-nombre" id="chat-nombre"></div>
+            <div class="wa-sub" id="chat-sub"></div>
+          </div>
+        </header>
+
+        <div class="wa-mensajes" id="mensajes" tabindex="0"></div>
+
+        <div class="wa-cita-escribiendo" id="cita" hidden>
+          <div class="cita"><div class="cita-quien" id="cita-quien"></div><div class="cita-texto" id="cita-texto"></div></div>
+          <button class="icono" id="cita-quitar" type="button" aria-label="Quitar la cita">
+            <svg viewBox="0 0 24 24"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+          </button>
+        </div>
+
+        <footer class="wa-escribir" id="escribir">
+          <div class="emojis" id="emojis" hidden></div>
+          <div class="adjuntar-menu" id="adjuntar-menu" hidden>
+            <button type="button" data-tipo="documento"><span class="adj adj-doc">📄</span>Documento</button>
+            <button type="button" data-tipo="medios"><span class="adj adj-foto">🖼️</span>Fotos y videos</button>
+          </div>
+          <button class="icono" id="btn-emoji" type="button" aria-label="Emojis">
+            <svg viewBox="0 0 24 24"><path d="M9.153 11.603c.795 0 1.439-.879 1.439-1.962s-.644-1.962-1.439-1.962-1.439.879-1.439 1.962.644 1.962 1.439 1.962zm-3.204 1.362c-.026-.307-.131 5.218 6.063 5.551 6.066-.25 6.066-5.551 6.066-5.551-6.078 1.416-12.129 0-12.129 0zm11.363 1.108s-.669 1.959-5.051 1.959c-3.505 0-5.388-1.164-5.607-1.959 0 0 5.912 1.055 10.658 0zM11.804 1.011C5.609 1.011.978 6.033.978 12.228s4.826 10.761 11.021 10.761S23.02 18.423 23.02 12.228c.001-6.195-5.021-11.217-11.216-11.217zM12 21.354c-5.273 0-9.381-3.886-9.381-9.159s3.942-9.548 9.215-9.548 9.548 4.275 9.548 9.548c-.001 5.272-4.109 9.159-9.382 9.159zm3.108-9.751c.795 0 1.439-.879 1.439-1.962s-.644-1.962-1.439-1.962-1.439.879-1.439 1.962.644 1.962 1.439 1.962z"/></svg>
+          </button>
+          <button class="icono" id="btn-adjuntar" type="button" aria-label="Adjuntar">
+            <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          </button>
+          <div class="wa-caja"><textarea id="texto" rows="1" placeholder="Escribe un mensaje"></textarea></div>
+          <button class="icono principal" id="btn-enviar" type="button" aria-label="Grabar nota de voz">
+            <svg class="i-mic" viewBox="0 0 24 24"><path d="M11.999 14.942c2.001 0 3.531-1.53 3.531-3.531V4.35c0-2.001-1.53-3.531-3.531-3.531S8.469 2.35 8.469 4.35v7.061c0 2.001 1.53 3.531 3.53 3.531zm6.238-3.53c0 3.531-2.942 6.002-6.237 6.002s-6.237-2.471-6.237-6.002H3.761c0 4.001 3.178 7.297 7.061 7.885v3.884h2.354v-3.884c3.884-.588 7.061-3.884 7.061-7.885h-2z"/></svg>
+            <svg class="i-enviar" viewBox="0 0 24 24"><path d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817-.011 7.912z"/></svg>
+          </button>
+          <div class="grabando" id="grabando" hidden>
+            <button class="icono" id="grabar-descartar" type="button" aria-label="Descartar la nota">
+              <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </button>
+            <span class="grabando-punto"></span><span id="grabar-tiempo">0:00</span>
+            <button class="icono principal" id="grabar-enviar" type="button" aria-label="Enviar la nota">
+              <svg viewBox="0 0 24 24"><path d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817-.011 7.912z"/></svg>
+            </button>
+          </div>
+          <input type="file" id="archivo-doc" hidden>
+          <input type="file" id="archivo-medios" accept="image/*,video/*" hidden>
+        </footer>
+      </div>
+    </section>
+  </main>
+
+  <!-- Vista previa de un archivo antes de enviarlo -->
+  <div class="capa" id="previa" hidden>
+    <div class="previa">
+      <header><button class="icono" id="previa-cerrar" type="button" aria-label="Cancelar">
+        <svg viewBox="0 0 24 24"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+        <span id="previa-nombre"></span></header>
+      <div class="previa-cuerpo" id="previa-cuerpo"></div>
+      <footer><input id="previa-pie" placeholder="Añade un comentario" autocomplete="off">
+        <button class="icono principal" id="previa-enviar" type="button" aria-label="Enviar">
+          <svg viewBox="0 0 24 24"><path d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817-.011 7.912z"/></svg>
+        </button></footer>
+    </div>
+  </div>
+
+  <!-- Foto en grande -->
+  <div class="capa visor" id="visor" hidden>
+    <button class="icono visor-cerrar" id="visor-cerrar" type="button" aria-label="Cerrar">
+      <svg viewBox="0 0 24 24"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+    </button>
+    <img id="visor-img" alt="">
+  </div>
+
+  <!-- Nuevo chat -->
+  <div class="capa" id="nuevo" hidden>
+    <form class="dialogo" id="nuevo-form">
+      <h3>Nuevo chat</h3>
+      <input name="numero" inputmode="tel" placeholder="Número (809 555 1234)" autocomplete="off" required>
+      <p class="dialogo-error" id="nuevo-error"></p>
+      <div class="dialogo-botones"><button type="button" id="nuevo-cancelar">Cancelar</button><button type="submit">Abrir chat</button></div>
+    </form>
+  </div>
+
+  <!-- Sin WhatsApp vinculado -->
+  <div class="vincular" id="vincular" hidden>
+    <div class="vincular-caja">
+      <div class="vincular-texto">
+        <h2>Usa tu WhatsApp en Jarvis</h2>
+        <ol>
+          <li>Abre WhatsApp en tu teléfono.</li>
+          <li>Toca <b>Menú ⋮</b> o <b>Ajustes</b> y selecciona <b>Dispositivos vinculados</b>.</li>
+          <li>Toca <b>Vincular un dispositivo</b>.</li>
+          <li id="vincular-paso">Apunta tu teléfono a esta pantalla para escanear el código.</li>
+        </ol>
+        <button type="button" class="enlace" id="vincular-codigo">Vincular con el número de teléfono</button>
+        <form id="vincular-form" hidden><input name="numero" inputmode="tel" placeholder="809 555 1234"><button type="submit">Pedir código</button></form>
+        <p class="vincular-error" id="vincular-error"></p>
+      </div>
+      <div class="vincular-qr"><img id="vincular-img" alt="Código QR para vincular" hidden><div id="vincular-numero" class="vincular-numero" hidden></div><div class="vincular-cargando" id="vincular-cargando">Generando código…</div></div>
+    </div>
+  </div>
+
+  <script type="module" src="/apps/whatsapp.js"></script>
+</body>
+</html>
