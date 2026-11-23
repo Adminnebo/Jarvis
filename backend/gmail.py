@@ -32,7 +32,8 @@ ENVIAR = "https://www.googleapis.com/auth/gmail.send"
 # Opcional: si la persona no marca la casilla, Gmail funciona igual (ver google_calendario.py).
 CALENDARIO = "https://www.googleapis.com/auth/calendar.events"
 MODIFICAR = "https://www.googleapis.com/auth/gmail.modify"   # la bandeja de /apps/correo
-PERMISOS = ("openid", "email", LEER, ENVIAR, MODIFICAR, CALENDARIO)
+CALENDARIOS = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"   # lista de calendarios (/apps/calendario)
+PERMISOS = ("openid", "email", LEER, ENVIAR, MODIFICAR, CALENDARIO, CALENDARIOS)
 RETORNO = "https://asistente.neboaiconsulting.com/integraciones/gmail/callback"
 VIGENCIA_ESTADO = 600
 
