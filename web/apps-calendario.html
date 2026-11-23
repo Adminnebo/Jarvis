@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1b1b1b">
+  <title>Calendario · Jarvis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/apps/calendario.css">
+</head>
+<body>
+  <header class="jarvis-barra">
+    <a href="/" class="jarvis-volver" aria-label="Volver a Jarvis">&larr; Jarvis</a>
+    <nav class="apps-pestanas" aria-label="Apps">
+      <a href="/apps/whatsapp">WhatsApp</a>
+      <a href="/apps/correo">Correo</a>
+      <a href="/apps/calendario" class="activa" aria-current="page">Calendario</a>
+    </nav>
+    <span class="jarvis-cuenta" id="cuenta"></span>
+  </header>
+
+  <div class="franja" id="franja" hidden>
+    <span>Reconecta tu Google para ver todos tus calendarios (compartidos, cumpleaños, festivos).</span>
+    <a href="/integraciones/gmail/conectar">Reconectar</a>
+  </div>
+
+  <div class="c" id="app">
+    <header class="c-arriba">
+      <button class="icono" id="btn-menu" type="button" aria-label="Menú">
+        <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+      </button>
+      <button class="boton-borde" id="btn-hoy" type="button">Hoy</button>
+      <button class="icono" id="btn-ant" type="button" aria-label="Anterior"><svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>
+      <button class="icono" id="btn-sig" type="button" aria-label="Siguiente"><svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>
+      <h1 id="titulo"></h1>
+      <div class="vistas" id="vistas" role="tablist">
+        <button type="button" data-vista="dia">Día</button>
+        <button type="button" data-vista="tres" class="solo-movil">3 días</button>
+        <button type="button" data-vista="semana" class="solo-pc">Semana</button>
+        <button type="button" data-vista="mes">Mes</button>
+        <button type="button" data-vista="agenda">Agenda</button>
+      </div>
+    </header>
+
+    <nav class="c-lado" id="lado" aria-label="Calendarios">
+      <button class="crear" id="btn-crear" type="button">
+        <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="#a8c7fa"/></svg>
+        <span>Crear</span>
+      </button>
+      <div class="mini" id="mini"></div>
+      <div class="lado-titulo">Mis calendarios</div>
+      <ul class="lista-cal" id="lista-cal"></ul>
+    </nav>
+    <div class="velo" id="velo"></div>
+
+    <main class="c-centro" id="centro"></main>
+
+    <button class="flotante" id="btn-crear-flotante" type="button" aria-label="Crear evento">
+      <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+    </button>
+  </div>
+
+  <!-- tarjeta de un evento -->
+  <div class="tarjeta" id="tarjeta" hidden role="dialog" aria-label="Evento"></div>
+
+  <!-- editor completo -->
+  <div class="capa" id="capa-editor" hidden>
+    <form class="editor" id="editor">
+      <header>
+        <button class="icono" type="button" id="editor-cerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+        <input name="titulo" class="editor-titulo" placeholder="Añade un título" autocomplete="off">
+        <button class="boton-azul" type="submit">Guardar</button>
+      </header>
+      <div class="editor-cuerpo">
+        <div class="fila-campos">
+          <input type="date" name="fecha_inicio" required>
+          <input type="time" name="hora_inicio" step="900">
+          <span class="a">a</span>
+          <input type="time" name="hora_fin" step="900">
+          <input type="date" name="fecha_fin" required>
+        </div>
+        <label class="casilla"><input type="checkbox" name="todo_el_dia"> Todo el día</label>
+        <label class="campo"><span>Calendario</span><select name="calendario"></select></label>
+        <label class="campo"><span>Invitados</span><input name="invitados" placeholder="correo@ejemplo.com, otro@ejemplo.com" autocomplete="off"></label>
+        <label class="casilla"><input type="checkbox" name="meet"> Agregar videollamada de Meet</label>
+        <label class="campo"><span>Ubicación</span><input name="ubicacion" autocomplete="off"></label>
+        <label class="campo"><span>Aviso</span><select name="aviso_min">
+          <option value="">Sin cambiar</option><option value="0">Al comenzar</option><option value="5">5 minutos antes</option>
+          <option value="10">10 minutos antes</option><option value="15">15 minutos antes</option><option value="30">30 minutos antes</option>
+          <option value="60">1 hora antes</option><option value="1440">1 día antes</option></select></label>
+        <label class="campo"><span>Descripción</span><textarea name="descripcion" rows="4"></textarea></label>
+        <p class="editor-error" id="editor-error" role="alert"></p>
+      </div>
+    </form>
+  </div>
+
+  <!-- serie: solo este o todos -->
+  <div class="capa" id="capa-serie" hidden>
+    <div class="dialogo">
+      <h3 id="serie-titulo">Editar evento recurrente</h3>
+      <label class="radio"><input type="radio" name="serie" value="0" checked> Este evento</label>
+      <label class="radio"><input type="radio" name="serie" value="1"> Todos los eventos</label>
+      <div class="dialogo-botones"><button type="button" id="serie-cancelar">Cancelar</button><button type="button" id="serie-aceptar" class="fuerte">Aceptar</button></div>
+    </div>
+  </div>
+
+  <div class="conectar" id="conectar" hidden>
+    <div class="conectar-caja">
+      <h2>Tu calendario en Jarvis</h2>
+      <p id="conectar-texto">Conecta tu cuenta de Google (y marca la casilla del calendario) para ver y organizar tu agenda sin salir de Jarvis.</p>
+      <a class="boton-azul" href="/integraciones/gmail/conectar">Conectar Google</a>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" role="status" hidden><span id="aviso-texto"></span></div>
+
+  <script type="module" src="/apps/calendario.js"></script>
+</body>
+</html>

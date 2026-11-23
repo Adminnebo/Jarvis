@@ -310,3 +310,10 @@ svg { fill: currentColor; }
   .adjuntar-menu { left: 50px; }
 }
 @media (prefers-reduced-motion: reduce) { .wa-chat { transition: none; } }
+
+@media (max-width: 600px) {
+  .jarvis-cuenta { display: none; }
+  .jarvis-barra { gap: 6px; padding: 0 10px; }
+  .jarvis-volver { white-space: nowrap; }
+  .apps-pestanas a { padding: 0 8px; }
+}

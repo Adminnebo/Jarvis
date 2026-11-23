@@ -887,6 +887,7 @@ async function cargarEstado() {
     $("btn-integraciones").hidden = false;
     $("btn-app-whatsapp").hidden = false;
     $("btn-app-correo").hidden = false;
+    $("btn-app-calendario").hidden = false;
     if (!avisosIniciados) { avisosIniciados = true; iniciarAvisos((texto) => enviar(texto)); }
     // Vuelta de Google: abrir el panel para que se vea la cuenta conectada.
     if (new URLSearchParams(location.search).get("integraciones")) {

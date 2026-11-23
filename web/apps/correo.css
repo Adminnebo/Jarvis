@@ -248,3 +248,10 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--g-azul);
   .aviso { left: 12px; right: 12px; bottom: 84px; }
 }
 @media (prefers-reduced-motion: reduce) { .g-menu { transition: none; } }
+
+@media (max-width: 600px) {
+  .jarvis-cuenta { display: none; }
+  .jarvis-barra { gap: 6px; padding: 0 10px; }
+  .jarvis-volver { white-space: nowrap; }
+  .apps-pestanas a { padding: 0 8px; }
+}
