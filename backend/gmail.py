@@ -31,13 +31,15 @@ LEER = "https://www.googleapis.com/auth/gmail.readonly"
 ENVIAR = "https://www.googleapis.com/auth/gmail.send"
 # Opcional: si la persona no marca la casilla, Gmail funciona igual (ver google_calendario.py).
 CALENDARIO = "https://www.googleapis.com/auth/calendar.events"
-PERMISOS = ("openid", "email", LEER, ENVIAR, CALENDARIO)
+MODIFICAR = "https://www.googleapis.com/auth/gmail.modify"   # la bandeja de /apps/correo
+PERMISOS = ("openid", "email", LEER, ENVIAR, MODIFICAR, CALENDARIO)
 RETORNO = "https://asistente.neboaiconsulting.com/integraciones/gmail/callback"
 VIGENCIA_ESTADO = 600
 
 _candado = threading.Lock()
 _usados: dict[str, float] = {}                    # nonce -> caduca
 _cache_tokens: dict[str, tuple[str, float]] = {}  # sha256(refresh) -> (access, caduca)
+_permisos: dict[str, set[str]] = {}               # sha256(refresh) -> permisos que dio la persona
 _cliente = httpx.Client(timeout=30)
 
 
@@ -127,10 +129,12 @@ def url_de_autorizacion(usuario_id: str) -> str:
 # Tokens
 # --------------------------------------------------------------------------
 
-def _guardar_en_cache(refresh: str, acceso_: str, expira_en: int) -> None:
+def _guardar_en_cache(refresh: str, acceso_: str, expira_en: int, scope: str | None = None) -> None:
+    clave = hashlib.sha256(refresh.encode()).hexdigest()
     with _candado:
-        _cache_tokens[hashlib.sha256(refresh.encode()).hexdigest()] = (
-            acceso_, time.time() + int(expira_en or 3600) - 60)
+        _cache_tokens[clave] = (acceso_, time.time() + int(expira_en or 3600) - 60)
+        if scope:
+            _permisos[clave] = set(str(scope).split())
 
 
 def canjear_codigo(codigo: str) -> dict:
@@ -148,7 +152,7 @@ def canjear_codigo(codigo: str) -> dict:
     if not datos.get("refresh_token"):
         raise ErrorGmail("Google no dio un permiso permanente. Quita el acceso en "
                          "myaccount.google.com/permissions y vuelve a conectar.")
-    _guardar_en_cache(datos["refresh_token"], datos["access_token"], datos.get("expires_in"))
+    _guardar_en_cache(datos["refresh_token"], datos["access_token"], datos.get("expires_in"), datos.get("scope"))
     return datos
 
 
@@ -172,8 +176,27 @@ def token_de_acceso(refresh: str) -> str:
     if r.status_code >= 400:
         raise ErrorGmail(f"Google no renovo el acceso (HTTP {r.status_code}).", status=r.status_code)
     datos = r.json()
-    _guardar_en_cache(refresh, datos["access_token"], datos.get("expires_in"))
+    _guardar_en_cache(refresh, datos["access_token"], datos.get("expires_in"), datos.get("scope"))
     return datos["access_token"]
+
+
+def permisos(refresh: str) -> set[str]:
+    """Los permisos que dio la persona (Google los dice al canjear y al refrescar el token)."""
+    clave = hashlib.sha256(refresh.encode()).hexdigest()
+    with _candado:
+        conocidos = _permisos.get(clave)
+    if conocidos is None:
+        with _candado:
+            _cache_tokens.pop(clave, None)   # se fuerza un refresco, que trae el scope
+        token_de_acceso(refresh)
+        with _candado:
+            conocidos = _permisos.get(clave, set())
+    return set(conocidos)
+
+
+def puede_modificar(refresh: str) -> bool:
+    """Si dio gmail.modify: archivar, eliminar, marcar, etiquetar y borradores."""
+    return MODIFICAR in permisos(refresh)
 
 
 def revocar(refresh: str) -> None:
@@ -308,3 +331,113 @@ def enviar(token: str, de: str, para: str, asunto: str, cuerpo: str,
     correo.set_content(cuerpo)
     datos["raw"] = _b64(correo.as_bytes())
     return _api("POST", "/messages/send", token, json=datos).get("id", "")
+
+
+# --------------------------------------------------------------------------
+# Bandeja (/apps/correo): etiquetas, hilos, adjuntos, cambios y acciones
+# --------------------------------------------------------------------------
+
+_OCULTAS = {"CHAT", "UNREAD", "IMPORTANT", "CATEGORY_UPDATES", "CATEGORY_FORUMS",
+            "CATEGORY_PERSONAL", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "YELLOW_STAR"}
+
+
+def etiquetas(token: str) -> list[dict]:
+    """Las etiquetas del menu, con cuantos hilos sin leer tiene cada una."""
+    salida = []
+    for e in _api("GET", "/labels", token).get("labels", []):
+        if e["id"] in _OCULTAS or e["id"].startswith("CATEGORY_"):
+            continue
+        detalle = _api("GET", f"/labels/{e['id']}", token)
+        salida.append({
+            "id": e["id"], "nombre": e.get("name", e["id"]), "propia": e.get("type") == "user",
+            "color": (e.get("color") or {}).get("backgroundColor"),
+            "no_leidos": int(detalle.get("threadsUnread") or 0), "total": int(detalle.get("threadsTotal") or 0),
+        })
+    return salida
+
+
+def no_leidos_de(token: str, etiqueta: str) -> int:
+    return int(_api("GET", f"/labels/{etiqueta}", token).get("threadsUnread") or 0)
+
+
+def hilos(token: str, etiqueta: str, consulta: str, pagina: str | None, cuantos: int = 50) -> tuple[list[str], str | None]:
+    """Ids de hilos de una etiqueta ('' = todos) y una busqueda, y el token de la pagina siguiente."""
+    parametros: dict = {"maxResults": cuantos}
+    if etiqueta:
+        parametros["labelIds"] = [etiqueta]
+    if consulta:
+        parametros["q"] = consulta
+    if pagina:
+        parametros["pageToken"] = pagina
+    datos = _api("GET", "/threads", token, params=parametros)
+    return [h["id"] for h in datos.get("threads", [])], datos.get("nextPageToken")
+
+
+def hilo_completo(token: str, identificador: str, solo_cabeceras: bool = False) -> dict:
+    if solo_cabeceras:
+        return _api("GET", f"/threads/{identificador}", token, params={
+            "format": "metadata", "metadataHeaders": ["From", "To", "Subject", "Date"]})
+    return _api("GET", f"/threads/{identificador}", token, params={"format": "full"})
+
+
+def adjunto(token: str, mensaje_id: str, adjunto_id: str) -> bytes:
+    datos = _api("GET", f"/messages/{mensaje_id}/attachments/{adjunto_id}", token)
+    return _de_b64(datos.get("data", ""))
+
+
+def cambios(token: str, desde: str) -> dict:
+    """Hilos que cambiaron desde un historyId (nuevos, leidos, archivados, borrados) y el historyId nuevo.
+
+    Un `desde` demasiado viejo da ErrorGmail con status 404: la vista recarga todo."""
+    hilos_: list[str] = []
+    pagina = None
+    while True:
+        parametros = {"startHistoryId": desde, "maxResults": 500}
+        if pagina:
+            parametros["pageToken"] = pagina
+        datos = _api("GET", "/history", token, params=parametros)
+        for cambio in datos.get("history", []):
+            for clave in ("messagesAdded", "messagesDeleted", "labelsAdded", "labelsRemoved"):
+                for item in cambio.get(clave, []):
+                    hilo_id = (item.get("message") or {}).get("threadId")
+                    if hilo_id and hilo_id not in hilos_:
+                        hilos_.append(hilo_id)
+        pagina = datos.get("nextPageToken")
+        if not pagina:
+            return {"historyId": str(datos.get("historyId", desde)), "hilos": hilos_}
+
+
+def modificar_hilos(token: str, ids: list[str], agregar: list[str] = (), quitar: list[str] = ()) -> None:
+    for identificador in ids:
+        _api("POST", f"/threads/{identificador}/modify", token,
+             json={"addLabelIds": list(agregar), "removeLabelIds": list(quitar)})
+
+
+def papelera(token: str, ids: list[str]) -> None:
+    for identificador in ids:
+        _api("POST", f"/threads/{identificador}/trash", token)
+
+
+def guardar_borrador(token: str, crudo: bytes, borrador_id: str | None, hilo_id: str | None) -> dict:
+    """Crea o reemplaza un borrador con un correo MIME ya armado."""
+    mensaje_ = {"raw": _b64(crudo)}
+    if hilo_id:
+        mensaje_["threadId"] = hilo_id
+    if borrador_id:
+        return _api("PUT", f"/drafts/{borrador_id}", token, json={"id": borrador_id, "message": mensaje_})
+    return _api("POST", "/drafts", token, json={"message": mensaje_})
+
+
+def borrar_borrador(token: str, borrador_id: str) -> None:
+    _api("DELETE", f"/drafts/{borrador_id}", token)
+
+
+def enviar_borrador(token: str, borrador_id: str) -> dict:
+    return _api("POST", "/drafts/send", token, json={"id": borrador_id})
+
+
+def enviar_mime(token: str, crudo: bytes, hilo_id: str | None = None) -> dict:
+    datos = {"raw": _b64(crudo)}
+    if hilo_id:
+        datos["threadId"] = hilo_id
+    return _api("POST", "/messages/send", token, json=datos)
