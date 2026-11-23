@@ -133,3 +133,41 @@ def test_respuesta_larga_se_recorta(portal):
 def test_la_herramienta_esta(monkeypatch):
     nombres = {e["name"] for e in herramientas.esquemas()}
     assert "consultar_panel" in nombres
+
+
+class _Transcripciones:
+    def __init__(self, vistos, falla=False):
+        self.vistos, self.falla = vistos, falla
+
+    def create(self, **kw):
+        if self.falla:
+            raise RuntimeError("cuota")
+        self.vistos.append(kw)
+        uso = type("U", (), {"model_dump": lambda s: {"input_tokens": 50, "output_tokens": 6}})()
+        return type("R", (), {"text": " Hola Jarvis ", "usage": uso})()
+
+
+def _cliente_falso(vistos, falla=False):
+    audio = type("A", (), {"transcriptions": _Transcripciones(vistos, falla)})()
+    return type("C", (), {"audio": audio})()
+
+
+def test_dictado_pasa_el_audio_a_texto(con_panel, monkeypatch):
+    from backend import consumo
+    vistos, anotados = [], []
+    monkeypatch.setattr(cerebro, "cliente", lambda: _cliente_falso(vistos))
+    monkeypatch.setattr(consumo, "registrar", lambda *a, **k: anotados.append((a, k)))
+    r = con_panel.post("/api/dictado", headers={"Authorization": "Bearer ana.jwt.firma"},
+                       files={"audio": ("dictado.webm", b"\x1a\x45audio", "audio/webm")})
+    assert r.status_code == 200 and r.json() == {"texto": "Hola Jarvis"}
+    assert vistos[0]["language"] == "es" and vistos[0]["file"][1] == b"\x1a\x45audio"
+    assert anotados[0][0][0] == "transcripcion" and anotados[0][1]["dispositivo"] == "panel"
+
+
+def test_dictado_pide_sesion_y_avisa_si_falla(con_panel, monkeypatch):
+    sin = con_panel.post("/api/dictado", files={"audio": ("d.webm", b"x", "audio/webm")})
+    assert sin.status_code == 401
+    monkeypatch.setattr(cerebro, "cliente", lambda: _cliente_falso([], falla=True))
+    r = con_panel.post("/api/dictado", headers={"Authorization": "Bearer ana.jwt.firma"},
+                       files={"audio": ("d.webm", b"x", "audio/webm")})
+    assert r.status_code == 502 and "transcribir" in r.json()["error"]

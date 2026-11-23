@@ -195,22 +195,69 @@
     document.addEventListener("keydown", function (e) {
       if ((e.ctrlKey || e.metaKey) && (e.key === "j" || e.key === "J")) { e.preventDefault(); abrir(); }
     });
-    var Reconocer = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (Reconocer) {
-      var rec = new Reconocer(), dictando = false, base = "";
-      rec.lang = "es-ES";
-      rec.interimResults = true;
-      var boton = $(".dictar");
+    // Dictado: se graba con el microfono y Jarvis lo pasa a texto (/api/dictado). El
+    // reconocimiento del navegador solo servia en Chrome/Edge de escritorio y fallaba callado.
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder) {
+      var boton = $(".dictar"), grabadora = null, flujo = null, trozos = [], aviso = null, tope = null;
       boton.hidden = false;
-      boton.addEventListener("click", function () {
-        if (dictando) { rec.stop(); return; }
-        base = area.value ? area.value + " " : "";
-        try { rec.start(); } catch (e) { /* ya estaba escuchando */ }
+      var avisar = function (t) {
+        if (!t) { if (aviso) aviso.remove(); aviso = null; return; }
+        if (!aviso) { aviso = document.createElement("div"); aviso.className = "est"; $(".msjs").appendChild(aviso); $(".hola").hidden = true; }
+        aviso.textContent = t;
+        $(".msjs").scrollTop = $(".msjs").scrollHeight;
+      };
+      var soltar = function () {
+        if (flujo) flujo.getTracks().forEach(function (t) { t.stop(); });
+        flujo = null; grabadora = null; clearTimeout(tope);
+        boton.classList.remove("dictando");
+        boton.setAttribute("aria-label", "Dictar");
+      };
+      var motivo = function (e) {
+        var n = e && e.name;
+        if (n === "NotAllowedError" || n === "SecurityError")
+          return "El navegador bloqueó el micrófono. Permítelo en el candado de la barra de direcciones (y en la configuración del sistema si hace falta) y vuelve a intentar.";
+        if (n === "NotFoundError") return "No encontré ningún micrófono conectado.";
+        if (n === "NotReadableError") return "Otra aplicación está usando el micrófono; ciérrala y vuelve a intentar.";
+        return "No pude usar el micrófono: " + ((e && e.message) || "error desconocido");
+      };
+      var transcribir = async function (blob) {
+        if (!blob.size) { avisar(null); return; }
+        avisar("Transcribiendo…");
+        try {
+          var datos = new FormData();
+          var ext = (blob.type.indexOf("mp4") >= 0) ? "mp4" : (blob.type.indexOf("ogg") >= 0 ? "ogg" : "webm");
+          datos.append("audio", blob, "dictado." + ext);
+          var r = await fetch(BASE + "/api/dictado", { method: "POST", credentials: "omit",
+            headers: { "Authorization": "Bearer " + token() }, body: datos });
+          var d = await r.json().catch(function () { return {}; });
+          if (!r.ok) throw new Error(d.error || (r.status === 401 ? "Tu sesión venció: recarga el panel." : "Error " + r.status));
+          avisar(null);
+          if (d.texto) {
+            area.value = (area.value ? area.value.replace(/\s*$/, " ") : "") + d.texto;
+            area.dispatchEvent(new Event("input"));
+          } else burbuja("err", "No se entendió nada en la grabación.");
+        } catch (e) { avisar(null); burbuja("err", e.message); }
+        area.focus();
+      };
+      boton.addEventListener("click", async function () {
+        if (grabadora) { grabadora.stop(); return; }
+        try {
+          flujo = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e) { soltar(); burbuja("err", motivo(e)); return; }
+        trozos = [];
+        try { grabadora = new MediaRecorder(flujo); } catch (e) { soltar(); burbuja("err", motivo(e)); return; }
+        grabadora.ondataavailable = function (e) { if (e.data && e.data.size) trozos.push(e.data); };
+        grabadora.onstop = function () {
+          var tipo = (grabadora && grabadora.mimeType) || "audio/webm";
+          soltar();
+          transcribir(new Blob(trozos, { type: tipo }));
+        };
+        grabadora.start();
+        boton.classList.add("dictando");
+        boton.setAttribute("aria-label", "Terminar dictado");
+        avisar("Escuchando… toca el micrófono para terminar.");
+        tope = setTimeout(function () { if (grabadora) grabadora.stop(); }, 120000);
       });
-      rec.onstart = function () { dictando = true; boton.classList.add("dictando"); };
-      rec.onend = function () { dictando = false; boton.classList.remove("dictando"); area.focus(); };
-      rec.onerror = function () { dictando = false; boton.classList.remove("dictando"); };
-      rec.onresult = function (e) { area.value = base + Array.from(e.results, function (r) { return r[0].transcript; }).join(""); };
     }
     // El contexto cambia mientras el panel esta abierto: el chip se mantiene al dia.
     setInterval(function () { if (!$(".panel").hidden) pintarChip(); }, 1500);

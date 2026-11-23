@@ -88,6 +88,12 @@ PRECIOS_POR_DEFECTO = {
     # ($0.017 el minuto, redondeado al segundo), no por tokens: su 'usage'
     # llega como {"type": "duration", "seconds": N}.
     MODELO_TRANSCRIPCION: {"minuto": 0.017, "confirmado": True},
+    # El dictado del widget de los paneles (archivo de audio, no en vivo).
+    "gpt-4o-mini-transcribe": {
+        "texto_entrada": 1.25, "texto_cache": 0.0, "texto_salida": 5.0,
+        "audio_entrada": 3.0, "audio_cache": 0.0, "audio_salida": 0.0,
+        "confirmado": True,
+    },
     # El TTS de los puentes. Con stream_format "sse" devuelve input_tokens
     # (texto) y output_tokens (audio): ~25 tokens por segundo de voz.
     "gpt-4o-mini-tts": {

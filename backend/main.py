@@ -430,6 +430,44 @@ def estado(peticion: Request):
     }
 
 
+# --------------------------------------------------------------------------
+# Dictado: el widget de los paneles graba con el microfono y aqui se pasa a
+# texto. El reconocimiento del navegador solo sirve en Chrome/Edge de
+# escritorio; esto funciona en cualquiera que grabe audio.
+# --------------------------------------------------------------------------
+
+MODELO_DICTADO = os.getenv("JARVIS_MODELO_DICTADO", "gpt-4o-mini-transcribe")
+MAXIMO_DICTADO = 10 * 1024 * 1024
+
+
+@app.post("/api/dictado")
+async def dictado(peticion: Request, audio: UploadFile = File(...)):
+    datos = await audio.read(MAXIMO_DICTADO + 1)
+    if not datos:
+        return JSONResponse(status_code=400, content={"error": "No llego audio."})
+    if len(datos) > MAXIMO_DICTADO:
+        return JSONResponse(status_code=413, content={"error": "El audio es demasiado largo."})
+    nombre = audio.filename or "dictado.webm"
+    try:
+        resultado = cerebro.cliente().audio.transcriptions.create(
+            model=MODELO_DICTADO, file=(nombre, datos, audio.content_type or "audio/webm"),
+            language="es",
+        )
+    except Exception as error:  # la API de OpenAI: formato raro, cuota, red
+        print(f"[dictado] fallo la transcripcion: {error}")
+        return JSONResponse(status_code=502, content={"error": "No pude transcribir el audio."})
+    uso = getattr(resultado, "usage", None)
+    if uso is not None:
+        try:
+            consumo.registrar("transcripcion", MODELO_DICTADO,
+                              uso.model_dump() if hasattr(uso, "model_dump") else dict(uso),
+                              usuario=peticion.state.usuario,
+                              dispositivo=getattr(peticion.state, "dispositivo", "navegador"))
+        except Exception as error:
+            print(f"[dictado] no se anoto el consumo: {error}")
+    return {"texto": (getattr(resultado, "text", "") or "").strip()}
+
+
 @app.post("/api/esquema/refrescar")
 def refrescar_esquema():
     """Para cuando cambies la base de datos y Jarvis siga viendo lo viejo."""
