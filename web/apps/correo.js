@@ -2,6 +2,13 @@
    (Jarvis habla con Gmail con el token de la persona). Lo nuevo se pide cada 25 s.
    Ver docs/superpowers/specs/2026-11-23-apps-correo-design.md. */
 
+import { enEstructura } from "./comun.js";
+
+const estructura = enEstructura("correo", {
+  refrescar: () => { cargarEtiquetas(); if (!estado.abierto) cargarLista(false, true); },
+  abrir: (id) => abrirHilo(estado.hilos.find((h) => h.id === id) || { id, asunto: "", etiquetas: [] }),
+});
+
 const $ = (id) => document.getElementById(id);
 const API = "/api/apps/correo";
 const esCelular = () => matchMedia("(max-width: 900px)").matches;
@@ -368,6 +375,10 @@ async function abrirHilo(resumen) {
     const datos = await pedir(`/hilos/${encodeURIComponent(resumen.id)}`);
     if (estado.abierto !== resumen.id) return;
     pintarHilo(resumen, datos);
+    const ultimo = datos.mensajes[datos.mensajes.length - 1] || {};
+    const asunto = resumen.asunto || ultimo.asunto || "(sin asunto)";
+    estructura.contexto(`Correo (Gmail): hilo id ${resumen.id}, asunto «${asunto}», último mensaje de ${ultimo.de?.nombre || ""} <${ultimo.de?.correo || ""}> (id ${ultimo.id})`,
+      `correo «${asunto.slice(0, 50)}»`);
     cargarEtiquetas();
   } catch (error) {
     $("hilo").querySelector(".cargando").textContent = error.message;
@@ -377,6 +388,7 @@ async function abrirHilo(resumen) {
 function cerrarHilo(volverAtras = true) {
   if (!estado.abierto) return;
   estado.abierto = null;
+  estructura.contexto(null);
   $("vista-hilo").hidden = true;
   $("vista-lista").hidden = false;
   document.body.classList.remove("leyendo");

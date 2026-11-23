@@ -362,7 +362,7 @@ async function enviar(mensaje) {
     const respuesta = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mensaje }),
+      body: JSON.stringify({ mensaje, contexto: contextoApps.texto }),
     });
 
     if (!respuesta.ok) {
@@ -423,6 +423,7 @@ async function enviar(mensaje) {
     if (!completo && nodoRespuesta.isConnected) nodoRespuesta.remove();
     // Si la mesa de cotizaciones cambio, la tabla se abre con lo nuevo.
     if (usoHerramientas) refrescarMesa({ abrir: "cambio" });
+    if (usoHerramientas && EMBEBIDO) parent.postMessage({ tipo: "herramientas-usadas" }, location.origin);
   } catch (error) {
     nodoRespuesta.remove();
     burbuja("error", `No pude conectar con el servidor: ${error.message}`);
@@ -891,7 +892,7 @@ async function cargarEstado() {
     if (!avisosIniciados) { avisosIniciados = true; iniciarAvisos((texto) => enviar(texto)); }
     // Vuelta de Google: abrir el panel para que se vea la cuenta conectada.
     if (new URLSearchParams(location.search).get("integraciones")) {
-      history.replaceState(null, "", "/");
+      history.replaceState(null, "", location.pathname);
       abrirPanelIntegraciones();
     }
     $("btn-organizacion").hidden = !(esSuperAdmin && estado.es_admin_org);
@@ -966,3 +967,51 @@ async function cargarEstado() {
   window.addEventListener("resize", aplicar);
   if (window.ResizeObserver) new ResizeObserver(aplicar).observe(barra);
 })();
+
+
+// --------------------------------------------------------------------------
+// Dentro de la estructura comun (/): el menu de arriba lo pone la estructura, que
+// pide abrir los paneles y cuenta que tiene abierto la persona en las apps.
+// --------------------------------------------------------------------------
+
+const EMBEBIDO = window.self !== window.top;
+const contextoApps = { texto: "", corto: "" };
+const PANELES = {
+  integraciones: "btn-integraciones", consumo: "btn-consumo", fuentes: "btn-fuentes",
+  organizacion: "btn-organizacion", asistente: "btn-asistente", dispositivos: "btn-dispositivos",
+  memoria: "btn-memoria", reiniciar: "btn-reiniciar",
+};
+
+function pintarChipApps() {
+  let chip = document.getElementById("chip-apps");
+  if (!chip) {
+    chip = document.createElement("div");
+    chip.id = "chip-apps";
+    chip.className = "chip-apps";
+    chip.innerHTML = '<span></span><button type="button" aria-label="No usar esto">×</button>';
+    chip.querySelector("button").addEventListener("click", () => {
+      contextoApps.texto = contextoApps.corto = "";
+      pintarChipApps();
+    });
+    document.querySelector(".entrada")?.prepend(chip);
+  }
+  chip.hidden = !contextoApps.texto;
+  chip.querySelector("span").textContent = contextoApps.corto ? `Sobre: ${contextoApps.corto}` : "";
+}
+
+if (EMBEBIDO) {
+  document.body.classList.add("embebido");
+  window.addEventListener("message", (e) => {
+    if (e.origin !== location.origin || e.source !== parent || !e.data) return;
+    if (e.data.tipo === "abrir-panel" && PANELES[e.data.panel]) {
+      document.getElementById(PANELES[e.data.panel])?.click();
+    } else if (e.data.tipo === "contexto") {
+      contextoApps.texto = String(e.data.texto || "");
+      contextoApps.corto = String(e.data.corto || "");
+      pintarChipApps();
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "j") { e.preventDefault(); parent.postMessage({ tipo: "atajo-jarvis" }, location.origin); }
+  });
+}

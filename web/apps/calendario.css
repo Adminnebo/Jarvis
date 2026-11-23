@@ -108,6 +108,8 @@ body.con-franja .c { height: calc(100% - var(--k-barra) - 30px); }
 .ev .t { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ev .h { opacity: .9; }
 .ev.corto { display: flex; gap: 4px; white-space: nowrap; }
+.ev.corto .t { flex: 0 1 auto; min-width: 0; }
+.ev.corto .h { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ev.pendiente { border-style: dashed; }
 .ev.rechazado { text-decoration: line-through; opacity: .6; }
 .ev.arrastrando { opacity: .85; box-shadow: 0 6px 12px rgba(0,0,0,.5); z-index: 5; }
@@ -242,3 +244,7 @@ body.con-franja .c { height: calc(100% - var(--k-barra) - 30px); }
   .jarvis-volver { white-space: nowrap; }
   .apps-pestanas a { padding: 0 8px; }
 }
+
+/* Dentro de la estructura comun (/): su barra ya esta afuera. */
+body.embebido .jarvis-barra { display: none; }
+body.embebido { --k-barra: 0px; }

@@ -255,3 +255,7 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--g-azul);
   .jarvis-volver { white-space: nowrap; }
   .apps-pestanas a { padding: 0 8px; }
 }
+
+/* Dentro de la estructura comun (/): su barra ya esta afuera. */
+body.embebido .jarvis-barra { display: none; }
+body.embebido { --g-barra: 0px; }

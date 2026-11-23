@@ -317,3 +317,7 @@ svg { fill: currentColor; }
   .jarvis-volver { white-space: nowrap; }
   .apps-pestanas a { padding: 0 8px; }
 }
+
+/* Dentro de la estructura comun (/): su barra ya esta afuera. */
+body.embebido .jarvis-barra { display: none; }
+body.embebido { --wa-barra: 0px; }

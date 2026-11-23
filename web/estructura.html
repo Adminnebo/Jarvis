@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0b">
+  <title>Jarvis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/estructura.css">
+</head>
+<body>
+  <div class="e">
+    <!-- barra de apps: a la izquierda en computadora, abajo en celular -->
+    <nav class="riel" aria-label="Apps">
+      <div class="riel-apps" id="riel-apps"></div>
+      <div class="riel-abajo">
+        <button class="riel-boton" id="btn-avisos" type="button" aria-label="Avisos">
+          <span class="riel-icono"><svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg><span class="globo" id="globo-avisos" hidden></span></span>
+          <span class="riel-texto">Avisos</span>
+        </button>
+        <button class="riel-boton" id="btn-ajustes" type="button" aria-label="Ajustes">
+          <span class="riel-icono"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg></span>
+          <span class="riel-texto">Ajustes</span>
+        </button>
+        <button class="riel-boton riel-mas" id="btn-mas" type="button" aria-label="Más">
+          <span class="riel-icono"><svg viewBox="0 0 24 24"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg><span class="globo" id="globo-mas" hidden></span></span>
+          <span class="riel-texto">Más</span>
+        </button>
+        <button class="orbe" id="btn-orbe" type="button" aria-label="Pregúntale a Jarvis (Ctrl+J)" title="Pregúntale a Jarvis (Ctrl+J)"><span></span></button>
+      </div>
+    </nav>
+
+    <main class="vistas" id="vistas"></main>
+
+    <!-- Jarvis rapido -->
+    <aside class="rapido" id="rapido" hidden aria-label="Jarvis">
+      <header>
+        <span class="orbe orbe-chico"><span></span></span>
+        <strong id="rapido-nombre">Jarvis</strong>
+        <button class="icono" id="rapido-completo" type="button" title="Abrir Jarvis completo" aria-label="Abrir Jarvis completo">
+          <svg viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+        </button>
+        <button class="icono" id="rapido-cerrar" type="button" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+      </header>
+      <div class="rapido-mensajes" id="rapido-mensajes">
+        <div class="rapido-hola" id="rapido-hola">
+          <p>Pídeme lo que necesites sin salir de la app.</p>
+          <p class="tenue">Sé qué tienes abierto: prueba «resúmeme esto», «respóndele que mañana paso» o «muévela a las 4».</p>
+        </div>
+      </div>
+      <div class="chip-contexto" id="chip" hidden><span id="chip-texto"></span><button type="button" id="chip-quitar" aria-label="No usar esto">×</button></div>
+      <form class="rapido-escribir" id="rapido-form">
+        <textarea id="rapido-texto" rows="1" placeholder="Escribe o dicta…"></textarea>
+        <button class="icono" id="rapido-dictar" type="button" aria-label="Dictar" hidden><svg viewBox="0 0 24 24"><path d="M12 15c1.7 0 3-1.3 3-3V5c0-1.7-1.3-3-3-3S9 3.3 9 5v7c0 1.7 1.3 3 3 3zm5.3-3c0 3-2.5 5.1-5.3 5.1S6.7 15 6.7 12H5c0 3.4 2.7 6.2 6 6.7V22h2v-3.3c3.3-.5 6-3.3 6-6.7h-1.7z"/></svg></button>
+        <button class="icono enviar" type="submit" aria-label="Enviar"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
+      </form>
+    </aside>
+  </div>
+
+  <!-- menus emergentes -->
+  <div class="menu" id="menu-ajustes" hidden role="menu"></div>
+  <div class="menu menu-avisos" id="menu-avisos" hidden>
+    <div class="menu-titulo">Avisos</div>
+    <div id="lista-avisos" class="lista-avisos"></div>
+  </div>
+  <div class="velo" id="velo" hidden></div>
+
+  <script type="module" src="/estructura.js"></script>
+</body>
+</html>

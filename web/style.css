@@ -1395,3 +1395,15 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
 
 a.boton-mini { display: inline-block; text-decoration: none; color: inherit; }
 a.boton-texto { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* Dentro de la estructura comun: la barra de apps y Ajustes estan afuera. */
+body.embebido #btn-menu, body.embebido #btn-avisos, body.embebido #btn-app-whatsapp, body.embebido #btn-app-correo,
+body.embebido #btn-app-calendario, body.embebido #btn-integraciones, body.embebido #btn-consumo, body.embebido #btn-fuentes,
+body.embebido #btn-organizacion, body.embebido #btn-asistente, body.embebido #btn-dispositivos, body.embebido #btn-memoria,
+body.embebido #btn-reiniciar { display: none !important; }
+.chip-apps { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; border-radius: 14px; background: var(--acento-suave);
+  color: var(--acento); font-size: 12.5px; max-width: 46%; min-width: 0; flex: none; }
+.chip-apps span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip-apps button { width: 20px; height: 20px; border-radius: 50%; border: 0; background: none; color: inherit; cursor: pointer; font-size: 15px; line-height: 1; }
+.chip-apps[hidden] { display: none; }
+@media (max-width: 700px) { .chip-apps { position: absolute; bottom: calc(100% + 6px); left: 12px; max-width: calc(100% - 24px); } .entrada { position: relative; } }

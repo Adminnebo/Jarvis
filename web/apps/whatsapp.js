@@ -2,6 +2,10 @@
    (Jarvis habla con Evolution); lo nuevo llega por Server-Sent Events.
    Ver docs/superpowers/specs/2026-11-20-apps-whatsapp-design.md. */
 
+import { enEstructura } from "./comun.js";
+
+const estructura = enEstructura("whatsapp", { refrescar: () => recargar(), abrir: (jid) => abrirChat(jid) });
+
 const $ = (id) => document.getElementById(id);
 const API = "/api/apps/whatsapp";
 const esCelular = () => matchMedia("(max-width: 900px)").matches;
@@ -188,6 +192,7 @@ async function abrirChat(jidOTexto) {
   }
   const chat = chatDe(jid);
   estado.abierto = jid;
+  estructura.contexto(`WhatsApp: chat con ${nombreDe(chat)} (${numeroLegible(jid) || jid}), id ${jid}`, `chat con ${nombreDe(chat)}`);
   quitarCita();
   $("vacio").hidden = true;
   $("conversacion").hidden = false;
@@ -218,6 +223,7 @@ async function abrirChat(jidOTexto) {
 
 function cerrarChat() {
   estado.abierto = null;
+  estructura.contexto(null);
   document.body.classList.remove("en-chat");
   if (!esCelular()) { $("conversacion").hidden = true; $("vacio").hidden = false; }
   pintarLista();

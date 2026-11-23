@@ -2,6 +2,10 @@
    (Jarvis habla con Google con el token de la persona). Al dia: cada 60 s se pide el rango.
    Ver docs/superpowers/specs/2026-11-23-apps-calendario-design.md. */
 
+import { enEstructura } from "./comun.js";
+
+const estructura = enEstructura("calendario", { refrescar: () => cargarEventos(true) });
+
 const $ = (id) => document.getElementById(id);
 const API = "/api/apps/calendario";
 const esCelular = () => matchMedia("(max-width: 900px)").matches;
@@ -215,7 +219,7 @@ function columnas(lista) {
 
 function pintarSemana(centro) {
   const { dias } = rango();
-  const plantilla = `56px repeat(${dias.length}, 1fr)`;
+  const plantilla = `56px repeat(${dias.length}, minmax(0, 1fr))`;
   const eventos = eventosVisibles();
   centro.innerHTML = `
     <div class="sem-cabeza" style="grid-template-columns:${plantilla}"><div class="zona-hora">${esc(Intl.DateTimeFormat().resolvedOptions().timeZone.split("/").pop().replace("_", " "))}</div>
@@ -514,6 +518,8 @@ function cuandoTexto(e) {
 
 function abrirTarjeta(e, cerca) {
   cerrarTarjeta();
+  estructura.contexto(`Calendario (Google): evento id ${e.id} en el calendario ${e.calendario}, «${e.titulo}», ${cuandoTexto(e)}`
+    + (e.recurrente ? " (se repite)" : ""), `evento «${String(e.titulo).slice(0, 50)}»`);
   const t = $("tarjeta");
   const marca = { si: "✓", no: "✕", quizas: "?", pendiente: "·" };
   const cal = calendarioDe(e.calendario);
