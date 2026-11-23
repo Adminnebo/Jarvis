@@ -888,6 +888,18 @@ def confirmar_cambio_evento(usuario: str = "") -> str:
     return _accion_cal(acciones_calendario.confirmar, usuario)
 
 
+@herramienta(
+    "Consulta los datos del panel de JH desde el que te hablan (solo lectura, con los permisos de la "
+    "persona). Las consultas disponibles vienen en tus instrucciones de este turno.",
+    consulta="El nombre de la consulta del panel, ej. cartera, cliente, cotizaciones.",
+    parametros="Parametros en JSON, ej. {\"codigo\": \"1234\"} o {\"dias\": 7}. Vacio: {}.",
+)
+def consultar_panel(consulta: str, parametros: str = "{}", usuario: str = "") -> str:
+    from . import paneles_jh
+
+    return paneles_jh.consultar(usuario, consulta, parametros)
+
+
 def _chat(funcion, *args) -> str:
     from . import whatsapp_chats
 
