@@ -637,7 +637,7 @@ def _donde_quedaron(usuario: acceso.Usuario) -> str:
         return ""
 
 
-def configuracion_de_sesion(usuario: acceso.Usuario) -> dict:
+def configuracion_de_sesion(usuario: acceso.Usuario, extra: str = "") -> dict:
     modelo = os.getenv("OPENAI_MODELO_VOZ", "gpt-realtime-2.1")
 
     return {
@@ -645,7 +645,7 @@ def configuracion_de_sesion(usuario: acceso.Usuario) -> dict:
         "model": modelo,
         # Las reglas de siempre y, al final, donde quedo la conversacion: sin
         # eso cada sesion de voz arranca sin saber de que se venia hablando.
-        "instructions": instrucciones(usuario) + _donde_quedaron(usuario),
+        "instructions": instrucciones(usuario, extra) + _donde_quedaron(usuario),
         # Cuanto piensa antes de hablar. 'low' es el punto recomendado para
         # agentes de voz; 'minimal' responde antes pero acierta menos con las
         # herramientas, y aqui casi todo turno lleva una consulta.
@@ -684,7 +684,7 @@ def ajustes_de_voz() -> dict:
     }
 
 
-def negociar_webrtc(sdp_oferta: str, usuario: acceso.Usuario) -> str:
+def negociar_webrtc(sdp_oferta: str, usuario: acceso.Usuario, extra: str = "") -> str:
     """Hace el intercambio SDP con OpenAI en nombre del navegador.
 
     El navegador no puede llamar a api.openai.com directamente: el navegador
@@ -701,7 +701,7 @@ def negociar_webrtc(sdp_oferta: str, usuario: acceso.Usuario) -> str:
             # Multipart con dos campos sueltos: el SDP crudo y la sesion.
             files={
                 "sdp": (None, sdp_oferta),
-                "session": (None, json.dumps(configuracion_de_sesion(usuario))),
+                "session": (None, json.dumps(configuracion_de_sesion(usuario, extra))),
             },
         )
 

@@ -433,7 +433,7 @@ LIBRES = (
     # Vuelve de Google sin cookie garantizada; la protege el state firmado (gmail.py).
     "/integraciones/gmail/callback",
     # Lo cargan los paneles de JH desde otro dominio (sin cookie de Jarvis).
-    "/jarvis-widget.js",
+    "/jarvis-widget.js", "/voz.js",
     # Vuelve de Zernio/Meta (state firmado) y el webhook de Zernio (firma HMAC). Ver whatsapp_chats.py.
     "/integraciones/whatsapp/callback", "/integraciones/whatsapp/webhook",
     # El webhook de Evolution: lo protege la clave de cada instancia (whatsapp_chats.py).

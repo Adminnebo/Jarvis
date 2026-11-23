@@ -171,3 +171,53 @@ def test_dictado_pide_sesion_y_avisa_si_falla(con_panel, monkeypatch):
     r = con_panel.post("/api/dictado", headers={"Authorization": "Bearer ana.jwt.firma"},
                        files={"audio": ("d.webm", b"x", "audio/webm")})
     assert r.status_code == 502 and "transcribir" in r.json()["error"]
+
+
+def test_voz_en_vivo_lleva_las_instrucciones_del_panel(con_panel, monkeypatch):
+    vistos = {}
+
+    def negociar(oferta, usuario, extra=""):
+        vistos.update(oferta=oferta, usuario=usuario.nombre, extra=extra)
+        return "v=0 respuesta"
+
+    monkeypatch.setattr(cerebro, "negociar_webrtc", negociar)
+    r = con_panel.post("/api/voz/sdp?panel=cobranzas&contexto=cliente%201234%20abierto",
+                       content="v=0 oferta", headers={"Authorization": "Bearer ana.jwt.firma",
+                                                      "X-Jarvis-Panel": "cobranzas"})
+    assert r.status_code == 200 and r.text == "v=0 respuesta"
+    assert vistos["usuario"] == "Ana" and "consultar_panel" in vistos["extra"]
+    assert "cliente 1234 abierto" in vistos["extra"]
+    assert paneles_jh.activo("sb-ana")["panel"] == "cobranzas"
+
+
+def test_voz_sin_panel_no_agrega_nada_y_sin_sesion_no_entra(con_panel, monkeypatch):
+    vistos = {}
+    monkeypatch.setattr(cerebro, "negociar_webrtc", lambda o, u, extra="": vistos.setdefault("extra", extra) or "v=0")
+    con_panel.post("/api/voz/sdp?panel=inventado", content="v=0", headers={"Authorization": "Bearer ana.jwt.firma"})
+    assert vistos["extra"] == ""
+    assert con_panel.post("/api/voz/sdp?panel=cobranzas", content="v=0").status_code == 401
+
+
+def test_las_herramientas_de_la_voz_llegan_al_panel(con_panel, monkeypatch):
+    """En la voz las herramientas llegan sueltas a /api/herramienta: la cabecera del panel
+    activa el panel con el token vigente y el gasto se anota a ese panel."""
+    vistos = []
+
+    def ejecutar(nombre, argumentos, usuario_id, quien=None, dispositivo="navegador"):
+        vistos.append((nombre, dispositivo, (paneles_jh.activo(usuario_id) or {}).get("token")))
+        return "ok", []
+
+    monkeypatch.setattr(herramientas, "ejecutar_completo", ejecutar)
+    r = con_panel.post("/api/herramienta", json={"nombre": "consultar_panel", "argumentos": "{}"},
+                       headers={"Authorization": "Bearer ana.jwt.firma", "X-Jarvis-Panel": "conversaciones"})
+    assert r.status_code == 200
+    assert vistos == [("consultar_panel", "panel-conversaciones", "ana.jwt.firma")]
+
+
+def test_cors_y_voz_js_para_el_widget(con_panel):
+    r = con_panel.options("/api/voz/sdp", headers={"Origin": PORTAL, "Access-Control-Request-Method": "POST",
+                                                    "Access-Control-Request-Headers": "authorization,x-jarvis-panel"})
+    assert r.status_code == 200 and "x-jarvis-panel" in r.headers["access-control-allow-headers"].lower()
+    js = con_panel.get("/voz.js", headers={"Origin": PORTAL})
+    assert js.status_code == 200 and "crearSesionDeVoz" in js.text
+    assert js.headers.get("access-control-allow-origin") == PORTAL

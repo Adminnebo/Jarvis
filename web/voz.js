@@ -155,7 +155,16 @@ function esperarCandidatos(conexion, tope = 3000, margen = 150) {
 }
 
 
-export function crearSesionDeVoz(eventos) {
+/* `opciones` es para usarla fuera de la app de Jarvis (el widget de los paneles de
+   JH): `base` es el origen de Jarvis, `cabeceras()` las que van en cada llamada
+   (el token del panel) y `consulta` lo que se agrega al negociar (panel y contexto).
+   Sin opciones todo va como siempre: rutas relativas y la cookie. */
+export function crearSesionDeVoz(eventos, opciones = {}) {
+  const base = opciones.base || "";
+  function api(ruta, init = {}) {
+    const cabeceras = { ...(opciones.cabeceras ? opciones.cabeceras() : {}), ...(init.headers || {}) };
+    return fetch(base + ruta, { ...init, headers: cabeceras });
+  }
   let conexion = null;
   let canal = null;
   let pista = null;
@@ -182,11 +191,11 @@ export function crearSesionDeVoz(eventos) {
 
   function mandarTraza(alCerrar = false) {
     if (!traza.length) return;
-    fetch("/api/voz/traza", {
+    api("/api/voz/traza", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pasos: traza.splice(0) }),
-      keepalive: alCerrar,
+      keepalive: alCerrar && !base,   // con otro origen hay preflight y keepalive no siempre lo admite
     }).catch(() => {});   // diagnosticar nunca debe estorbar la conversacion
   }
 
@@ -267,7 +276,7 @@ export function crearSesionDeVoz(eventos) {
 
     let datos;
     try {
-      const respuesta = await fetch("/api/voz/config");
+      const respuesta = await api("/api/voz/config");
       datos = await respuesta.json();
       if (!respuesta.ok) throw new Error(datos.error || "No pude abrir la sesion de voz");
     } catch (error) {
@@ -338,7 +347,7 @@ export function crearSesionDeVoz(eventos) {
 
     // El intercambio va por nuestro servidor: llamar a api.openai.com desde
     // aqui lo bloquea CORS salvo en localhost, y ademas expondria la clave.
-    const sdp = await fetch("/api/voz/sdp", {
+    const sdp = await api("/api/voz/sdp" + (opciones.consulta ? "?" + new URLSearchParams(opciones.consulta()) : ""), {
       method: "POST",
       body: conexion.localDescription.sdp,
       headers: { "Content-Type": "application/sdp" },
@@ -434,7 +443,7 @@ export function crearSesionDeVoz(eventos) {
   function anotarConsumo(uso, modo = "voz") {
     if (!uso) return;
     const cuerpo = modo === "voz" ? { modelo: modeloEnUso, uso } : { modo, uso };
-    fetch("/api/consumo/voz", {
+    api("/api/consumo/voz", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(cuerpo),
@@ -447,11 +456,11 @@ export function crearSesionDeVoz(eventos) {
     sesionDesde = null;
     if (segundos < 1) return;
     // keepalive para que salga aunque se cierre la pestana justo despues.
-    fetch("/api/consumo/voz", {
+    api("/api/consumo/voz", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ modelo: modeloEnUso, segundos_sesion: segundos }),
-      keepalive: true,
+      keepalive: !base,
     }).catch(() => {});
   }
 
@@ -467,7 +476,7 @@ export function crearSesionDeVoz(eventos) {
       // Con tiempo limite: si una base no responde y esperasemos para siempre,
       // el turno nunca se cerraria y Jarvis se quedaria mudo.
       const corte = AbortSignal.timeout(ESPERA_HERRAMIENTA);
-      const respuesta = await fetch("/api/herramienta", {
+      const respuesta = await api("/api/herramienta", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nombre: item.name, argumentos: item.arguments || "{}" }),
