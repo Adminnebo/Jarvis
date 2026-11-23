@@ -127,7 +127,13 @@ def instruccion(panel: str) -> str:
             "de la persona y solo van si lo pide explicitamente ('mi WhatsApp', 'mi correo'). "
             "Consultas disponibles (parametros en JSON):\n" + "\n".join(lineas)
             + "\nSi la consulta devuelve una lista vacia o un error, dilo tal cual. Si algo no esta en estas "
-            "consultas, dilo; no inventes datos.")
+            "consultas, dilo; no inventes datos." + _acciones(panel))
+
+
+def _acciones(panel: str) -> str:
+    from . import acciones_panel   # importa este modulo: aqui adentro para no hacer un ciclo
+
+    return acciones_panel.instruccion(panel)
 
 
 def consultar(usuario_id: str, consulta: str, parametros: str = "{}") -> str:

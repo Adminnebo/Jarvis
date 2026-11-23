@@ -903,6 +903,38 @@ def consultar_panel(consulta: str, parametros: str = "{}", usuario: str = "") ->
     return paneles_jh.consultar(usuario, consulta, parametros)
 
 
+def _accion_panel(funcion, *args) -> str:
+    from . import acciones_panel
+
+    try:
+        return funcion(*args)
+    except acciones_panel.ErrorAccion as error:
+        return str(error)
+
+
+@herramienta(
+    "Prepara una accion en el panel de JH desde el que te hablan (ej. llamar: que Camila llame a un "
+    "cliente). NO la hace: dice que se va a hacer para que se lo preguntes a la persona. Las acciones "
+    "disponibles vienen en tus instrucciones de este turno.",
+    accion="El nombre de la accion, ej. llamar.",
+    parametros="Parametros en JSON, ej. {\"codigos\": [\"1234\"]}.",
+)
+def preparar_accion_panel(accion: str, parametros: str = "{}", usuario: str = "") -> str:
+    from . import acciones_panel
+
+    return _accion_panel(acciones_panel.preparar, usuario, accion, parametros)
+
+
+@herramienta(
+    "Hace la accion del panel que preparo preparar_accion_panel. Usala SOLO despues de que la persona "
+    "dijo que si.",
+)
+def confirmar_accion_panel(usuario: str = "") -> str:
+    from . import acciones_panel
+
+    return _accion_panel(acciones_panel.confirmar, usuario)
+
+
 def _chat(funcion, *args) -> str:
     from . import whatsapp_chats
 
