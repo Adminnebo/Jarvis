@@ -150,7 +150,10 @@ function irA(carpeta) {
 
 function consulta() {
   if (estado.busqueda) return estado.busqueda;
-  return estado.carpeta === "INBOX" ? `category:${estado.categoria}` : "";
+  if (estado.carpeta !== "INBOX") return "";
+  // Principal es lo que queda fuera de las otras pestañas (asi lo arma Gmail): no todos los
+  // correos traen la categoria "primary", y pedirla dejaba Principal vacia.
+  return estado.categoria === "primary" ? "-category:promotions -category:social" : `category:${estado.categoria}`;
 }
 
 async function cargarLista(desdeElPrincipio = false, silencioso = false) {
