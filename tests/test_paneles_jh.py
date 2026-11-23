@@ -93,13 +93,23 @@ def test_consulta_con_el_token_de_la_persona(portal):
     assert pedidos[0].headers["authorization"] == "Bearer tok"
 
 
-def test_parametros_de_busqueda_y_solo_los_permitidos(portal):
+def test_parametros_de_busqueda(portal):
     pedidos, respuestas = portal
     respuestas["/api/jarvis/conversaciones"] = (200, {"conversaciones": []})
     paneles_jh.activar("u1", "conversaciones", "tok")
-    paneles_jh.consultar("u1", "conversaciones", json.dumps({"q": "pedro", "sin_responder": True, "otra": "x"}))
+    paneles_jh.consultar("u1", "conversaciones", json.dumps({"q": "pedro", "sin_responder": True}))
     params = pedidos[0].url.params
-    assert params["q"] == "pedro" and params["sin_responder"] == "1" and "otra" not in params
+    assert params["q"] == "pedro" and params["sin_responder"] == "1"
+
+
+def test_un_parametro_desconocido_se_avisa_y_no_trae_todo(portal):
+    """Jarvis buscaba {"nombre": ...} en Reactivacion: se ignoraba, llegaba la lista entera
+    y decia que el cliente no existia. Ahora se le dice cuales son los parametros."""
+    pedidos, _ = portal
+    paneles_jh.activar("u1", "reactivacion", "tok")
+    texto = paneles_jh.consultar("u1", "clientes", json.dumps({"nombre": "Ferreteria de Jorge"}))
+    assert not pedidos and "nombre" in texto and "q" in texto
+    assert "q, estado, clasificacion" in paneles_jh.instruccion("reactivacion")
 
 
 def test_permiso_negado_por_el_panel(portal):

@@ -25,7 +25,8 @@ PANELES: dict[str, dict] = {
         "nombre": "Conversaciones (bandeja de WhatsApp/redes)", "prefijo": "",
         "consultas": {
             "conversaciones": ("/api/jarvis/conversaciones", ["q", "sin_responder", "limite"],
-                               "lista de conversaciones (q: nombre o telefono; sin_responder: true)"),
+                               "conversaciones, la mas reciente primero. q: parte del nombre o telefono; "
+                               "sin_responder: true para las que esperan respuesta; limite: cuantas (max 50)"),
             "conversacion": ("/api/jarvis/conversaciones/{id}", ["limite"], "mensajes de una conversacion (id)"),
             "contacto": ("/api/jarvis/contacto/{id}", [], "contacto de GHL con oportunidades (id del contacto)"),
         },
@@ -59,7 +60,15 @@ PANELES: dict[str, dict] = {
         "nombre": "Reactivación", "prefijo": "/reactivacion",
         "consultas": {
             "resumen": ("/api/jarvis/resumen", [], "resumen de clientes inactivos por estado"),
-            "clientes": ("/api/jarvis/clientes", ["estado", "clasificacion", "q"], "clientes inactivos (filtros)"),
+            "clientes": ("/api/jarvis/clientes",
+                         ["q", "estado", "clasificacion", "motivo", "responsable", "dias_min", "monto_min"],
+                         "clientes inactivos, los de mas compras primero. q: nombre, codigo o telefono (busca "
+                         "por parte del nombre, ej. \"jorge\"). estado: por_contactar, en_cola, "
+                         "sin_respuesta_parcial, contactado, sin_respuesta, telefono_invalido, recuperado, "
+                         "suspendido. clasificacion: reactivado_camila, quiere_vendedor, volver_llamar, "
+                         "compra_otro_lado, ya_no_necesita, negocio_cerrado, problema_jh, no_interesado, revisar. "
+                         "motivo: precio, credito, servicio, entregas_existencia, cerro_no_necesita, competencia, "
+                         "otro. dias_min: dias sin comprar minimo. monto_min: compras de 24 meses minimo (RD$)"),
             "cliente": ("/api/jarvis/clientes/{codigo}", [], "ficha de un cliente con eventos y llamadas (codigo)"),
         },
     },
@@ -101,10 +110,16 @@ def activo(usuario_id: str) -> dict | None:
     return dict(dato[0])
 
 
+def _parametros(plantilla: str, permitidos: list[str]) -> list[str]:
+    """Los de la ruta ({id}, {numero}, {codigo}) y los de busqueda, en ese orden."""
+    return [c for c in ("id", "numero", "codigo") if "{" + c + "}" in plantilla] + list(permitidos)
+
+
 def instruccion(panel: str) -> str:
     """Lo que Jarvis tiene que saber estando dentro de un panel."""
     p = PANELES[panel]
-    lineas = [f"- {nombre}: {desc}" for nombre, (_, _, desc) in p["consultas"].items()]
+    lineas = [f"- {nombre} (parametros: {', '.join(_parametros(plantilla, permitidos)) or 'ninguno'}): {desc}"
+              for nombre, (plantilla, permitidos, desc) in p["consultas"].items()]
     return (f"Estas dentro del panel {p['nombre']} de JH. Aqui 'chats', 'conversaciones', 'clientes', "
             "'cotizaciones', 'cobros' y parecidos son LOS DE ESTE PANEL: para cualquier pregunta sobre ellos "
             "llama SIEMPRE primero a consultar_panel, antes de responder. No uses buscar_chats, leer_chat, "
@@ -129,6 +144,14 @@ def consultar(usuario_id: str, consulta: str, parametros: str = "{}") -> str:
             raise ValueError
     except ValueError:
         return "Los parametros tienen que ser un objeto JSON, por ejemplo {\"codigo\": \"1234\"}."
+
+    # Un parametro que la consulta no conoce se avisa: si se descartara callado, el
+    # panel devolveria la lista sin filtrar y Jarvis diria que no esta lo que busca.
+    validos = _parametros(plantilla, permitidos)
+    sobran = [clave for clave in datos if clave not in validos]
+    if sobran:
+        return (f"La consulta «{consulta}» no acepta {', '.join(sobran)}. Sus parametros son: "
+                f"{', '.join(validos) or 'ninguno'}. Vuelve a llamarla con esos.")
 
     ruta = plantilla
     for clave in ("id", "numero", "codigo"):
