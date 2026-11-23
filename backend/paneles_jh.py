@@ -105,9 +105,14 @@ def instruccion(panel: str) -> str:
     """Lo que Jarvis tiene que saber estando dentro de un panel."""
     p = PANELES[panel]
     lineas = [f"- {nombre}: {desc}" for nombre, (_, _, desc) in p["consultas"].items()]
-    return (f"Estas dentro del panel {p['nombre']} de JH. Para preguntas sobre sus datos usa "
-            "consultar_panel con una de estas consultas (y sus parametros en JSON):\n" + "\n".join(lineas)
-            + "\nSi algo no esta en estas consultas, dilo; no inventes datos.")
+    return (f"Estas dentro del panel {p['nombre']} de JH. Aqui 'chats', 'conversaciones', 'clientes', "
+            "'cotizaciones', 'cobros' y parecidos son LOS DE ESTE PANEL: para cualquier pregunta sobre ellos "
+            "llama SIEMPRE primero a consultar_panel, antes de responder. No uses buscar_chats, leer_chat, "
+            "buscar_correos ni otras herramientas personales para esto: esas son el WhatsApp y el correo propios "
+            "de la persona y solo van si lo pide explicitamente ('mi WhatsApp', 'mi correo'). "
+            "Consultas disponibles (parametros en JSON):\n" + "\n".join(lineas)
+            + "\nSi la consulta devuelve una lista vacia o un error, dilo tal cual. Si algo no esta en estas "
+            "consultas, dilo; no inventes datos.")
 
 
 def consultar(usuario_id: str, consulta: str, parametros: str = "{}") -> str:
@@ -142,7 +147,9 @@ def consultar(usuario_id: str, consulta: str, parametros: str = "{}") -> str:
         r = _http().get(portal() + panel["prefijo"] + ruta, params=busqueda,
                         headers={"Authorization": f"Bearer {actual['token']}"})
     except httpx.HTTPError as error:
+        print(f"[panel] {actual['panel']}/{consulta} sin respuesta: {error}")
         return f"No pude hablar con el panel: {error}"
+    print(f"[panel] {actual['panel']}/{consulta} {busqueda or ''} -> {r.status_code} ({len(r.text)} bytes)")
     if r.status_code in (401, 403):
         return "No tienes permiso para ver eso en el panel (o tu sesion del panel vencio)."
     if r.status_code == 404:

@@ -98,6 +98,9 @@ def ejecutar_completo(nombre: str, argumentos_json: str, usuario: str,
     anota a la organizacion y al aparato de quien la pidio.
     """
     entrada = REGISTRO.get(nombre)
+    if str(dispositivo).startswith("panel-"):
+        # Desde los paneles de JH: que se vea en los logs que herramienta eligio.
+        print(f"[herramienta] {dispositivo} {nombre} {str(argumentos_json or '')[:160]}")
     if entrada is None:
         return f"Error: no existe la herramienta '{nombre}'.", []
 
