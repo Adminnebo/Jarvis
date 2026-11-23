@@ -40,6 +40,11 @@ svg { fill: currentColor; }
 .jarvis-volver:hover { color: #fff; }
 .jarvis-titulo { color: #e4e4e7; }
 .jarvis-titulo span { color: #71717a; margin-left: 6px; }
+.apps-pestanas { display: flex; gap: 4px; height: 100%; }
+.apps-pestanas a { display: flex; align-items: center; padding: 0 12px; color: #a1a1aa; text-decoration: none; border-bottom: 2px solid transparent; }
+.apps-pestanas a:hover { color: #fff; }
+.apps-pestanas a.activa { color: #fff; border-bottom-color: #fff; }
+.jarvis-cuenta { margin-left: auto; color: #71717a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .franja {
   position: fixed; top: var(--wa-barra); left: 0; right: 0; z-index: 30; text-align: center;
   background: #8a6d15; color: #fff; font-size: 13px; padding: 4px;

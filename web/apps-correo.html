@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1b1b1b">
+  <title>Correo · Jarvis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/apps/correo.css">
+</head>
+<body>
+  <header class="jarvis-barra">
+    <a href="/" class="jarvis-volver" aria-label="Volver a Jarvis">&larr; Jarvis</a>
+    <nav class="apps-pestanas" aria-label="Apps">
+      <a href="/apps/whatsapp">WhatsApp</a>
+      <a href="/apps/correo" class="activa" aria-current="page">Correo</a>
+    </nav>
+    <span class="jarvis-cuenta" id="cuenta"></span>
+  </header>
+
+  <div class="franja" id="franja" hidden>
+    <span>Reconecta tu Gmail para archivar, eliminar y marcar correos.</span>
+    <a href="/integraciones/gmail/conectar">Reconectar</a>
+  </div>
+
+  <div class="g" id="app">
+    <!-- barra superior: menu + buscador -->
+    <header class="g-arriba">
+      <button class="icono" id="btn-menu" type="button" aria-label="Menú">
+        <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+      </button>
+      <form class="g-buscar" id="buscar-form" role="search">
+        <button class="icono" type="submit" aria-label="Buscar">
+          <svg viewBox="0 0 24 24"><path d="M20.49 19l-5.73-5.73C15.53 12.2 16 10.91 16 9.5A6.5 6.5 0 1 0 9.5 16c1.41 0 2.7-.47 3.77-1.24L19 20.49 20.49 19zM5 9.5C5 7.01 7.01 5 9.5 5S14 7.01 14 9.5 11.99 14 9.5 14 5 11.99 5 9.5z"/></svg>
+        </button>
+        <input id="buscar" type="search" placeholder="Buscar correo" autocomplete="off">
+        <button class="icono" type="button" id="buscar-limpiar" aria-label="Borrar búsqueda" hidden>
+          <svg viewBox="0 0 24 24"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+        </button>
+      </form>
+      <div class="avatar avatar-propio" id="avatar-propio"></div>
+    </header>
+
+    <!-- menu izquierdo -->
+    <nav class="g-menu" id="menu" aria-label="Carpetas">
+      <button class="redactar" id="btn-redactar" type="button">
+        <svg viewBox="0 0 24 24"><path d="M20.41 4.94l-1.35-1.35c-.78-.78-2.05-.78-2.83 0L3 16.82V21h4.18L20.41 7.77c.79-.78.79-2.05 0-2.83zm-14 14.12L5 19v-1.36l9.82-9.82 1.41 1.41-9.82 9.83z"/></svg>
+        <span>Redactar</span>
+      </button>
+      <ul id="carpetas" class="carpetas"></ul>
+      <div class="menu-titulo" id="etiquetas-titulo" hidden>Etiquetas</div>
+      <ul id="etiquetas" class="carpetas"></ul>
+    </nav>
+    <div class="velo" id="velo"></div>
+
+    <!-- lista / lectura -->
+    <main class="g-centro">
+      <section class="g-lista" id="vista-lista">
+        <div class="g-herramientas" id="herramientas-lista">
+          <label class="casilla-todos"><input type="checkbox" id="todos" aria-label="Seleccionar todos"></label>
+          <button class="icono" id="btn-recargar" type="button" aria-label="Actualizar">
+            <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+          </button>
+          <div class="acciones-seleccion" id="acciones-seleccion" hidden></div>
+          <div class="paginas"><span id="paginas-texto"></span>
+            <button class="icono" id="pag-ant" type="button" aria-label="Más recientes"><svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>
+            <button class="icono" id="pag-sig" type="button" aria-label="Más antiguos"><svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>
+          </div>
+        </div>
+        <div class="pestanas" id="pestanas" role="tablist">
+          <button type="button" role="tab" data-cat="primary" class="activa"><svg viewBox="0 0 24 24"><path d="M19 3H4.99C3.88 3 3 3.9 3 5l.01 14c0 1.1.88 2 1.99 2H19c1.1 0 2-.9 2-2V5a2 2 0 0 0-2-2zm0 12h-4c0 1.66-1.35 3-3 3s-3-1.34-3-3H4.99V5H19v10z"/></svg>Principal</button>
+          <button type="button" role="tab" data-cat="promotions"><svg viewBox="0 0 24 24"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>Promociones</button>
+          <button type="button" role="tab" data-cat="social"><svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>Social</button>
+        </div>
+        <div class="titulo-movil" id="titulo-movil"></div>
+        <ul class="filas" id="filas" role="list"></ul>
+        <div class="vacio" id="vacio" hidden></div>
+      </section>
+
+      <section class="g-hilo" id="vista-hilo" hidden>
+        <div class="g-herramientas">
+          <button class="icono" id="btn-volver" type="button" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+          <div class="acciones-seleccion" id="acciones-hilo"></div>
+        </div>
+        <div class="hilo-cuerpo" id="hilo"></div>
+      </section>
+    </main>
+
+    <button class="redactar-flotante" id="btn-redactar-flotante" type="button">
+      <svg viewBox="0 0 24 24"><path d="M20.41 4.94l-1.35-1.35c-.78-.78-2.05-.78-2.83 0L3 16.82V21h4.18L20.41 7.77c.79-.78.79-2.05 0-2.83zm-14 14.12L5 19v-1.36l9.82-9.82 1.41 1.41-9.82 9.83z"/></svg>
+      <span>Redactar</span>
+    </button>
+  </div>
+
+  <!-- ventana de redactar -->
+  <section class="redactor" id="redactor" hidden aria-label="Mensaje nuevo">
+    <header class="redactor-cabecera" id="redactor-cabecera">
+      <span id="redactor-titulo">Mensaje nuevo</span>
+      <button class="icono chico" id="redactor-minimizar" type="button" aria-label="Minimizar"><svg viewBox="0 0 24 24"><path d="M6 19h12v2H6z"/></svg></button>
+      <button class="icono chico" id="redactor-cerrar" type="button" aria-label="Guardar y cerrar"><svg viewBox="0 0 24 24"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+    </header>
+    <div class="redactor-cuerpo">
+      <label class="campo"><span>Para</span><input id="r-para" autocomplete="off" multiple>
+        <button type="button" class="enlace" id="r-mostrar-cc">CC CCO</button></label>
+      <label class="campo" id="r-fila-cc" hidden><span>CC</span><input id="r-cc" autocomplete="off"></label>
+      <label class="campo" id="r-fila-cco" hidden><span>CCO</span><input id="r-cco" autocomplete="off"></label>
+      <label class="campo"><input id="r-asunto" placeholder="Asunto" autocomplete="off"></label>
+      <div class="editor" id="r-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Cuerpo del mensaje"></div>
+      <ul class="r-adjuntos" id="r-adjuntos"></ul>
+      <p class="r-error" id="r-error" role="alert"></p>
+    </div>
+    <footer class="redactor-pie">
+      <button class="enviar" id="r-enviar" type="button">Enviar</button>
+      <div class="formato" id="r-formato">
+        <button type="button" data-cmd="bold" aria-label="Negrita"><b>B</b></button>
+        <button type="button" data-cmd="italic" aria-label="Cursiva"><i>I</i></button>
+        <button type="button" data-cmd="underline" aria-label="Subrayado"><u>U</u></button>
+        <button type="button" data-cmd="insertUnorderedList" aria-label="Lista con viñetas"><svg viewBox="0 0 24 24"><path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/></svg></button>
+        <button type="button" data-cmd="insertOrderedList" aria-label="Lista numerada"><svg viewBox="0 0 24 24"><path d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"/></svg></button>
+        <button type="button" data-cmd="createLink" aria-label="Enlace"><svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></button>
+      </div>
+      <button class="icono" id="r-adjuntar" type="button" aria-label="Adjuntar archivos"><svg viewBox="0 0 24 24"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5a2.5 2.5 0 0 0 5 0V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg></button>
+      <input type="file" id="r-archivos" multiple hidden>
+      <span class="r-estado" id="r-estado"></span>
+      <button class="icono" id="r-descartar" type="button" aria-label="Descartar borrador"><svg viewBox="0 0 24 24"><path d="M15 4V3H9v1H4v2h1v13c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V6h1V4h-5zm2 15H7V6h10v13zM9 8h2v9H9zm4 0h2v9h-2z"/></svg></button>
+    </footer>
+  </section>
+
+  <!-- elegir etiqueta -->
+  <div class="capa" id="capa-etiquetas" hidden>
+    <div class="dialogo">
+      <h3>Mover a</h3>
+      <ul id="lista-mover"></ul>
+      <div class="dialogo-botones"><button type="button" id="mover-cancelar">Cancelar</button></div>
+    </div>
+  </div>
+
+  <!-- conectar -->
+  <div class="conectar" id="conectar" hidden>
+    <div class="conectar-caja">
+      <h2>Tu correo en Jarvis</h2>
+      <p>Conecta tu Gmail para leer, responder y organizar tus correos sin salir de Jarvis.</p>
+      <a class="boton-azul" href="/integraciones/gmail/conectar">Conectar Gmail</a>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" role="status" hidden><span id="aviso-texto"></span><button type="button" id="aviso-deshacer">Deshacer</button></div>
+
+  <script type="module" src="/apps/correo.js"></script>
+</body>
+</html>

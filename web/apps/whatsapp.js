@@ -834,7 +834,7 @@ async function arrancar() {
   try {
     const { conectado, cuenta } = await pedir("/estado");
     if (!conectado) { mostrarVincular(); return; }
-    $("cuenta").textContent = cuenta ? `· ${cuenta}` : "";
+    $("cuenta").textContent = cuenta || "";
     avatar($("avatar-propio"), null);
     await cargarChats();
     escuchar();

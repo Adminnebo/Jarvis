@@ -886,6 +886,7 @@ async function cargarEstado() {
     // Integraciones y avisos son de cada persona, no solo del super admin.
     $("btn-integraciones").hidden = false;
     $("btn-app-whatsapp").hidden = false;
+    $("btn-app-correo").hidden = false;
     if (!avisosIniciados) { avisosIniciados = true; iniciarAvisos((texto) => enviar(texto)); }
     // Vuelta de Google: abrir el panel para que se vea la cuenta conectada.
     if (new URLSearchParams(location.search).get("integraciones")) {

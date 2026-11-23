@@ -14,7 +14,11 @@
   <!-- La barra de Jarvis: siempre a la vista, para volver sin salir de la aplicacion. -->
   <header class="jarvis-barra">
     <a href="/" class="jarvis-volver" aria-label="Volver a Jarvis">&larr; Jarvis</a>
-    <span class="jarvis-titulo">WhatsApp<span id="cuenta"></span></span>
+    <nav class="apps-pestanas" aria-label="Apps">
+      <a href="/apps/whatsapp" class="activa" aria-current="page">WhatsApp</a>
+      <a href="/apps/correo">Correo</a>
+    </nav>
+    <span class="jarvis-cuenta" id="cuenta"></span>
   </header>
 
   <div id="franja" class="franja" hidden>Reconectando…</div>
