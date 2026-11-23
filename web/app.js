@@ -982,11 +982,11 @@ const PANELES = {
   memoria: "btn-memoria", reiniciar: "btn-reiniciar",
 };
 
+let chipApps = null;
 function pintarChipApps() {
-  let chip = document.getElementById("chip-apps");
+  let chip = chipApps;
   if (!chip) {
-    chip = document.createElement("div");
-    chip.id = "chip-apps";
+    chip = chipApps = document.createElement("div");
     chip.className = "chip-apps";
     chip.innerHTML = '<span></span><button type="button" aria-label="No usar esto">×</button>';
     chip.querySelector("button").addEventListener("click", () => {
