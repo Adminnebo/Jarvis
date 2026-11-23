@@ -840,6 +840,54 @@ def confirmar_reunion(usuario: str = "") -> str:
 # WhatsApp de la persona (Zernio, coexistencia)
 # --------------------------------------------------------------------------
 
+def _accion_cal(funcion, *args) -> str:
+    from . import acciones_calendario
+
+    try:
+        return funcion(*args)
+    except acciones_calendario.ErrorAccion as error:
+        return str(error)
+
+
+@herramienta(
+    "Prepara mover un evento del Google Calendar de la persona a otra hora. NO lo mueve: "
+    "describe el cambio para preguntarle. El id sale de ver_agenda o de lo que tiene abierto.",
+    disponible=_calendario_disponible,
+    id="El id del evento de Google.",
+    inicio="La hora nueva completa con zona, ej. 2026-11-25T10:00:00-04:00.",
+    calendario="Opcional: el calendario (por defecto el principal).",
+    fin="Opcional: hora de fin; sin ella se conserva la duracion.",
+)
+def mover_evento(id: str, inicio: str, calendario: str = "primary", fin: str = "", usuario: str = "") -> str:  # noqa: A002
+    from . import acciones_calendario
+
+    return _accion_cal(acciones_calendario.mover, usuario, id, inicio, calendario or "primary", fin)
+
+
+@herramienta(
+    "Prepara cancelar (borrar) un evento del Google Calendar de la persona. NO lo borra: "
+    "describe el cambio para preguntarle.",
+    disponible=_calendario_disponible,
+    id="El id del evento de Google.",
+    calendario="Opcional: el calendario (por defecto el principal).",
+)
+def cancelar_evento(id: str, calendario: str = "primary", usuario: str = "") -> str:  # noqa: A002
+    from . import acciones_calendario
+
+    return _accion_cal(acciones_calendario.cancelar, usuario, id, calendario or "primary")
+
+
+@herramienta(
+    "Hace el cambio de calendario que preparo mover_evento o cancelar_evento. Usala SOLO "
+    "despues de que la persona dijo que si.",
+    disponible=_calendario_disponible,
+)
+def confirmar_cambio_evento(usuario: str = "") -> str:
+    from . import acciones_calendario
+
+    return _accion_cal(acciones_calendario.confirmar, usuario)
+
+
 def _chat(funcion, *args) -> str:
     from . import whatsapp_chats
 
