@@ -441,3 +441,25 @@ def enviar_mime(token: str, crudo: bytes, hilo_id: str | None = None) -> dict:
     if hilo_id:
         datos["threadId"] = hilo_id
     return _api("POST", "/messages/send", token, json=datos)
+
+
+def restaurar(token: str, ids: list[str]) -> None:
+    """Saca hilos de la papelera (el "Deshacer" de eliminar)."""
+    for identificador in ids:
+        _api("POST", f"/threads/{identificador}/untrash", token)
+
+
+def borrador_de_mensaje(token: str, mensaje_id: str) -> str | None:
+    """El id del borrador que contiene ese mensaje (para seguir editandolo desde Borradores)."""
+    pagina = None
+    while True:
+        parametros = {"maxResults": 100}
+        if pagina:
+            parametros["pageToken"] = pagina
+        datos = _api("GET", "/drafts", token, params=parametros)
+        for borrador in datos.get("drafts", []):
+            if (borrador.get("message") or {}).get("id") == mensaje_id:
+                return borrador["id"]
+        pagina = datos.get("nextPageToken")
+        if not pagina:
+            return None

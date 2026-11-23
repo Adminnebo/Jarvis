@@ -54,6 +54,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     memoria,
     outlook,
     rutas,
+    rutas_apps_correo,
     rutas_apps_whatsapp,
     supabase_sesion,
     version,
@@ -66,6 +67,7 @@ WEB = RAIZ / "web"
 
 app = FastAPI(title="Jarvis")
 app.include_router(rutas_apps_whatsapp.router)   # /apps/whatsapp (rutas_apps_whatsapp.py)
+app.include_router(rutas_apps_correo.router)     # /apps/correo (rutas_apps_correo.py)
 
 
 @app.on_event("startup")

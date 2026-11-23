@@ -156,3 +156,18 @@ def test_enviar_mime(api):
     assert gmail.enviar_mime("t", b"CRUDO", "h5") == {"id": "m5", "threadId": "h5"}
     cuerpo = json.loads(pedidos[0].content)
     assert cuerpo["threadId"] == "h5" and base64.urlsafe_b64decode(cuerpo["raw"] + "==") == b"CRUDO"
+
+
+def test_restaurar(api):
+    pedidos, respuestas = api
+    respuestas[("POST", "/threads/h1/untrash")] = (200, {})
+    gmail.restaurar("t", ["h1"])
+    assert pedidos[0].url.path.endswith("/threads/h1/untrash")
+
+
+def test_borrador_de_mensaje(api):
+    _, respuestas = api
+    respuestas[("GET", "/drafts")] = (200, {"drafts": [{"id": "d1", "message": {"id": "m1"}},
+                                                      {"id": "d2", "message": {"id": "m2"}}]})
+    assert gmail.borrador_de_mensaje("t", "m2") == "d2"
+    assert gmail.borrador_de_mensaje("t", "m9") is None
