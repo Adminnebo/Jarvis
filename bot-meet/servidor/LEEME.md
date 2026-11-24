@@ -13,6 +13,22 @@ lo que vive en `/opt/bot-meet`. El secreto (`bot.env`) NO está aquí.
 **Desplegar = push a la rama.** El timer mira cada minuto; si hay una
 reunión grabándose, espera. Registro: `sudo tail -f /var/log/bot-meet-despliegue.log`.
 
+El despliegue corre como root sobre un clon de `ubuntu`: hace falta
+`git config --system --add safe.directory /opt/bot-meet/repo` (ya puesto), si
+no el registro dice «no se pudo leer GitHub».
+
+## Medido en la primera prueba real (2026-11-24)
+
+- Reposo: 42 MB, sin Chrome abierto.
+- Grabando un Meet de 3 personas con «Solo audio»: ~500 MB de RAM y 35-40 % de
+  un núcleo (con el volcado de HTML cada 10 s encendido). Dos bots caben en RAM;
+  en CPU, el t3.small rinde 40 % de un núcleo sostenido entre sus dos vCPU, así
+  que con dos bots a la vez gasta créditos de CPU.
+- Audio: Opus mono 16 kHz, ~2,2 MB por cada 5 min (unos 27 MB por hora), voces a -24 dB de media.
+- Quién habla: el Meet real no trae `data-self-name` en los mosaicos, así que la
+  línea de hablantes sale vacía y Jarvis pone «Participante». Calibrarlo queda
+  pendiente (`BOT_MEET_SEL_HABLANDO` y `JS_ESTADO` en `selectores.py`).
+
 ## Iniciar sesión con la cuenta de Google del bot (una vez, o si se cierra)
 
 En el servidor, con el bot apagado para que no use el perfil:
