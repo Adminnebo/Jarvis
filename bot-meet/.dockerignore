@@ -1,0 +1,5 @@
+tests
+servidor
+.venv
+__pycache__
+*.pyc
