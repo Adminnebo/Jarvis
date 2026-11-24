@@ -278,6 +278,50 @@ _ESQUEMA = """
         dias TEXT NOT NULL,
         zona TEXT NOT NULL
     );
+
+    -- Reuniones de Meet que graba el bot (docs/superpowers/specs/2026-11-24-bot-grabacion-meet-design.md).
+    CREATE TABLE IF NOT EXISTS reuniones (
+        id TEXT PRIMARY KEY,
+        clave TEXT NOT NULL UNIQUE,
+        meet_url TEXT NOT NULL,
+        titulo TEXT NOT NULL,
+        inicio TEXT NOT NULL,
+        fin TEXT NOT NULL,
+        estado TEXT NOT NULL,
+        motivo TEXT,
+        token_hash TEXT,
+        linea TEXT,
+        transcripcion TEXT,
+        resumen TEXT,
+        puntos TEXT,
+        tareas TEXT,
+        duracion_s INTEGER,
+        terminada TEXT,
+        incompleta INTEGER NOT NULL DEFAULT 0,
+        audio_borrado INTEGER NOT NULL DEFAULT 0,
+        creada TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS reunion_interesados (
+        reunion_id TEXT NOT NULL REFERENCES reuniones (id) ON DELETE CASCADE,
+        usuario_id TEXT NOT NULL,
+        quiere INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (reunion_id, usuario_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS reunion_pedazos (
+        reunion_id TEXT NOT NULL REFERENCES reuniones (id) ON DELETE CASCADE,
+        n INTEGER NOT NULL,
+        estado TEXT NOT NULL,
+        intentos INTEGER NOT NULL DEFAULT 0,
+        segmentos TEXT,
+        PRIMARY KEY (reunion_id, n)
+    );
+
+    CREATE TABLE IF NOT EXISTS reuniones_preferencias (
+        usuario_id TEXT PRIMARY KEY,
+        grabar_siempre INTEGER NOT NULL DEFAULT 0
+    );
 """
 
 

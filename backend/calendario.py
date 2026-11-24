@@ -412,7 +412,20 @@ def _avisar(usuario, usuario_id: str, proveedor: str, e: dict, ahora: datetime, 
         contexto = ""
     titulo = e.get("title") or "Reunion"
     resumen = f"{_hora(e['start'], zona):%H:%M} · {titulo}" + (f". {contexto}" if contexto else "")
-    avisos.crear(usuario_id, ref, None, titulo, (e.get("conferencing") or {}).get("url") or "", resumen,
+    # El bot de Meet: con "Grabar siempre" se agenda ya y el aviso ofrece no
+    # grabar; si no, ofrece grabar. Los enlaces van en su propia linea: la
+    # campanita los cambia por un boton (web/avisos.js) y WhatsApp los muestra.
+    from . import reuniones, reuniones_datos
+    hilo = None
+    reunion = reuniones.proponer(usuario_id, e)
+    if reunion is not None:
+        hilo = reunion["id"]
+        if reuniones_datos.grabar_siempre(usuario_id):
+            resumen += f"\n{reuniones.pedir(usuario_id, hilo)}"
+            resumen += f"\nNo grabar: {reuniones.enlace(usuario_id, hilo, 'no_grabar')}"
+        else:
+            resumen += f"\nGrabar: {reuniones.enlace(usuario_id, hilo, 'grabar')}"
+    avisos.crear(usuario_id, ref, hilo, titulo, (e.get("conferencing") or {}).get("url") or "", resumen,
                  con_whatsapp=bool(regla["whatsapp"]) and bool(regla["activo"]), tipo="reunion", app=app)
 
 

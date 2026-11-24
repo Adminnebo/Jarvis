@@ -106,6 +106,12 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 .aviso strong { font-weight: 600; font-size: 13px; }
 .aviso span { color: var(--texto); font-size: 13px; }
 .aviso time { color: var(--tenue); font-size: 11px; }
+/* Botón Grabar / No grabar debajo de un aviso de reunión (estructura.js). */
+.menu .aviso-accion { display: inline-block; width: auto; max-width: calc(100% - 24px); margin: -2px 12px 10px;
+  padding: 6px 12px; font: inherit; font-size: 12.5px; text-align: left; color: var(--texto);
+  background: var(--acento-suave); border: 1px solid var(--acento); border-radius: 8px; cursor: pointer; }
+.menu .aviso-accion:hover:not(:disabled) { filter: brightness(1.2); }
+.menu .aviso-accion:disabled { cursor: default; color: var(--tenue); background: transparent; border-color: var(--borde); }
 .aviso.nuevo strong::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--acento); margin-right: 6px; vertical-align: middle; }
 .sin-avisos { color: var(--tenue); padding: 12px; }
 .velo { position: fixed; inset: 0; z-index: 25; }

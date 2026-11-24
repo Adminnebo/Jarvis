@@ -94,6 +94,16 @@ PRECIOS_POR_DEFECTO = {
         "audio_entrada": 3.0, "audio_cache": 0.0, "audio_salida": 0.0,
         "confirmado": True,
     },
+    # Reuniones del bot de Meet: transcripción con hablantes. Su usage llega en
+    # tokens (probado 2026-11-24: 5 min = 2628 audio + 154 texto de entrada y
+    # 4724 de salida, ~$0.06). Precios de gpt-4o-transcribe, el doble que el
+    # mini; "minuto" queda por si algún día llega como duración. Confirmar con
+    # la factura.
+    "gpt-4o-transcribe-diarize": {
+        "texto_entrada": 2.5, "texto_cache": 0.0, "texto_salida": 10.0,
+        "audio_entrada": 6.0, "audio_cache": 0.0, "audio_salida": 0.0,
+        "minuto": 0.006, "confirmado": False,
+    },
     # El TTS de los puentes. Con stream_format "sse" devuelve input_tokens
     # (texto) y output_tokens (audio): ~25 tokens por segundo de voz.
     "gpt-4o-mini-tts": {

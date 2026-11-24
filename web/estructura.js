@@ -14,6 +14,8 @@ const VISTAS = [
     icono: '<svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>' },
   { id: "calendario", nombre: "Calendario", src: () => "/apps/calendario",
     icono: '<svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V10h14v10zM7 12h5v5H7z"/></svg>' },
+  { id: "reuniones", nombre: "Reuniones", src: () => "/apps/reuniones",
+    icono: '<svg viewBox="0 0 24 24"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg>' },
 ];
 
 const estado = {
@@ -92,6 +94,9 @@ window.addEventListener("message", (e) => {
     refrescarApps();
   } else if (e.data.tipo === "ir") {
     ir(String(e.data.vista));
+    // Con id (p. ej. la campanita abre una reunión): si la vista ya estaba cargada le
+    // llega "abrir"; si recién se crea, lo lee de sessionStorage al arrancar.
+    if (e.data.id) estado.marcos.get(String(e.data.vista))?.contentWindow?.postMessage({ tipo: "abrir", id: String(e.data.id) }, location.origin);
   }
 });
 
@@ -235,18 +240,40 @@ async function abrirAvisos(boton) {
       b.className = "aviso" + (a.visto ? "" : " nuevo");
       b.innerHTML = `<strong></strong><span></span><time></time>`;
       b.querySelector("strong").textContent = a.remitente || (a.app === "whatsapp" ? "WhatsApp" : "Correo");
-      b.querySelector("span").textContent = a.resumen;
+      // Los avisos de reunión traen "Grabar: <enlace>" / "No grabar: <enlace>" en su
+      // propia línea (para WhatsApp): aquí se quitan y se ofrece un botón.
+      const lineas = (a.resumen || "").split("\n");
+      b.querySelector("span").textContent = lineas.filter((l) => !/^(No grabar|Grabar): /.test(l)).join(" ");
       b.querySelector("time").textContent = new Date(a.creado).toLocaleString("es");
       b.addEventListener("click", async () => {
         cerrarMenus();
         await fetch(`/api/avisos/${a.id}/visto`, { method: "POST" });
         cargarAvisos();
+        if (a.tipo === "reunion-lista" && a.hilo) {
+          ir("reuniones");
+          try { sessionStorage.setItem("jarvis-reunion-abrir", a.hilo); } catch { /* sin storage */ }
+          estado.marcos.get("reuniones")?.contentWindow?.postMessage({ tipo: "abrir", id: a.hilo }, location.origin);
+          return;
+        }
         if (a.tipo !== "correo") return;
         if (a.app === "whatsapp") { ir("whatsapp"); estado.marcos.get("whatsapp")?.contentWindow?.postMessage({ tipo: "abrir", id: a.hilo }, location.origin); }
         else if (a.app === "gmail") { ir("correo"); estado.marcos.get("correo")?.contentWindow?.postMessage({ tipo: "abrir", id: a.hilo }, location.origin); }
         else preguntar(`Léeme el correo con id ${a.ref}`);
       });
       lista.appendChild(b);
+      const grabar = lineas.some((l) => l.startsWith("Grabar: "));
+      if (a.tipo === "reunion" && a.hilo && (grabar || lineas.some((l) => l.startsWith("No grabar: ")))) {
+        const accion = document.createElement("button");
+        accion.type = "button";
+        accion.className = "aviso-accion";
+        accion.textContent = grabar ? "Grabar esta reunión" : "No grabar";
+        accion.addEventListener("click", async () => {
+          accion.disabled = true;
+          const r = await fetch(`/api/reuniones/${a.hilo}/${grabar ? "grabar" : "no-grabar"}`, { method: "POST" });
+          accion.textContent = r.ok ? (await r.json()).mensaje : "No se pudo, inténtalo otra vez.";
+        });
+        lista.appendChild(accion);
+      }
     }
   } catch {
     lista.innerHTML = '<div class="sin-avisos">No se pudieron cargar.</div>';

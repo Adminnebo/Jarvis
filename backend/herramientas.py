@@ -735,6 +735,34 @@ def leer_correo(id: str, usuario: str = "") -> str:  # noqa: A002 - es el nombre
     return _correo(correo.leer, usuario, id)
 
 
+def _reuniones_disponible() -> bool:
+    from . import bot_meet
+    return bot_meet.configurado()
+
+
+@herramienta(
+    "Busca en las reuniones de Meet que grabó el bot de la persona: resumen, tareas y lo que "
+    "se dijo. Úsala cuando pregunte qué se habló o qué se acordó en una reunión.",
+    disponible=_reuniones_disponible,
+    texto="Palabras a buscar (un cliente, un tema).",
+    desde="Opcional: fecha ISO desde la que buscar.",
+    hasta="Opcional: fecha ISO hasta la que buscar.",
+)
+def buscar_reuniones(texto: str, desde: str = "", hasta: str = "", usuario: str = "") -> str:
+    from . import reuniones_datos as rd
+
+    encontradas = rd.buscar_texto(usuario, texto, desde, hasta)
+    if not encontradas:
+        return f"No encontré reuniones grabadas que hablen de «{texto}»."
+    partes = []
+    for r in encontradas:
+        tareas = "; ".join(f"{t.get('quien')}: {t.get('que')}" + (f" ({t['cuando']})" if t.get("cuando") else "")
+                           for t in r.get("tareas") or [])
+        partes.append(f"{r['titulo']} ({r['inicio'][:16]}): {r.get('resumen') or ''}"
+                      + (f"\nTareas: {tareas}" if tareas else ""))
+    return "\n\n".join(partes)
+
+
 @herramienta(
     "Prepara un correo o una respuesta. NO lo envia: devuelve el borrador para leerselo. "
     "Para responder, pasa responder_a con el id del correo (para, asunto y buzon se completan "
