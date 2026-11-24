@@ -1066,6 +1066,36 @@ async def ventas_productos_para_cotizaciones(peticion: Request):
         return JSONResponse(status_code=502, content={"error": "No se pudo leer Nueva Data JH."})
 
 
+@app.post("/api/puente/cotizaciones/factura")
+async def factura_para_cotizaciones(peticion: Request):
+    """Una factura de Nueva Data JH con sus productos, para verla desde Cotizaciones de JH.
+
+    Misma entrada que los otros puentes del panel de JH (JARVIS_REACTIVACION_CLAVE). Solo
+    recibe el numero de factura; la consulta es fija (puente_cotizaciones.py).
+    """
+    if not puente_reactivacion.configurado():
+        return JSONResponse(status_code=404, content={"error": "No encontrado."})
+
+    autorizacion = peticion.headers.get("authorization", "")
+    recibida = autorizacion[7:] if autorizacion.lower().startswith("bearer ") else None
+    if not puente_reactivacion.clave_valida(recibida):
+        return JSONResponse(status_code=401, content={"error": "No autorizado."})
+
+    try:
+        cuerpo = await peticion.json()
+    except ValueError:
+        cuerpo = None
+    try:
+        numero = puente_cotizaciones.numero_de(cuerpo)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    try:
+        return puente_cotizaciones.factura(numero)
+    except Exception as error:  # noqa: BLE001 - el detalle va al log, no a quien llama
+        print(f"  Puente de cotizaciones (factura): la consulta fallo: {type(error).__name__}: {error}")
+        return JSONResponse(status_code=502, content={"error": "No se pudo leer Nueva Data JH."})
+
+
 @app.post("/api/consumo/voz")
 def anotar_consumo_de_voz(peticion: Request, datos: dict):
     """Lo mandan el navegador y los puentes: lo que gastan fuera de este

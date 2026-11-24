@@ -446,6 +446,7 @@ LIBRES = (
     "/api/puente/reactivacion/ventas",
     # El cruce por productos de Cotizaciones de JH, con la misma clave (puente_cotizaciones.py).
     "/api/puente/cotizaciones/ventas-productos",
+    "/api/puente/cotizaciones/factura",
 )
 
 
