@@ -117,6 +117,30 @@ async function abrir(id) {
   seccion(caja, "Transcripción", texto);
 }
 
+$("grabar-link").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const boton = form.querySelector("button");
+  const mensaje = $("mensaje-link");
+  boton.disabled = true;
+  mensaje.textContent = "Mandando el bot…";
+  try {
+    const r = await fetch("/api/reuniones/grabar-link", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url: form.url.value.trim() }),
+    });
+    const datos = await r.json();
+    mensaje.textContent = r.ok ? `${datos.mensaje} Admítelo cuando pida entrar.` : datos.mensaje;
+    mensaje.classList.toggle("mal", !r.ok);
+    if (r.ok) { form.reset(); cargarLista(); }
+  } catch {
+    mensaje.textContent = "No se pudo, inténtalo otra vez.";
+    mensaje.classList.add("mal");
+  } finally {
+    boton.disabled = false;
+  }
+});
+
 // Suelta (fuera de la estructura) la página ya se está yendo a /#reuniones: si siguiera,
 // podría leer y borrar el id pendiente antes que la vista de verdad (pasaba en celular).
 if (EMBEBIDO) {

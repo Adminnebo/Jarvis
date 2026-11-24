@@ -16,7 +16,17 @@
     <span class="jarvis-titulo">Reuniones</span>
   </header>
   <main class="reuniones">
-    <aside id="lista" aria-label="Reuniones grabadas"></aside>
+    <div class="columna">
+      <form id="grabar-link" class="grabar-link">
+        <label for="link-meet">Grabar un Meet que no está en el calendario</label>
+        <div class="fila-form">
+          <input id="link-meet" name="url" type="url" inputmode="url" required placeholder="Pega el link del Meet" autocomplete="off">
+          <button type="submit">Grabar</button>
+        </div>
+        <p class="mensaje" id="mensaje-link" role="status"></p>
+      </form>
+      <aside id="lista" aria-label="Reuniones grabadas"></aside>
+    </div>
     <section id="detalle" aria-live="polite"><p class="vacio">Elige una reunión.</p></section>
   </main>
   <script type="module" src="/apps/reuniones.js"></script>

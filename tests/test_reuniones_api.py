@@ -82,6 +82,15 @@ def test_lista_detalle_y_preferencias(reunion, entrar):
     assert entrar("la-de-ana").get(f"/api/reuniones/{rid}").status_code == 404
 
 
+def test_grabar_un_link_desde_la_vista(reunion, entrar):
+    c = entrar("la-de-ana")
+    r = c.post("/api/reuniones/grabar-link", json={"url": "https://meet.google.com/xyz-abcd-efg", "titulo": ""})
+    assert r.status_code == 200 and "voy a grabar" in r.json()["mensaje"]
+    assert [x["meet_url"] for x in c.get("/api/reuniones").json()["reuniones"]] == ["https://meet.google.com/xyz-abcd-efg"]
+    malo = c.post("/api/reuniones/grabar-link", json={"url": "https://zoom.us/j/1"})
+    assert malo.status_code == 400
+
+
 def test_grabar_desde_la_campanita(reunion, entrar):
     rid, _ = reunion
     c = entrar("la-de-ana")

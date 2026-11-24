@@ -91,6 +91,19 @@ def guardar_preferencias(peticion: Request, datos: Preferencias):
     return {"grabar_siempre": datos.grabar_siempre}
 
 
+class Link(BaseModel):
+    url: str
+    titulo: str = ""
+
+
+@router.post("/api/reuniones/grabar-link")
+def grabar_link(peticion: Request, datos: Link):
+    """Un Meet que no está en el calendario: el bot entra ya."""
+    if reuniones.link_meet({"description": datos.url}) is None:
+        return JSONResponse(status_code=400, content={"mensaje": "Eso no es un link de Google Meet."})
+    return {"mensaje": reuniones.grabar_link(peticion.state.usuario.id, datos.url, datos.titulo)}
+
+
 @router.get("/api/reuniones/{reunion_id}")
 def detalle(reunion_id: str, peticion: Request):
     r = rd.obtener(reunion_id)

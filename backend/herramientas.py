@@ -749,6 +749,24 @@ def _reuniones_disponible() -> bool:
     hasta="Opcional: fecha ISO hasta la que buscar.",
 )
 def buscar_reuniones(texto: str, desde: str = "", hasta: str = "", usuario: str = "") -> str:
+    return _buscar_reuniones(texto, desde, hasta, usuario)
+
+
+@herramienta(
+    "Manda el bot de Jarvis a grabar YA una reunión de Google Meet a partir de su link (sirve "
+    "para Meets que no están en el calendario). Úsala cuando la persona pegue un link de Meet y "
+    "pida grabarlo. Alguien en la reunión tiene que admitir al bot.",
+    disponible=_reuniones_disponible,
+    link="El link de Meet tal cual (meet.google.com/xxx-xxxx-xxx).",
+    titulo="Opcional: un nombre para la reunión.",
+)
+def grabar_meet(link: str, titulo: str = "", usuario: str = "") -> str:
+    from . import reuniones
+
+    return reuniones.grabar_link(usuario, link, titulo)
+
+
+def _buscar_reuniones(texto: str, desde: str, hasta: str, usuario: str) -> str:
     from . import reuniones_datos as rd
 
     encontradas = rd.buscar_texto(usuario, texto, desde, hasta)

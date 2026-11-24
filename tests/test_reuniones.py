@@ -129,6 +129,33 @@ def test_herramienta_buscar_reuniones(bot):
     assert "No encontré" in herramientas.ejecutar("buscar_reuniones", '{"texto": "alambre"}', "u2")
 
 
+def test_grabar_por_link_sin_calendario(bot):
+    texto = reuniones.grabar_link("u1", "https://meet.google.com/pnp-gtkn-yer?pli=1&authuser=2", "Con Pedro")
+    assert "voy a grabar «Con Pedro»" in texto
+    (rid, url, ini, fin, _), = bot["agendadas"]
+    assert url == "https://meet.google.com/pnp-gtkn-yer"
+    assert rd.obtener(rid)["estado"] == "agendada" and rd.interesados(rid) == ["u1"]
+    from datetime import datetime
+    assert (datetime.fromisoformat(fin) - datetime.fromisoformat(ini)).total_seconds() == 2 * 3600
+
+
+def test_grabar_por_link_sin_titulo_y_link_malo(bot):
+    assert "«Meet" in reuniones.grabar_link("u1", "meet.google.com/abc-defg-hij")
+    assert "no es un link de Google Meet" in reuniones.grabar_link("u1", "https://zoom.us/j/123")
+    assert len(bot["agendadas"]) == 1
+
+
+def test_grabar_por_link_sin_bot(bot, monkeypatch):
+    monkeypatch.setattr(bot_meet, "configurado", lambda: False)
+    assert "no está configurado" in reuniones.grabar_link("u1", "https://meet.google.com/abc-defg-hij")
+
+
+def test_herramienta_grabar_meet(bot):
+    from backend import herramientas
+    texto = herramientas.ejecutar("grabar_meet", '{"link": "https://meet.google.com/abc-defg-hij"}', "u1")
+    assert "voy a grabar" in texto and len(bot["agendadas"]) == 1
+
+
 def test_enlace_firmado(bot, monkeypatch):
     monkeypatch.setenv("JARVIS_CLAVE_SECRETA", "x" * 40)
     r = reuniones.proponer("u1", EVENTO)
