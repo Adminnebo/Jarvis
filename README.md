@@ -697,6 +697,38 @@ mal oído le llegaría a otra persona.
 | `EVOLUTION_INSTANCIA` | La instancia (el número) que envía |
 | `EVOLUTION_INSTANCIA_RESPALDO` | Opcional: otra instancia. Si la principal da cualquier error, cada archivo se reintenta por esta; si las dos fallan, Jarvis explica el motivo y el envío queda preparado para reintentar |
 
+## Reuniones (bot de Meet)
+
+Un bot propio entra a las reuniones de Google Meet del calendario de cada
+persona, graba solo el audio y Jarvis lo convierte en transcripción con
+hablantes, resumen y tareas. Se ven en la vista **Reuniones** y el resumen corto
+llega por WhatsApp. Jarvis las consulta con `buscar_reuniones`.
+
+- **Cuándo entra:** en Integraciones → Avisos, «Grabar siempre». Si está
+  apagado, el aviso de 15 minutos antes de la reunión trae **Grabar** (en la
+  campanita es un botón; en WhatsApp, un enlace firmado que abre una página con
+  el botón, para que la vista previa de WhatsApp no grabe sola).
+- **El bot** vive en su propio EC2 (`bot-meet.neboaiconsulting.com`, código en
+  `bot-meet/`, ver `bot-meet/servidor/LEEME.md`). Jarvis le manda órdenes
+  firmadas y el bot sube eventos, audio en pedazos de 5 minutos y quién habló a
+  `/api/reuniones/{id}/…` con un token propio de cada reunión.
+- **Audio:** bucket privado `reuniones` de Supabase Storage; se escucha con
+  enlaces firmados de una hora y se borra a los 90 días. El texto queda.
+- **Costo:** la transcripción con hablantes (`gpt-4o-transcribe-diarize`)
+  cobra por tokens: unos $0.06 cada 5 minutos (~$0.75 la hora), más el resumen.
+  Se anota en Consumo como `transcripcion`, dispositivo `reuniones`.
+- **Nombres:** mientras el bot no esté calibrado para leer quién habla en Meet,
+  las voces salen como «Participante A/B…»; el resumen usa el nombre real si se
+  dice en la conversación.
+
+| Variable | |
+|---|---|
+| `BOT_MEET_URL` | `https://bot-meet.neboaiconsulting.com`. Sin ella (o sin el secreto) todo esto queda apagado |
+| `BOT_MEET_SECRETO` | El mismo de `/opt/bot-meet/bot.env` en el EC2 del bot |
+| `JARVIS_MODELO_REUNIONES` | Opcional: modelo de transcripción (por defecto `gpt-4o-transcribe-diarize`) |
+| `JARVIS_MODELO_RESUMEN_REUNIONES` | Opcional: modelo del resumen (por defecto `OPENAI_MODEL`) |
+| `JARVIS_BUCKET_REUNIONES` | Opcional: bucket del audio (por defecto `reuniones`) |
+
 ## Fuentes de datos
 
 El botón **Fuentes** abre el panel para conectar bases de datos sin tocar
