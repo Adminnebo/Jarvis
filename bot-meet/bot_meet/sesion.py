@@ -7,6 +7,7 @@ from .reglas import motivo_para_salir
 AVISO = "Jarvis está grabando esta reunión para tomar notas."
 VOLCAR_CADA_S = 10
 AUSENTE_MAX_S = 5
+SILENCIAR_CADA_S = 60
 
 
 def _log(sesion, texto):
@@ -41,7 +42,9 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
         _log(sesion, "admitido")
         if volcar_dom:
             meet.volcar("admitido")
-        # Primero grabar: si algo de lo cosmético se traba, el audio ya corre.
+        # Lo primero, que no se le oiga ni se le vea (al entrar directo quedaban prendidos).
+        _log(sesion, f"apagados al entrar: {meet.silenciar()}")
+        # Después grabar: si algo de lo cosmético se traba, el audio ya corre.
         grabador.iniciar()
         _log(sesion, "grabando")
         meet.solo_audio()
@@ -53,12 +56,17 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
         linea, ultima_voz, solo_desde = [], None, None
         reintento_usado, incompleta, motivo = False, False, None
         ultimo_volcado, ausente_desde = 0.0, None
+        ultimo_silencio = entrada
         while True:
             if debe_parar():
                 motivo = "cancelada"
                 break
             estado = meet.leer_estado()
             t = ahora()
+            if estado.en_llamada and (t - ultimo_silencio).total_seconds() >= SILENCIAR_CADA_S:
+                if meet.silenciar():
+                    _log(sesion, "micrófono o cámara se habían prendido: apagados")
+                ultimo_silencio = t
             if not estado.en_llamada:
                 # Un parpadeo (un menú que tapa la llamada) no es una caída.
                 ausente_desde = ausente_desde or t

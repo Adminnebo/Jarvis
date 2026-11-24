@@ -24,7 +24,10 @@ SOLO_AUDIO = "Solo audio"
 CERRAR_DIALOGO = re.compile(r"^(Cerrar|Close)( diálogo| dialog)?$")  # real: "Cerrar diálogo"
 
 BOTON_CHAT = re.compile(r"Chatear con todos|Chat with everyone")
-CAJA_CHAT = re.compile(r"Enviar un mensaje|Send a message")
+CAJA_CHAT = re.compile(r"Env(í|i)a(r)? un mensaje|Send a message")   # real: "Envía un mensaje"
+# Dentro de la llamada, el botón dice "Desactivar ..." mientras está PRENDIDO.
+CSS_PRENDIDOS = ('[aria-label^="Desactivar micrófono"], [aria-label^="Desactivar cámara"], '
+                 '[aria-label^="Turn off microphone"], [aria-label^="Turn off camera"]')
 
 # Cada mosaico de participante lleva data-participant-id; el nombre va en
 # data-self-name. "hablando" se reconoce con el selector configurable

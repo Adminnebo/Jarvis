@@ -24,9 +24,12 @@
     </ul>
     <button aria-label="Cerrar diálogo" onclick="document.getElementById('ajustes').hidden=true">x</button>
   </div>
+  <!-- Como el Meet real al entrar directo: micro y cámara quedan prendidos (?prendidos=1). -->
+  <button id="micro-llamada" onclick="alternar(this, 'micrófono')"></button>
+  <button id="camara-llamada" onclick="alternar(this, 'cámara')"></button>
   <button aria-label="Chatear con todos" onclick="document.getElementById('chat').hidden=!document.getElementById('chat').hidden">chat</button>
   <div id="chat" hidden>
-    <textarea aria-label="Enviar un mensaje" onkeydown="if(event.key==='Enter'){event.preventDefault();enviar(this)}"></textarea>
+    <textarea aria-label="Envía un mensaje" onkeydown="if(event.key==='Enter'){event.preventDefault();enviar(this)}"></textarea>
   </div>
   <ul id="mensajes"></ul>
   <div id="mosaico">
@@ -56,6 +59,13 @@ function pedir() {
       });
     }
   }, Number(q.get('admitir_ms') || 300));
+}
+function alternar(b, que) {
+  const prendido = b.getAttribute('aria-label').startsWith('Desactivar');
+  b.setAttribute('aria-label', `${prendido ? 'Activar' : 'Desactivar'} ${que} (ctrl + d)`);
+}
+for (const [id, que] of [['micro-llamada', 'micrófono'], ['camara-llamada', 'cámara']]) {
+  document.getElementById(id).setAttribute('aria-label', `${q.get('prendidos') ? 'Desactivar' : 'Activar'} ${que} (ctrl + d)`);
 }
 function elegir(li) { document.getElementById('recepcion').textContent = li.textContent; document.getElementById('opciones').hidden = true; }
 function enviar(t) { const li = document.createElement('li'); li.textContent = t.value; document.getElementById('mensajes').append(li); t.value=''; }
