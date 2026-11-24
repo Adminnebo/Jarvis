@@ -444,6 +444,8 @@ LIBRES = (
     "/api/costos/resumen",
     # El panel de Reactivacion de JH, con su propia clave (puente_reactivacion.py).
     "/api/puente/reactivacion/ventas",
+    # El cruce por productos de Cotizaciones de JH, con la misma clave (puente_cotizaciones.py).
+    "/api/puente/cotizaciones/ventas-productos",
 )
 
 

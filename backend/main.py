@@ -47,6 +47,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     evolution_wa,
     fotos,
     fuentes,
+    puente_cotizaciones,
     puente_reactivacion,
     gmail,
     herramientas,
@@ -1030,6 +1031,38 @@ def ventas_para_reactivacion(peticion: Request, desde: str | None = None):
         return puente_reactivacion.ventas(inicio)
     except Exception as error:  # noqa: BLE001 - el detalle va al log, no a quien llama
         print(f"  Puente de reactivacion: la consulta fallo: {type(error).__name__}: {error}")
+        return JSONResponse(status_code=502, content={"error": "No se pudo leer Nueva Data JH."})
+
+
+@app.post("/api/puente/cotizaciones/ventas-productos")
+async def ventas_productos_para_cotizaciones(peticion: Request):
+    """Lineas de List_VentasxProductosIA para el cruce por productos de Cotizaciones de JH.
+
+    Misma entrada que el puente de Reactivacion: lo llama el panel de JH (server2), que no
+    llega a gemelo-kpi, con JARVIS_REACTIVACION_CLAVE en Authorization: Bearer. Sin la
+    variable la ruta responde como si no existiera. Solo corre las consultas fijas de
+    puente_cotizaciones.py con un rango de fechas y codigos de cliente validados.
+    """
+    if not puente_reactivacion.configurado():
+        return JSONResponse(status_code=404, content={"error": "No encontrado."})
+
+    autorizacion = peticion.headers.get("authorization", "")
+    recibida = autorizacion[7:] if autorizacion.lower().startswith("bearer ") else None
+    if not puente_reactivacion.clave_valida(recibida):
+        return JSONResponse(status_code=401, content={"error": "No autorizado."})
+
+    try:
+        cuerpo = await peticion.json()
+    except ValueError:
+        cuerpo = None
+    try:
+        pedido = puente_cotizaciones.pedido_de(cuerpo)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    try:
+        return puente_cotizaciones.ventas_productos(pedido)
+    except Exception as error:  # noqa: BLE001 - el detalle va al log, no a quien llama
+        print(f"  Puente de cotizaciones: la consulta fallo: {type(error).__name__}: {error}")
         return JSONResponse(status_code=502, content={"error": "No se pudo leer Nueva Data JH."})
 
 
