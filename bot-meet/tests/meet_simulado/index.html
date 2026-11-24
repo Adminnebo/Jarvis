@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Meet simulado</title></head>
+<body>
+<div id="previa">
+  <button aria-label="Desactivar micrófono" onclick="this.dataset.apagado=1">mic</button>
+  <button aria-label="Desactivar cámara" onclick="this.dataset.apagado=1">cam</button>
+  <button id="unirse" onclick="pedir()">Pedir unirse</button>
+</div>
+<div id="espera" hidden>Pidiendo unirse...</div>
+<div id="rechazo" hidden>Alguien de la llamada rechazó tu solicitud para unirte.</div>
+<div id="llamada" hidden>
+  <button aria-label="Más opciones" onclick="document.getElementById('menu').hidden=false">...</button>
+  <div id="menu" role="menu" hidden>
+    <div role="menuitem" onclick="document.getElementById('ajustes').hidden=false">Configuración</div>
+  </div>
+  <div id="ajustes" role="dialog" hidden>
+    <button role="tab">Video</button>
+    <label>Resolución de recepción (máxima)
+      <select aria-label="Resolución de recepción (máxima)" id="recepcion">
+        <option>Alta definición (720p)</option><option>Solo audio</option>
+      </select></label>
+    <button aria-label="Cerrar" onclick="document.getElementById('ajustes').hidden=true">x</button>
+  </div>
+  <button aria-label="Chatear con todos" onclick="document.getElementById('chat').hidden=!document.getElementById('chat').hidden">chat</button>
+  <div id="chat" hidden>
+    <textarea aria-label="Enviar un mensaje" onkeydown="if(event.key==='Enter'){event.preventDefault();enviar(this)}"></textarea>
+  </div>
+  <ul id="mensajes"></ul>
+  <div id="mosaico">
+    <div data-participant-id="yo"><span data-self-name="Jarvis · Notas"></span></div>
+    <div data-participant-id="p1"><span data-self-name="Ana"></span><i></i></div>
+  </div>
+  <button aria-label="Abandonar la llamada" onclick="salir()">colgar</button>
+</div>
+<div id="fuera" hidden>Saliste de la llamada</div>
+<script>
+const q = new URLSearchParams(location.search);
+function pedir() {
+  document.getElementById('previa').hidden = true;
+  document.getElementById('espera').hidden = false;
+  setTimeout(() => {
+    document.getElementById('espera').hidden = true;
+    document.getElementById(q.get('rechazar') ? 'rechazo' : 'llamada').hidden = false;
+  }, Number(q.get('admitir_ms') || 300));
+}
+function enviar(t) { const li = document.createElement('li'); li.textContent = t.value; document.getElementById('mensajes').append(li); t.value=''; }
+function salir() { document.getElementById('llamada').remove(); document.getElementById('fuera').hidden = false; }
+window.hablar = (id, si) => { const i = document.querySelector(`[data-participant-id="${id}"] i`); if (si) i.setAttribute('data-hablando', '1'); else i.removeAttribute('data-hablando'); };
+window.quitar = (id) => document.querySelector(`[data-participant-id="${id}"]`).remove();
+</script>
+</body></html>
