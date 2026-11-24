@@ -107,3 +107,60 @@ def verificar_enlace(usuario_id: str, reunion_id: str, accion: str, firma: str) 
     if accion not in ("grabar", "no_grabar"):
         return False
     return hmac.compare_digest(_firma(usuario_id, reunion_id, accion), firma or "")
+
+
+# --------------------------------------------------------------------------
+# Lo que sube el bot
+# --------------------------------------------------------------------------
+
+ESTADOS = {"esperando": "esperando", "admitido": "grabando", "rechazado": "rechazada",
+           "fallo": "fallida", "terminado": "procesando"}
+MOTIVOS = {"sin_respuesta": "nadie lo admitió", "rechazado": "lo rechazaron",
+           "sesion_google": "se cerró la sesión de Google del bot",
+           "sin_boton_unirse": "Meet cambió su página"}
+
+
+def _avisar(reunion_id: str, texto: str) -> None:
+    from . import avisos
+    for usuario_id in rd.interesados(reunion_id):
+        avisos.crear(usuario_id, f"reunion-estado:{reunion_id}:{texto[:40]}", reunion_id, "Bot de reuniones",
+                     "", texto, con_whatsapp=True, tipo="sistema", app="reuniones")
+
+
+def recibir_evento(reunion_id: str, datos: dict) -> None:
+    tipo = datos.get("tipo")
+    if tipo not in ESTADOS:
+        return
+    r = rd.obtener(reunion_id)
+    cambios = {"estado": ESTADOS[tipo]}
+    if tipo == "terminado":
+        cambios.update(terminada=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                       incompleta=int(bool(datos.get("incompleta"))), motivo=datos.get("motivo"))
+    elif tipo in ("rechazado", "fallo"):
+        cambios["motivo"] = datos.get("motivo")
+    rd.actualizar(reunion_id, **cambios)
+    motivo = MOTIVOS.get(datos.get("motivo") or "", datos.get("motivo") or "")
+    if tipo == "rechazado":
+        _avisar(reunion_id, f"No me dejaron entrar a «{r['titulo']}» ({motivo}).")
+    elif tipo == "fallo":
+        _avisar(reunion_id, f"No pude entrar a «{r['titulo']}»: {motivo}.")
+
+
+def ruta_pedazo(reunion_id: str, n: int) -> Path:
+    carpeta = Path(rutas.archivo(f"reuniones/{reunion_id}"))
+    carpeta.mkdir(parents=True, exist_ok=True)
+    return carpeta / f"{n:05d}.ogg"
+
+
+def recibir_audio(reunion_id: str, n: int, datos: bytes) -> bool:
+    if not rd.guardar_pedazo(reunion_id, n):
+        return False
+    ruta = ruta_pedazo(reunion_id, n)
+    tmp = ruta.with_suffix(".tmp")
+    tmp.write_bytes(datos)
+    tmp.replace(ruta)
+    return True
+
+
+def recibir_hablantes(reunion_id: str, linea: list) -> None:
+    rd.actualizar(reunion_id, linea=linea if isinstance(linea, list) else [])

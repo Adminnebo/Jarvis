@@ -74,6 +74,50 @@ def test_no_grabar_cancela_si_nadie_mas_quiere(bot):
     assert bot["canceladas"] == [r["id"]] and rd.obtener(r["id"])["estado"] == "cancelada"
 
 
+def _agendada(bot):
+    r = reuniones.proponer("u1", EVENTO)
+    reuniones.pedir("u1", r["id"])
+    return r["id"]
+
+
+def test_eventos_cambian_el_estado(bot, monkeypatch):
+    avisos_creados = []
+    monkeypatch.setattr(reuniones, "_avisar", lambda rid, texto: avisos_creados.append(texto))
+    rid = _agendada(bot)
+    reuniones.recibir_evento(rid, {"tipo": "esperando"})
+    assert rd.obtener(rid)["estado"] == "esperando"
+    reuniones.recibir_evento(rid, {"tipo": "admitido"})
+    assert rd.obtener(rid)["estado"] == "grabando"
+    reuniones.recibir_evento(rid, {"tipo": "terminado", "motivo": "solo", "incompleta": True})
+    fila = rd.obtener(rid)
+    assert fila["estado"] == "procesando" and fila["incompleta"] == 1 and fila["terminada"]
+    assert avisos_creados == []
+
+
+def test_rechazado_y_fallo_avisan(bot, monkeypatch):
+    avisos_creados = []
+    monkeypatch.setattr(reuniones, "_avisar", lambda rid, texto: avisos_creados.append(texto))
+    rid = _agendada(bot)
+    reuniones.recibir_evento(rid, {"tipo": "rechazado", "motivo": "sin_respuesta"})
+    assert rd.obtener(rid)["estado"] == "rechazada"
+    assert "No me dejaron entrar" in avisos_creados[0]
+    reuniones.recibir_evento(rid, {"tipo": "fallo", "motivo": "sesion_google"})
+    assert rd.obtener(rid)["estado"] == "fallida" and "No pude entrar" in avisos_creados[1]
+
+
+def test_audio_se_guarda_una_vez(bot):
+    rid = _agendada(bot)
+    assert reuniones.recibir_audio(rid, 1, b"OGG1") is True
+    assert reuniones.recibir_audio(rid, 1, b"OGG1") is False
+    assert reuniones.ruta_pedazo(rid, 1).read_bytes() == b"OGG1"
+
+
+def test_hablantes(bot):
+    rid = _agendada(bot)
+    reuniones.recibir_hablantes(rid, [{"t": 3, "nombres": ["Ana"]}])
+    assert rd.obtener(rid)["linea"] == [{"t": 3, "nombres": ["Ana"]}]
+
+
 def test_enlace_firmado(bot, monkeypatch):
     monkeypatch.setenv("JARVIS_CLAVE_SECRETA", "x" * 40)
     r = reuniones.proponer("u1", EVENTO)
