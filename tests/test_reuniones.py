@@ -118,6 +118,17 @@ def test_hablantes(bot):
     assert rd.obtener(rid)["linea"] == [{"t": 3, "nombres": ["Ana"]}]
 
 
+def test_herramienta_buscar_reuniones(bot):
+    from backend import herramientas
+    r = reuniones.proponer("u1", EVENTO)
+    reuniones.pedir("u1", r["id"])
+    rd.actualizar(r["id"], estado="lista", resumen="Se acordó bajar el precio del alambre.",
+                  tareas=[{"quien": "Ana", "que": "mandar cotización", "cuando": "viernes"}])
+    texto = herramientas.ejecutar("buscar_reuniones", '{"texto": "alambre"}', "u1")
+    assert "Ventas" in texto and "bajar el precio" in texto and "Ana: mandar cotización (viernes)" in texto
+    assert "No encontré" in herramientas.ejecutar("buscar_reuniones", '{"texto": "alambre"}', "u2")
+
+
 def test_enlace_firmado(bot, monkeypatch):
     monkeypatch.setenv("JARVIS_CLAVE_SECRETA", "x" * 40)
     r = reuniones.proponer("u1", EVENTO)
