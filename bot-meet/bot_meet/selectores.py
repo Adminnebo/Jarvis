@@ -29,6 +29,26 @@ CAJA_CHAT = re.compile(r"Env(í|i)a(r)? un mensaje|Send a message")   # real: "E
 CSS_PRENDIDOS = ('[aria-label^="Desactivar micrófono"], [aria-label^="Desactivar cámara"], '
                  '[aria-label^="Turn off microphone"], [aria-label^="Turn off camera"]')
 
+# Calibración: por cada mosaico, su texto y sus "marcas" (clases y atributos data-*/aria-*
+# de él y sus descendientes). Comparando segundos con y sin voz sale qué marca dice
+# "está hablando" y dónde está el nombre.
+JS_FOTO = """() => {
+  const salida = [];
+  for (const m of document.querySelectorAll('[data-participant-id]')) {
+    const marcas = new Set();
+    for (const el of [m, ...m.querySelectorAll('*')]) {
+      for (const c of el.classList) marcas.add('c:' + c);
+      for (const a of el.attributes) {
+        if ((a.name.startsWith('data-') || a.name.startsWith('aria-')) && a.value.length <= 60
+            && !a.name.startsWith('data-participant')) marcas.add('a:' + a.name + '=' + a.value);
+      }
+    }
+    salida.push({id: m.getAttribute('data-participant-id'), texto: (m.innerText || '').trim().slice(0, 120),
+                 marcas: [...marcas].sort()});
+  }
+  return salida;
+}"""
+
 # Cada mosaico de participante lleva data-participant-id; el nombre va en
 # data-self-name. "hablando" se reconoce con el selector configurable
 # (BOT_MEET_SEL_HABLANDO), que se calibra con una reunión real.

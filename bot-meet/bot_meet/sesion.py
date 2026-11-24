@@ -21,7 +21,7 @@ def _pasar_pedazos(grabador, subidor, todos=False):
 
 def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
                     ahora=lambda: datetime.now(timezone.utc), dormir=time.sleep,
-                    espera_admision_s=600, volcar_dom=False) -> str:
+                    espera_admision_s=600, volcar_dom=False, calibrar_s=0) -> str:
     """Devuelve "terminada", "incompleta", "rechazada" o "fallida"."""
     try:
         subidor.evento("esperando")
@@ -86,6 +86,9 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
                 incompleta, motivo = True, "caida"
                 break
             ausente_desde = None
+            # Calibración: foto de los mosaicos cada segundo durante los primeros calibrar_s.
+            if calibrar_s and (t - entrada).total_seconds() < calibrar_s:
+                meet.anotar_calibracion(round((t - entrada).total_seconds()))
             if estado.hablando:
                 ultima_voz = t
                 linea.append({"t": round((t - entrada).total_seconds()), "nombres": estado.hablando})

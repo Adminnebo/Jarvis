@@ -78,7 +78,8 @@ class Lanzador:
             return ejecutar_sesion(
                 s, meet, grabador, subidor,
                 debe_parar=lambda: self._agenda.obtener(s.id).estado == "cancelada",
-                espera_admision_s=c.espera_admision_s, volcar_dom=c.volcar_dom)
+                espera_admision_s=c.espera_admision_s, volcar_dom=c.volcar_dom,
+                calibrar_s=c.calibrar_s)
         finally:
             shutil.rmtree(perfil, ignore_errors=True)
 

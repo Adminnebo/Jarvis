@@ -1,4 +1,5 @@
 """Chromium manejado por Playwright para entrar a un Meet y seguirlo."""
+import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -212,6 +213,18 @@ class MeetPlaywright:
             return ruta
         except PWError:
             return None
+
+    def anotar_calibracion(self, t: int) -> None:
+        """Una línea de capturas/calibracion.jsonl con la foto de los mosaicos en el segundo t."""
+        if not self._viva():
+            return
+        try:
+            mosaicos = self._pagina.evaluate(S.JS_FOTO)
+        except PWError:
+            return
+        self._capturas.mkdir(parents=True, exist_ok=True)
+        with open(self._capturas / "calibracion.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"t": t, "mosaicos": mosaicos}, ensure_ascii=False) + "\n")
 
     def volcar(self, nombre: str) -> Path | None:
         """Guarda el HTML de la página (para calibrar selectores)."""

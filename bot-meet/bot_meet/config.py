@@ -18,6 +18,7 @@ class Config:
     espera_admision_s: int = 600
     sel_hablando: str = SEL_HABLANDO_SIMULADO
     volcar_dom: bool = False
+    calibrar_s: int = 0
 
 
 def leer_config(entorno=None) -> Config:
@@ -34,4 +35,5 @@ def leer_config(entorno=None) -> Config:
         espera_admision_s=int(e.get("BOT_MEET_ESPERA_ADMISION_S", "600")),
         sel_hablando=e.get("BOT_MEET_SEL_HABLANDO", SEL_HABLANDO_SIMULADO),
         volcar_dom=e.get("BOT_MEET_VOLCAR_DOM", "0") == "1",
+        calibrar_s=int(e.get("BOT_MEET_CALIBRAR_S", "0")),
     )

@@ -56,6 +56,9 @@ class MeetFalso:
     def volcar(self, nombre):
         pass
 
+    def anotar_calibracion(self, t):
+        self.calibrado = getattr(self, "calibrado", []) + [t]
+
     def cerrar(self):
         self.cerrado = True
 
@@ -120,6 +123,16 @@ def test_reunion_normal_hasta_quedar_solo():
     assert g.inicios == 1 and g.detenciones == 1
     # Al entrar y una vez por minuto mientras está adentro (sale a los 180 s).
     assert m.silencios == 1 + 3
+
+
+def test_calibracion_solo_los_primeros_segundos():
+    m = MeetFalso([ResultadoEntrada("admitido")],
+                  lambda seg: EstadoLlamada(True, 0 if seg >= 30 else 1, []))
+    reloj = Reloj()
+    m.reloj = reloj
+    ejecutar_sesion(sesion(), m, GrabadorFalso(), SubidorFalso(), lambda: False,
+                    ahora=reloj.ahora, dormir=reloj.dormir, calibrar_s=10)
+    assert m.calibrado == list(range(10))
 
 
 def test_rechazado():
