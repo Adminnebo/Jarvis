@@ -92,3 +92,42 @@ def ventas_productos(pedido: dict) -> dict:
                           "TotalVenta": float(f["TotalVenta"] or 0)})
     hasta = fuentes.consultar(id_fuente, SQL_HASTA, 1)
     return {"filas": filas, "datosHasta": _iso(hasta[0]["hasta"]) if hasta else None}
+
+
+# ---------- Una factura con sus productos (para verla desde el panel) ----------
+SQL_FACTURA = """
+SELECT TOP 500 nfactura, FechaHora, ncf, Empresa, cliente, NombreCliente, Contado, PreFacturador,
+       Codigo, Descripcion, Und, Cantidad, Precio, TotalVenta, MontoITBIS
+  FROM dbo.List_VentasxProductosIA WHERE nfactura = %(numero)s
+"""
+
+
+def numero_de(cuerpo) -> int:
+    numero = cuerpo.get("numero") if isinstance(cuerpo, dict) else None
+    if not isinstance(numero, int) or isinstance(numero, bool) or numero <= 0 or numero > 10**15:
+        raise ValueError("Falta el numero de factura (entero positivo).")
+    return numero
+
+
+def _texto(x) -> str:
+    return str(x or "").strip()
+
+
+def factura(numero: int) -> dict:
+    """Cabecera y lineas de una factura. encontrada=False si la vista no la tiene (o se atraso)."""
+    id_fuente = puente_reactivacion.fuente()
+    filas = fuentes.consultar(id_fuente, SQL_FACTURA, 500, parametros={"numero": numero})
+    hasta = fuentes.consultar(id_fuente, SQL_HASTA, 1)
+    datos_hasta = _iso(hasta[0]["hasta"]) if hasta else None
+    if not filas:
+        return {"encontrada": False, "numero": numero, "datosHasta": datos_hasta}
+    f0 = filas[0]
+    return {
+        "encontrada": True, "numero": numero, "datosHasta": datos_hasta,
+        "fecha": _iso(f0["FechaHora"]), "ncf": _texto(f0["ncf"]), "empresa": _texto(f0["Empresa"]),
+        "cliente": _num(f0["cliente"]), "nombreCliente": _texto(f0["NombreCliente"]),
+        "contado": bool(f0["Contado"]), "facturador": _texto(f0["PreFacturador"]),
+        "lineas": [{"codigo": _texto(f["Codigo"]), "descripcion": _texto(f["Descripcion"]), "unidad": _texto(f["Und"]),
+                    "cantidad": float(f["Cantidad"] or 0), "precio": float(f["Precio"] or 0),
+                    "total": float(f["TotalVenta"] or 0), "itbis": float(f["MontoITBIS"] or 0)} for f in filas],
+    }

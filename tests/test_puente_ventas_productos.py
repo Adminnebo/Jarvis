@@ -127,3 +127,60 @@ def test_si_la_base_falla_es_502_sin_detalles(cliente, monkeypatch):
     r = cliente.post(RUTA, json=CUERPO, headers={"Authorization": f"Bearer {CLAVE}"})
     assert r.status_code == 502
     assert "LMNeboUsrIA" not in r.text
+
+
+# --------------------------------------------------------------------------
+# Una factura con sus productos
+# --------------------------------------------------------------------------
+
+RUTA_FACTURA = "/api/puente/cotizaciones/factura"
+
+
+@pytest.fixture
+def factura_falsa(monkeypatch):
+    pedidas = []
+
+    def falsa(id_fuente, sql, limite=200, parametros=None):
+        fuentes.validar_solo_lectura(sql)
+        pedidas.append({"sql": sql, "parametros": parametros})
+        if "MAX(FechaHora)" in sql:
+            return [{"hasta": datetime(2026, 10, 19, 15, 12, 6, 913000)}]
+        if parametros and parametros.get("numero") == 404:
+            return []
+        return [{"nfactura": Decimal("1010391175"), "FechaHora": datetime(2026, 7, 2, 10, 0, 0, 360000), "ncf": "B0100000001 ",
+                 "Empresa": "EMPRESA DE PRUEBA", "cliente": Decimal("5853"), "NombreCliente": "CLIENTE DE PRUEBA ", "Contado": 1,
+                 "PreFacturador": "FACTURADOR DE PRUEBA", "Codigo": "5741 ", "Descripcion": "PRODUCTO DE PRUEBA", "Und": "UND       ",
+                 "Cantidad": 2.0, "Precio": 150.25, "TotalVenta": 300.5, "MontoITBIS": 45.84}]
+
+    monkeypatch.setattr(fuentes, "consultar", falsa)
+    return pedidas
+
+
+@pytest.mark.parametrize("malo", [None, {}, {"numero": "1"}, {"numero": 0}, {"numero": True}, {"numero": 1.5}])
+def test_numero_malo(malo):
+    with pytest.raises(ValueError):
+        puente_cotizaciones.numero_de(malo)
+
+
+def test_factura_con_sus_lineas_y_el_numero_como_parametro(factura_falsa):
+    f = puente_cotizaciones.factura(1010391175)
+    assert factura_falsa[0]["parametros"] == {"numero": 1010391175}
+    assert "1010391175" not in factura_falsa[0]["sql"]
+    assert f["encontrada"] is True and f["fecha"] == "2026-07-02T10:00:00.360Z"
+    assert f["ncf"] == "B0100000001" and f["contado"] is True and f["cliente"] == 5853
+    assert f["lineas"] == [{"codigo": "5741", "descripcion": "PRODUCTO DE PRUEBA", "unidad": "UND", "cantidad": 2.0,
+                            "precio": 150.25, "total": 300.5, "itbis": 45.84}]
+
+
+def test_factura_que_no_esta(factura_falsa):
+    assert puente_cotizaciones.factura(404) == {"encontrada": False, "numero": 404, "datosHasta": "2026-10-19T15:12:06.913Z"}
+
+
+def test_ruta_factura_con_y_sin_clave(cliente, monkeypatch, factura_falsa):
+    assert cliente.post(RUTA_FACTURA, json={"numero": 1}).status_code == 404
+    monkeypatch.setenv("JARVIS_REACTIVACION_CLAVE", CLAVE)
+    assert cliente.post(RUTA_FACTURA, json={"numero": 1}).status_code == 401
+    assert factura_falsa == []
+    r = cliente.post(RUTA_FACTURA, json={"numero": 1010391175}, headers={"Authorization": f"Bearer {CLAVE}"})
+    assert r.status_code == 200 and r.json()["lineas"][0]["codigo"] == "5741"
+    assert cliente.post(RUTA_FACTURA, json={"numero": "x"}, headers={"Authorization": f"Bearer {CLAVE}"}).status_code == 400
