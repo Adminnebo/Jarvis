@@ -13,7 +13,9 @@ sleep 1
 if [ "$MODO" = "vnc" ]; then
   x11vnc -display :98 -localhost -rfbport 5900 -nopw -forever -quiet &
 fi
-exec "$CHROME" --user-data-dir=/data/perfil --no-first-run --lang=es-419 \
+# --no-sandbox: dentro de Docker no hay sandbox de Chrome (Playwright lo pone
+# solo al lanzar el bot; aquí se lanza a mano).
+exec "$CHROME" --user-data-dir=/data/perfil --no-first-run --lang=es-419 --no-sandbox \
   --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 \
   --disable-blink-features=AutomationControlled \
   https://accounts.google.com/
