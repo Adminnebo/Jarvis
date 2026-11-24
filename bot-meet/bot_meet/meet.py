@@ -118,7 +118,13 @@ class MeetPlaywright:
             self._boton(S.MAS_OPCIONES).first.click(timeout=5000)
             p.get_by_role("menuitem", name=S.CONFIGURACION).first.click(timeout=5000)
             p.get_by_role("tab", name=S.PESTANA_VIDEO).first.click(timeout=5000)
-            p.get_by_label(S.RESOLUCION_RECEPCION).first.select_option(label=S.SOLO_AUDIO, timeout=5000)
+            lista = p.get_by_label(S.RESOLUCION_RECEPCION).first
+            # En el Meet real es un menú propio (role=combobox), no un <select>.
+            if lista.evaluate("e => e.tagName") == "SELECT":
+                lista.select_option(label=S.SOLO_AUDIO, timeout=5000)
+            else:
+                lista.click(timeout=5000)
+                p.get_by_role("option", name=S.SOLO_AUDIO).first.click(timeout=5000)
             self._boton(S.CERRAR_DIALOGO).first.click(timeout=5000)
             return True
         except PWError as error:

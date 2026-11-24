@@ -52,7 +52,7 @@ def test_nadie_admite_a_tiempo(meet):
 def test_solo_audio_y_chat(meet):
     meet.unirse(PAGINA + "?admitir_ms=100", espera_s=10)
     assert meet.solo_audio() is True
-    assert meet._pagina.locator("#recepcion").input_value() == "Solo audio"
+    assert meet._pagina.locator("#recepcion").inner_text() == "Solo audio"
     assert meet.escribir_chat("Jarvis está grabando") is True
     assert meet._pagina.locator("#mensajes li").inner_text() == "Jarvis está grabando"
 

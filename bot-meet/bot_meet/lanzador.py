@@ -2,6 +2,7 @@
 import asyncio
 import shutil
 import threading
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -53,8 +54,8 @@ class Lanzador:
         try:
             resultado = self._correr(s)
             print(f"[lanzador] {s.id}: {resultado}")
-        except Exception as error:  # nunca tumbar el servicio por una reunión
-            print(f"[lanzador] {s.id}: error {error!r}")
+        except Exception:  # nunca tumbar el servicio por una reunión
+            print(f"[lanzador] {s.id}: error\n{traceback.format_exc()}", flush=True)
         finally:
             if self._agenda.obtener(s.id).estado == "en_curso":
                 self._agenda.marcar(s.id, "terminada")

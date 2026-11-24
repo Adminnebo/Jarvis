@@ -15,10 +15,13 @@
   </div>
   <div id="ajustes" role="dialog" hidden>
     <button role="tab">Video</button>
-    <label>Resolución de recepción (máxima)
-      <select aria-label="Resolución de recepción (máxima)" id="recepcion">
-        <option>Alta definición (720p)</option><option>Solo audio</option>
-      </select></label>
+    <!-- Como el Meet real: un menú propio con role=combobox, no un <select>. -->
+    <div role="combobox" tabindex="0" aria-label="Resolución de recepción (máxima)" id="recepcion"
+         onclick="document.getElementById('opciones').hidden=false">Alta definición (720p)</div>
+    <ul role="listbox" id="opciones" hidden>
+      <li role="option" onclick="elegir(this)">Alta definición (720p)</li>
+      <li role="option" onclick="elegir(this)">Solo audio</li>
+    </ul>
     <button aria-label="Cerrar" onclick="document.getElementById('ajustes').hidden=true">x</button>
   </div>
   <button aria-label="Chatear con todos" onclick="document.getElementById('chat').hidden=!document.getElementById('chat').hidden">chat</button>
@@ -43,6 +46,7 @@ function pedir() {
     document.getElementById(q.get('rechazar') ? 'rechazo' : 'llamada').hidden = false;
   }, Number(q.get('admitir_ms') || 300));
 }
+function elegir(li) { document.getElementById('recepcion').textContent = li.textContent; document.getElementById('opciones').hidden = true; }
 function enviar(t) { const li = document.createElement('li'); li.textContent = t.value; document.getElementById('mensajes').append(li); t.value=''; }
 function salir() { document.getElementById('llamada').remove(); document.getElementById('fuera').hidden = false; }
 window.hablar = (id, si) => { const i = document.querySelector(`[data-participant-id="${id}"] i`); if (si) i.setAttribute('data-hablando', '1'); else i.removeAttribute('data-hablando'); };

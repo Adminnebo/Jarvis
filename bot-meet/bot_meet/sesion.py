@@ -8,6 +8,10 @@ AVISO = "Jarvis está grabando esta reunión para tomar notas."
 VOLCAR_CADA_S = 10
 
 
+def _log(sesion, texto):
+    print(f"[sesion {sesion.id}] {texto}", flush=True)
+
+
 def _pasar_pedazos(grabador, subidor, todos=False):
     for n, ruta in grabador.pedazos_listos(todos=todos):
         subidor.audio(n, ruta)
@@ -33,14 +37,21 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
 
         subidor.evento("admitido")
         subidor.vaciar()
+        _log(sesion, "admitido")
+        if volcar_dom:
+            meet.volcar("admitido")
+        # Primero grabar: si algo de lo cosmético se traba, el audio ya corre.
+        grabador.iniciar()
+        _log(sesion, "grabando")
         meet.solo_audio()
+        _log(sesion, "solo audio intentado")
         meet.escribir_chat(AVISO)
+        _log(sesion, "aviso intentado")
 
         entrada = ahora()
         linea, ultima_voz, solo_desde = [], None, None
         reintento_usado, incompleta, motivo = False, False, None
         ultimo_volcado = 0.0
-        grabador.iniciar()
         while True:
             if debe_parar():
                 motivo = "cancelada"
@@ -73,6 +84,7 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
                 break
             dormir(1)
 
+        _log(sesion, f"saliendo: {motivo}")
         meet.salir()
         grabador.detener()
         _pasar_pedazos(grabador, subidor, todos=True)
