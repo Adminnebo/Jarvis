@@ -24,6 +24,8 @@ llega el resumen corto. Un solo sistema, sin pagar Fathom por persona.
 | Técnica | Chromium manejado por Playwright (Python) + ffmpeg grabando el audio de la tarjeta de sonido virtual (opción A) | La más robusta: si Google cambia la página se rompe entrar, no la grabación |
 | Dónde corre | EC2 nuevo y aparte, t3.small (2 GB) para 1–2 bots a la vez; se sube a t3.medium si la medición no alcanza | Un Chrome colgado no tumba Jarvis ni nebocore |
 | Código | Carpeta `bot-meet/` en este repo, Docker propio, despliegue propio | Comparte pruebas y contrato con Jarvis sin compartir máquina |
+| Acceso al bot | HTTPS en `bot-meet.neboaiconsulting.com` (Caddy, puertos 80/443). Caddy solo deja pasar la IP de Jarvis (54.174.88.26), y para `/v1/salud` también la de nebocore (monitor). Además, cada pedido va firmado | El link y el token de subida no viajan en claro; reemplaza el puerto 8443 que se pensó al principio |
+| Perfil de Chrome | El perfil base (`/data/perfil`) tiene la sesión de Google; cada reunión usa una copia propia que se borra al terminar | Dos Chrome no pueden abrir el mismo perfil a la vez |
 | Transcripción | En Jarvis, por la API de OpenAI, modelo con hablantes (`gpt-4o-transcribe-diarize`), configurable con `JARVIS_MODELO_REUNIONES` | El bot no hace trabajo pesado; el modelo actual se retira en 2027 |
 | Audio guardado | Bucket privado `reuniones` en Supabase Storage, se borra a los 90 días; el texto queda | Jarvis ya guarda archivos allí |
 
@@ -68,7 +70,9 @@ Un servicio chico en Python (FastAPI) que en reposo no abre ningún Chrome.
 4. ffmpeg graba el monitor de PulseAudio en Opus, mono, 16 kHz, 24 kbps, y lo
    corta en pedazos de 5 minutos.
 5. Cada segundo lee de la página quién aparece hablando y lo anota en la línea
-   de tiempo `[{t, nombres}]`.
+   de tiempo `[{t, nombres}]`. El selector CSS que marca «hablando» se
+   calibra con una reunión real (`BOT_MEET_SEL_HABLANDO`). Si no detecta a
+   nadie, Jarvis pone «Participante» y el resto sigue igual.
 6. **Sale** cuando queda solo, cuando pasan 15 minutos de la hora de fin sin
    que nadie hable, o a las 3 horas de haber entrado.
 
