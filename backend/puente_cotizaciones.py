@@ -58,7 +58,12 @@ def pedido_de(cuerpo) -> dict:
         raise ValueError(f"No mas de {MAXIMO_CLIENTES} clientes por pedido.")
     if not all(isinstance(c, int) and not isinstance(c, bool) and c > 0 for c in clientes):
         raise ValueError("Los clientes tienen que ser codigos enteros positivos.")
-    return {"desde": desde.isoformat(), "hasta": hasta.isoformat(), "clientes": sorted(set(clientes), key=clientes.index)}
+    return {"desde": _sql(desde), "hasta": _sql(hasta), "clientes": sorted(set(clientes), key=clientes.index)}
+
+
+def _sql(f: datetime) -> str:
+    """Texto que SQL Server convierte a datetime: a lo mas 3 decimales (isoformat da 6 y falla)."""
+    return f.strftime("%Y-%m-%dT%H:%M:%S.") + f"{f.microsecond // 1000:03d}"
 
 
 def _iso(f) -> str | None:
