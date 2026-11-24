@@ -1,0 +1,32 @@
+# Bot de Meet en su EC2 (18.227.166.134, t3.small, us-east-2). Ver LEEME.md.
+name: bot-meet
+
+x-base: &base
+  restart: unless-stopped
+  logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }
+
+services:
+  bot:
+    <<: *base
+    build: ./repo/bot-meet
+    image: bot-meet-bot:latest
+    env_file: bot.env
+    volumes: [datos:/data]
+    shm_size: 256m          # Chrome usa /dev/shm; el de Docker (64 MB) se queda corto
+    mem_limit: 1600m        # deja aire a Caddy y al sistema en 2 GB + swap
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/salud', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    <<: *base
+    image: caddy:2-alpine
+    ports: ["80:80", "443:443"]
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile:ro, caddy:/data]
+    mem_limit: 64m
+
+volumes:
+  datos:
+  caddy:

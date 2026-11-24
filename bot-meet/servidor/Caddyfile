@@ -1,0 +1,17 @@
+# Solo Jarvis (54.174.88.26) habla con el bot; el monitor (nebocore) mira la salud.
+bot-meet.neboaiconsulting.com {
+	@monitor {
+		remote_ip 3.132.126.1
+		path /v1/salud
+	}
+	handle @monitor {
+		reverse_proxy bot:8000
+	}
+	@jarvis remote_ip 54.174.88.26
+	handle @jarvis {
+		reverse_proxy bot:8000
+	}
+	handle {
+		respond 403
+	}
+}

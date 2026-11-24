@@ -1,0 +1,6 @@
+[Unit]
+Description=Desplegar el bot de Meet si cambió en GitHub
+
+[Service]
+Type=oneshot
+ExecStart=/opt/bot-meet/desplegar.sh
