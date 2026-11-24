@@ -37,7 +37,14 @@ def consultas(monkeypatch):
 
 def test_pedido_valido():
     p = puente_cotizaciones.pedido_de(CUERPO)
-    assert p == {"desde": "2026-07-01T00:00:00", "hasta": "2026-07-09T00:00:00", "clientes": [76, 5853]}
+    assert p == {"desde": "2026-07-01T00:00:00.000", "hasta": "2026-07-09T00:00:00.000", "clientes": [76, 5853]}
+
+
+def test_milisegundos_del_panel_quedan_en_3_decimales():
+    # el panel manda toISOString() (".037Z"); con 6 decimales SQL Server no convierte la fecha
+    p = puente_cotizaciones.pedido_de({**CUERPO, "desde": "2026-11-15T16:21:46.037Z", "hasta": "2026-11-23T16:21:46.5Z"})
+    assert p["desde"] == "2026-11-15T16:21:46.037"
+    assert p["hasta"] == "2026-11-23T16:21:46.500"
 
 
 @pytest.mark.parametrize("malo", [
@@ -60,7 +67,7 @@ def test_ventas_solo_lectura_fechas_como_parametro_y_clientes_validados(consulta
     assert len(consultas) == 2
     lineas = consultas[0]
     assert lineas["fuente"] == puente_cotizaciones.FUENTE_POR_DEFECTO
-    assert lineas["parametros"] == {"desde": "2026-07-01T00:00:00", "hasta": "2026-07-09T00:00:00"}
+    assert lineas["parametros"] == {"desde": "2026-07-01T00:00:00.000", "hasta": "2026-07-09T00:00:00.000"}
     assert "2026-07-01" not in lineas["sql"], "las fechas van como parametro"
     assert "cliente IN (76,5853)" in lineas["sql"]
     # hora del ERP marcada como UTC, igual que la lee el panel con el driver de MSSQL
