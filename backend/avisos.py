@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from . import basedatos, cerebro
 
 MAX_TEXTO = 2000
+MAX_RESUMEN = 1000
 
 
 def _ahora() -> datetime:
@@ -39,7 +40,9 @@ def crear(usuario_id: str, ref: str, hilo: str | None, remitente: str, asunto: s
             "INSERT OR IGNORE INTO avisos (id, usuario_id, app, ref, hilo, remitente, asunto, "
             "resumen, tipo, creado, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (uuid.uuid4().hex[:12], usuario_id, app, ref, hilo, remitente[:200], asunto[:300],
-             resumen[:300], tipo, _ahora().isoformat(timespec="seconds"),
+             # 1000 y no 300: el aviso de reunión lleva el resumen de los
+             # invitados y un enlace firmado de Grabar que no se puede cortar.
+             resumen[:MAX_RESUMEN], tipo, _ahora().isoformat(timespec="seconds"),
              "pendiente" if con_whatsapp else "no_aplica"))
         return cursor.rowcount == 1
 
