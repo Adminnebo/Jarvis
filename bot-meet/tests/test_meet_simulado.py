@@ -43,6 +43,15 @@ def test_entra_directo_con_un_cartel_encima(meet):
     assert meet.leer_estado().en_llamada
 
 
+def test_apaga_micro_y_camara_ya_dentro_de_la_llamada(meet):
+    # Prueba real 2026-11-24: entró directo con la cámara y el micrófono falsos prendidos.
+    meet.unirse(PAGINA + "?admitir_ms=100&prendidos=1", espera_s=5)
+    assert meet.silenciar() == 2
+    etiquetas = [meet._pagina.locator(f"#{i}").get_attribute("aria-label") for i in ("micro-llamada", "camara-llamada")]
+    assert all(e.startswith("Activar") for e in etiquetas)
+    assert meet.silenciar() == 0   # ya apagados: no los vuelve a prender
+
+
 def test_si_no_confirma_la_entrada_deja_captura(meet, tmp_path):
     meet.unirse(PAGINA + "?admitir_ms=60000", espera_s=1)
     assert any(p.name.endswith("sin-admision.png") for p in (tmp_path / "capturas").iterdir())

@@ -36,6 +36,10 @@ class MeetFalso:
     def solo_audio(self):
         return True
 
+    def silenciar(self):
+        self.silencios = getattr(self, "silencios", 0) + 1
+        return 0
+
     def escribir_chat(self, texto):
         self.chat.append(texto)
         return True
@@ -114,6 +118,8 @@ def test_reunion_normal_hasta_quedar_solo():
     assert linea[0] == {"t": 10, "nombres": ["Ana"]} and len(linea) == 10
     assert m.chat == [AVISO] and m.salio and m.cerrado
     assert g.inicios == 1 and g.detenciones == 1
+    # Al entrar y una vez por minuto mientras está adentro (sale a los 180 s).
+    assert m.silencios == 1 + 3
 
 
 def test_rechazado():

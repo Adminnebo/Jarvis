@@ -120,6 +120,23 @@ class MeetPlaywright:
             return ResultadoEntrada("fallo", f"navegador: {error}"[:200])
 
     # --- ya adentro ----------------------------------------------------
+    def silenciar(self) -> int:
+        """Apaga micrófono y cámara si quedaron prendidos (al entrar directo, sin sala
+        de espera, Meet los dejaba encendidos). Devuelve cuántos apagó."""
+        apagados = 0
+        try:
+            # Se vuelve a buscar después de cada clic: el botón apagado deja de
+            # calzar con el selector y la lista se corre.
+            for _ in range(4):
+                visibles = [b for b in self._pagina.locator(S.CSS_PRENDIDOS).all() if b.is_visible()]
+                if not visibles:
+                    break
+                visibles[0].click(timeout=3000)
+                apagados += 1
+        except PWError as error:
+            print(f"[meet] no pude apagar micrófono/cámara: {str(error).splitlines()[0]}")
+        return apagados
+
     def solo_audio(self) -> bool:
         """Ajustes > Video > Resolución de recepción: Solo audio. Si falla, sigue."""
         p = self._pagina
