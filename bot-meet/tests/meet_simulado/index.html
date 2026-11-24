@@ -44,6 +44,17 @@ function pedir() {
   setTimeout(() => {
     document.getElementById('espera').hidden = true;
     document.getElementById(q.get('rechazar') ? 'rechazo' : 'llamada').hidden = false;
+    // ?cartel=1: como Meet al entrar directo, un cartel encima que esconde la llamada
+    // del árbol de accesibilidad (aria-hidden) hasta que se cierra con Escape.
+    if (q.get('cartel')) {
+      document.getElementById('llamada').setAttribute('aria-hidden', 'true');
+      const c = document.createElement('div');
+      c.id = 'cartel'; c.setAttribute('role', 'dialog'); c.textContent = 'Tu reunión está lista';
+      document.body.append(c);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { c.remove(); document.getElementById('llamada').removeAttribute('aria-hidden'); }
+      });
+    }
   }, Number(q.get('admitir_ms') || 300));
 }
 function elegir(li) { document.getElementById('recepcion').textContent = li.textContent; document.getElementById('opciones').hidden = true; }
