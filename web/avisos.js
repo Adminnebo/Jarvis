@@ -38,7 +38,10 @@ function fila(aviso) {
   const quien = document.createElement("strong");
   quien.textContent = aviso.remitente || (aviso.app === "whatsapp" ? "WhatsApp" : "Gmail");
   const resumen = document.createElement("span");
-  resumen.textContent = aviso.resumen;
+  // Los avisos de reunión traen los enlaces de Grabar / No grabar en su propia
+  // línea (son para WhatsApp): aquí se quitan y se ofrece un botón.
+  const lineas = (aviso.resumen || "").split("\n");
+  resumen.textContent = lineas.filter((l) => !/^(No grabar|Grabar): /.test(l)).join(" ");
   const cuando = document.createElement("time");
   cuando.textContent = new Date(aviso.creado).toLocaleString("es");
   item.append(quien, resumen, cuando);
@@ -48,6 +51,31 @@ function fila(aviso) {
     panel.hidden = true;
     if (aviso.tipo === "correo" && aviso.app === "whatsapp") pedirAJarvis(`Léeme el chat de WhatsApp con id ${aviso.hilo}`);
     else if (aviso.tipo === "correo") pedirAJarvis(`Léeme el correo con id ${aviso.ref}`);
+    else if (aviso.tipo === "reunion-lista" && aviso.hilo) abrirReunion(aviso.hilo);
   });
-  return item;
+  if (aviso.tipo !== "reunion" || !aviso.hilo) return item;
+
+  const ofreceGrabar = lineas.some((l) => l.startsWith("Grabar: "));
+  const ofreceNoGrabar = lineas.some((l) => l.startsWith("No grabar: "));
+  if (!ofreceGrabar && !ofreceNoGrabar) return item;
+  const caja = document.createElement("div");
+  caja.className = "aviso-con-accion";
+  const accion = document.createElement("button");
+  accion.type = "button";
+  accion.className = "aviso-accion";
+  accion.textContent = ofreceGrabar ? "Grabar" : "No grabar";
+  accion.addEventListener("click", async () => {
+    accion.disabled = true;
+    const r = await fetch(`/api/reuniones/${aviso.hilo}/${ofreceGrabar ? "grabar" : "no-grabar"}`, { method: "POST" });
+    accion.textContent = r.ok ? (await r.json()).mensaje : "No se pudo, inténtalo otra vez.";
+  });
+  caja.append(item, accion);
+  return caja;
+}
+
+function abrirReunion(id) {
+  // La vista Reuniones vive en la estructura (/); si recién se crea, lee el id de aquí.
+  try { sessionStorage.setItem("jarvis-reunion-abrir", id); } catch { /* sin storage */ }
+  if (window.top !== window) window.top.postMessage({ tipo: "ir", vista: "reuniones", id }, location.origin);
+  else location.href = `/#reuniones`;
 }

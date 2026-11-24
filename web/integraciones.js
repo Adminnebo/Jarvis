@@ -248,11 +248,24 @@ async function formularioDeReglas() {
     <label><span>WhatsApp para avisos (opcional)</span>
       <input name="whatsapp" inputmode="tel" placeholder="809 555 1234"></label>
     <label class="casilla"><input type="checkbox" name="activo"> Avisarme</label>
+    <label class="casilla" data-grabar hidden><input type="checkbox" name="grabar"> Grabar siempre mis reuniones de Meet</label>
+    <small class="integracion-casilla-ayuda" data-grabar hidden>El bot de Jarvis entra solo a las reuniones de tu calendario que tengan Meet. Apagado, el aviso de 15 minutos te pregunta si grabar.</small>
     <div class="fuente-acciones"><button class="boton-mini" type="submit">Guardar</button>
       <span class="integracion-mensaje" role="status"></span></div>`;
   form.reglas.value = reglas.reglas || "";
   form.whatsapp.value = reglas.whatsapp ? `+${reglas.whatsapp}` : "";
   form.activo.checked = reglas.activo;
+  // "Grabar siempre" se guarda solo, al marcarlo (no espera al botón Guardar).
+  const preferencias = await fetch("/api/reuniones/preferencias");
+  const pref = preferencias.ok ? await preferencias.json() : null;
+  if (pref?.disponible) {
+    form.grabar.checked = pref.grabar_siempre;
+    form.querySelectorAll("[data-grabar]").forEach((e) => { e.hidden = false; });
+    form.grabar.addEventListener("change", () => fetch("/api/reuniones/preferencias", {
+      method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ grabar_siempre: form.grabar.checked }),
+    }));
+  }
   form.addEventListener("submit", async (evento) => {
     evento.preventDefault();
     const mensaje = form.querySelector(".integracion-mensaje");

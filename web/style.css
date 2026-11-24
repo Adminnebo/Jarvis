@@ -1372,6 +1372,15 @@ body.con-avatar .orbe { position: absolute; width: 1px; height: 1px; opacity: 0;
 .integracion-reglas input[type="checkbox"] { accent-color: var(--acento); }
 .integracion-reglas .casilla { display: flex; gap: 8px; align-items: center; }
 .integracion-mensaje.mal { color: var(--peligro); }
+/* Aviso de reunión con su botón Grabar / No grabar (web/avisos.js). */
+.aviso-con-accion { display: grid; gap: 6px; }
+.aviso-accion {
+  justify-self: start; margin: 0 0 8px 12px; padding: 6px 14px; font: inherit; font-size: 13px;
+  background: var(--acento-suave); color: var(--texto); border: 1px solid var(--acento);
+  border-radius: var(--radio-chico); cursor: pointer;
+}
+.aviso-accion:disabled { cursor: default; opacity: .8; }
+.integracion-casilla-ayuda { display: block; font-size: 12px; color: var(--tenue); margin-left: 26px; }
 /* hidden tiene que ganarle a los display de .fuente-acciones e .integracion-reglas */
 .integracion [hidden] { display: none !important; }
 .vinculo { display: grid; gap: 10px; margin-top: 12px; }

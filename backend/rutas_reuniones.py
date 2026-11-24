@@ -14,7 +14,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import almacen_reuniones, reuniones
+from . import almacen_reuniones, bot_meet, reuniones
 from . import reuniones_datos as rd
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -77,7 +77,8 @@ def lista(peticion: Request):
 
 @router.get("/api/reuniones/preferencias")
 def ver_preferencias(peticion: Request):
-    return {"grabar_siempre": rd.grabar_siempre(peticion.state.usuario.id)}
+    # disponible: sin bot configurado, Integraciones no muestra el interruptor.
+    return {"grabar_siempre": rd.grabar_siempre(peticion.state.usuario.id), "disponible": bot_meet.configurado()}
 
 
 class Preferencias(BaseModel):

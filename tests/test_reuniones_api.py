@@ -78,7 +78,7 @@ def test_lista_detalle_y_preferencias(reunion, entrar):
     assert [x["id"] for x in c.get("/api/reuniones").json()["reuniones"]] == [rid]
     assert c.get(f"/api/reuniones/{rid}").json()["titulo"] == "Ventas"
     assert c.put("/api/reuniones/preferencias", json={"grabar_siempre": True}).json() == {"grabar_siempre": True}
-    assert c.get("/api/reuniones/preferencias").json() == {"grabar_siempre": True}
+    assert c.get("/api/reuniones/preferencias").json() == {"grabar_siempre": True, "disponible": True}
     assert entrar("la-de-ana").get(f"/api/reuniones/{rid}").status_code == 404
 
 
