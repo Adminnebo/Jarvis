@@ -52,6 +52,19 @@ def test_apaga_micro_y_camara_ya_dentro_de_la_llamada(meet):
     assert meet.silenciar() == 0   # ya apagados: no los vuelve a prender
 
 
+def test_foto_de_calibracion_muestra_que_cambia_al_hablar(meet, tmp_path):
+    import json
+    meet.unirse(PAGINA + "?admitir_ms=100", espera_s=5)
+    meet.anotar_calibracion(0)
+    meet._pagina.evaluate("hablar('p1', true)")
+    meet.anotar_calibracion(1)
+    lineas = [json.loads(x) for x in (tmp_path / "capturas" / "calibracion.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [x["t"] for x in lineas] == [0, 1]
+    ana = [next(m for m in x["mosaicos"] if m["id"] == "p1") for x in lineas]
+    assert 'a:data-hablando=1' not in ana[0]["marcas"] and 'a:data-hablando=1' in ana[1]["marcas"]
+    assert "a:data-self-name=Ana" in ana[1]["marcas"]
+
+
 def test_si_no_confirma_la_entrada_deja_captura(meet, tmp_path):
     meet.unirse(PAGINA + "?admitir_ms=60000", espera_s=1)
     assert any(p.name.endswith("sin-admision.png") for p in (tmp_path / "capturas").iterdir())

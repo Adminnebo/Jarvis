@@ -17,6 +17,7 @@ def test_valores_por_defecto():
     assert c.espera_admision_s == 600
     assert c.sel_hablando == '[data-hablando="1"]'
     assert c.volcar_dom is False
+    assert c.calibrar_s == 0
 
 
 def test_lee_las_variables():
@@ -24,12 +25,13 @@ def test_lee_las_variables():
         "BOT_MEET_SECRETO": SECRETO, "BOT_MEET_DATOS": "/tmp/x",
         "BOT_MEET_MAX_SESIONES": "1", "BOT_MEET_PEDAZO_S": "60",
         "BOT_MEET_HEADLESS": "0", "BOT_MEET_ESPERA_ADMISION_S": "30",
-        "BOT_MEET_SEL_HABLANDO": ".habla", "BOT_MEET_VOLCAR_DOM": "1",
+        "BOT_MEET_SEL_HABLANDO": ".habla", "BOT_MEET_VOLCAR_DOM": "1", "BOT_MEET_CALIBRAR_S": "180",
     })
     assert c.datos == Path("/tmp/x")
     assert (c.max_sesiones, c.pedazo_s, c.headless, c.espera_admision_s) == (1, 60, False, 30)
     assert c.sel_hablando == ".habla"
     assert c.volcar_dom is True
+    assert c.calibrar_s == 180
 
 
 @pytest.mark.parametrize("secreto", ["", "corto"])
