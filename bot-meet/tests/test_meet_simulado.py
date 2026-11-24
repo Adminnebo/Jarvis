@@ -3,10 +3,16 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("playwright")
-from bot_meet.meet import MeetPlaywright  # noqa: E402
+from bot_meet.meet import ARGUMENTOS, QUITAR_POR_DEFECTO, MeetPlaywright  # noqa: E402
 
 pytestmark = pytest.mark.navegador
 PAGINA = (Path(__file__).parent / "meet_simulado" / "index.html").resolve().as_uri()
+
+
+def test_chrome_no_sale_silenciado():
+    # Si --mute-audio se cuela, la grabación queda en silencio sin ningún error.
+    assert "--mute-audio" in QUITAR_POR_DEFECTO
+    assert "--mute-audio" not in ARGUMENTOS
 
 
 @pytest.fixture

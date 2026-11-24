@@ -1,4 +1,6 @@
-FROM python:3.12-slim
+# bookworm fijo: Playwright 1.49 no reconoce Debian 13 (trixie, el slim actual)
+# y su --with-deps pide paquetes que ya no existen.
+FROM python:3.12-slim-bookworm
 ENV PYTHONUNBUFFERED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     XDG_RUNTIME_DIR=/tmp/runtime-bot HOME=/home/bot
 RUN apt-get update \

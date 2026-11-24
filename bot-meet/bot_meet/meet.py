@@ -20,6 +20,9 @@ ARGUMENTOS = [
     "--autoplay-policy=no-user-gesture-required",
     "--window-size=640,360", "--lang=es-419",
 ]
+# Playwright pone --mute-audio por defecto: con eso ffmpeg graba silencio
+# (probado en el EC2: -91 dB con él, -4.6 dB sin él).
+QUITAR_POR_DEFECTO = ["--enable-automation", "--mute-audio"]
 
 
 @dataclass
@@ -49,7 +52,7 @@ class MeetPlaywright:
         self._pw = sync_playwright().start()
         self._contexto = self._pw.chromium.launch_persistent_context(
             str(self._perfil), channel="chromium", headless=self._headless,
-            args=ARGUMENTOS, ignore_default_args=["--enable-automation"],
+            args=ARGUMENTOS, ignore_default_args=QUITAR_POR_DEFECTO,
             viewport={"width": 640, "height": 360}, locale="es-419",
             permissions=["microphone", "camera"],
         )
