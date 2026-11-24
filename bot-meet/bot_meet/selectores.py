@@ -9,6 +9,11 @@ BOTON_UNIRSE = re.compile(r"^(Unirse ahora|Pedir unirse|Solicitar unirse|Join no
 APAGAR_MICRO = re.compile(r"Desactivar micrófono|Turn off microphone")
 APAGAR_CAMARA = re.compile(r"Desactivar cámara|Turn off camera")
 SALIR_LLAMADA = re.compile(r"Abandonar la llamada|Salir de la llamada|Leave call")
+# Para saber si sigue en la llamada se busca en el DOM, no por rol: con un
+# diálogo abierto Meet saca los botones del árbol de accesibilidad y por rol
+# parecería que el bot ya no está (pasó en la primera prueba real).
+CSS_EN_LLAMADA = ('[aria-label="Abandonar la llamada"], [aria-label="Salir de la llamada"], '
+                  '[aria-label="Leave call"]')
 TEXTO_RECHAZADO = re.compile(r"rechazó tu solicitud|No puedes unirte|denied your request|You can't join")
 
 MAS_OPCIONES = re.compile(r"Más opciones|More options")

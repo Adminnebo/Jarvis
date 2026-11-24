@@ -132,9 +132,22 @@ def test_fallo_al_entrar_guarda_captura():
     assert m.capturas == ["fallo-entrar"]
 
 
+def test_un_parpadeo_no_es_una_caida():
+    # Un diálogo abierto tapa la llamada 3 s: no se detiene la grabación.
+    def estados(seg):
+        if 30 <= seg < 33:
+            return EstadoLlamada(False)
+        if seg >= 100:
+            return EstadoLlamada(True, 0, [])
+        return EstadoLlamada(True, 1, [])
+    m = MeetFalso([ResultadoEntrada("admitido")], estados)
+    r, g, _ = correr(m)
+    assert r == "terminada" and g.inicios == 1 and g.detenciones == 1
+
+
 def test_se_cae_y_vuelve_a_entrar_una_vez():
     def estados(seg):
-        if 30 <= seg < 31:
+        if 30 <= seg < 40:
             return EstadoLlamada(False)   # Chrome se cayó
         if seg >= 100:
             return EstadoLlamada(True, 0, [])

@@ -18,7 +18,8 @@ ARGUMENTOS = [
     "--disable-blink-features=AutomationControlled",
     "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
     "--autoplay-policy=no-user-gesture-required",
-    "--window-size=640,360", "--lang=es-419",
+    # 1024 px: más angosto, Meet esconde el botón del chat en "Más opciones".
+    "--window-size=1024,600", "--lang=es-419",
 ]
 # Playwright pone --mute-audio por defecto: con eso ffmpeg graba silencio
 # (probado en el EC2: -91 dB con él, -4.6 dB sin él).
@@ -53,7 +54,7 @@ class MeetPlaywright:
         self._contexto = self._pw.chromium.launch_persistent_context(
             str(self._perfil), channel="chromium", headless=self._headless,
             args=ARGUMENTOS, ignore_default_args=QUITAR_POR_DEFECTO,
-            viewport={"width": 640, "height": 360}, locale="es-419",
+            viewport={"width": 1024, "height": 600}, locale="es-419",
             permissions=["microphone", "camera"],
         )
         paginas = self._contexto.pages
@@ -128,9 +129,19 @@ class MeetPlaywright:
             self._boton(S.CERRAR_DIALOGO).first.click(timeout=5000)
             return True
         except PWError as error:
-            print(f"[meet] no pude poner solo audio: {error}")
-            p.keyboard.press("Escape")
+            print(f"[meet] no pude poner solo audio: {str(error).splitlines()[0]}")
+            self.captura("solo-audio")
+            self._cerrar_dialogos()
             return False
+
+    def _cerrar_dialogos(self):
+        """Escape un par de veces: un menú o diálogo abierto tapa la llamada."""
+        try:
+            for _ in range(2):
+                self._pagina.keyboard.press("Escape")
+                self._pagina.wait_for_timeout(300)
+        except PWError:
+            pass
 
     def escribir_chat(self, texto: str) -> bool:
         p = self._pagina
@@ -142,14 +153,16 @@ class MeetPlaywright:
             self._boton(S.BOTON_CHAT).first.click(timeout=5000)
             return True
         except PWError as error:
-            print(f"[meet] no pude escribir en el chat: {error}")
+            print(f"[meet] no pude escribir en el chat: {str(error).splitlines()[0]}")
+            self.captura("chat")
+            self._cerrar_dialogos()
             return False
 
     def leer_estado(self) -> EstadoLlamada:
         if not self._viva():
             return EstadoLlamada(False)
         try:
-            if not self._boton(S.SALIR_LLAMADA).count():
+            if not self._pagina.locator(S.CSS_EN_LLAMADA).count():
                 return EstadoLlamada(False)
             datos = self._pagina.evaluate(S.JS_ESTADO, self._sel_hablando)
         except PWError:

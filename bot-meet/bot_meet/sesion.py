@@ -6,6 +6,7 @@ from .reglas import motivo_para_salir
 
 AVISO = "Jarvis está grabando esta reunión para tomar notas."
 VOLCAR_CADA_S = 10
+AUSENTE_MAX_S = 5
 
 
 def _log(sesion, texto):
@@ -51,7 +52,7 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
         entrada = ahora()
         linea, ultima_voz, solo_desde = [], None, None
         reintento_usado, incompleta, motivo = False, False, None
-        ultimo_volcado = 0.0
+        ultimo_volcado, ausente_desde = 0.0, None
         while True:
             if debe_parar():
                 motivo = "cancelada"
@@ -59,6 +60,13 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
             estado = meet.leer_estado()
             t = ahora()
             if not estado.en_llamada:
+                # Un parpadeo (un menú que tapa la llamada) no es una caída.
+                ausente_desde = ausente_desde or t
+                if (t - ausente_desde).total_seconds() < AUSENTE_MAX_S:
+                    dormir(1)
+                    continue
+                _log(sesion, "fuera de la llamada")
+                ausente_desde = None
                 grabador.detener()
                 _pasar_pedazos(grabador, subidor, todos=True)
                 if not reintento_usado:
@@ -69,6 +77,7 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
                         continue
                 incompleta, motivo = True, "caida"
                 break
+            ausente_desde = None
             if estado.hablando:
                 ultima_voz = t
                 linea.append({"t": round((t - entrada).total_seconds()), "nombres": estado.hablando})
