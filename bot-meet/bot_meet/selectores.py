@@ -21,7 +21,7 @@ CONFIGURACION = re.compile(r"^(Configuración|Settings)$")
 PESTANA_VIDEO = re.compile(r"^(Video|Vídeo)$")
 RESOLUCION_RECEPCION = re.compile(r"Resolución de recepción|Receive resolution")
 SOLO_AUDIO = "Solo audio"
-CERRAR_DIALOGO = re.compile(r"^(Cerrar|Close)$")
+CERRAR_DIALOGO = re.compile(r"^(Cerrar|Close)( diálogo| dialog)?$")  # real: "Cerrar diálogo"
 
 BOTON_CHAT = re.compile(r"Chatear con todos|Chat with everyone")
 CAJA_CHAT = re.compile(r"Enviar un mensaje|Send a message")
