@@ -79,6 +79,12 @@ class MeetPlaywright:
     def _boton(self, patron):
         return self._pagina.get_by_role("button", name=patron)
 
+    def _en_llamada(self) -> bool:
+        """El botón de colgar está en la página y visible. Se busca en el DOM y no
+        por rol: un cartel encima saca la llamada del árbol de accesibilidad."""
+        salir = self._pagina.locator(S.CSS_EN_LLAMADA)
+        return bool(salir.count()) and salir.first.is_visible()
+
     # --- entrar --------------------------------------------------------
     def unirse(self, url: str, espera_s: int) -> ResultadoEntrada:
         if not self._viva():
@@ -100,12 +106,14 @@ class MeetPlaywright:
             self._boton(S.BOTON_UNIRSE).first.click()
             limite = time.monotonic() + espera_s
             while True:
-                if self._boton(S.SALIR_LLAMADA).count():
+                if self._en_llamada():
+                    self._cerrar_dialogos()   # el cartel de bienvenida tapa la llamada
                     return ResultadoEntrada("admitido")
                 rechazo = p.get_by_text(S.TEXTO_RECHAZADO)
                 if rechazo.count() and rechazo.first.is_visible():  # get_by_text cuenta lo oculto
                     return ResultadoEntrada("rechazado", "rechazado")
                 if time.monotonic() >= limite:
+                    self.captura("sin-admision")
                     return ResultadoEntrada("rechazado", "sin_respuesta")
                 p.wait_for_timeout(1000)
         except PWError as error:

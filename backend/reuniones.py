@@ -10,9 +10,10 @@ import hashlib
 import hmac
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 from . import bot_meet, rutas
 from . import reuniones_datos as rd
@@ -164,3 +165,26 @@ def recibir_audio(reunion_id: str, n: int, datos: bytes) -> bool:
 
 def recibir_hablantes(reunion_id: str, linea: list) -> None:
     rd.actualizar(reunion_id, linea=linea if isinstance(linea, list) else [])
+
+
+# --------------------------------------------------------------------------
+# Grabar un Meet que no está en el calendario (pegando el link)
+# --------------------------------------------------------------------------
+
+DURACION_LINK = timedelta(hours=2)   # el bot sale antes si se queda solo
+ZONA = ZoneInfo("America/Santo_Domingo")
+
+
+def grabar_link(usuario_id: str, link: str, titulo: str = "") -> str:
+    """Manda el bot ya a un Meet suelto (creado al momento, sin evento)."""
+    if not bot_meet.configurado():
+        return "El bot de reuniones no está configurado en este Jarvis."
+    url = link_meet({"description": link or ""})
+    if url is None:
+        return "Eso no es un link de Google Meet (tiene que ser meet.google.com/xxx-xxxx-xxx)."
+    ahora = datetime.now(ZONA).replace(microsecond=0)
+    evento = {"title": (titulo or "").strip() or f"Meet de las {ahora:%H:%M}",
+              "start": ahora.isoformat(), "end": (ahora + DURACION_LINK).isoformat(),
+              "conferencing": {"url": url}}
+    reunion = proponer(usuario_id, evento)
+    return pedir(usuario_id, reunion["id"])

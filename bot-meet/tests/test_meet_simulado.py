@@ -34,6 +34,20 @@ def test_entra_y_lee_el_estado(meet):
     assert meet.leer_estado().otros == 0
 
 
+def test_entra_directo_con_un_cartel_encima(meet):
+    # Prueba real 2026-11-24: entró sin sala de espera, un cartel tapaba la llamada y
+    # el bot siguió "esperando" hasta rendirse.
+    r = meet.unirse(PAGINA + "?admitir_ms=100&cartel=1", espera_s=5)
+    assert r.estado == "admitido"
+    assert meet._pagina.locator("#cartel").count() == 0   # lo cerró al entrar
+    assert meet.leer_estado().en_llamada
+
+
+def test_si_no_confirma_la_entrada_deja_captura(meet, tmp_path):
+    meet.unirse(PAGINA + "?admitir_ms=60000", espera_s=1)
+    assert any(p.name.endswith("sin-admision.png") for p in (tmp_path / "capturas").iterdir())
+
+
 def test_apaga_micro_y_camara_antes_de_entrar(meet):
     meet.unirse(PAGINA + "?admitir_ms=5000", espera_s=0)
     assert meet._pagina.locator('[aria-label="Desactivar micrófono"]').get_attribute("data-apagado") == "1"
