@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import html
 import os
+import re
 import time
 from dataclasses import dataclass
 
@@ -450,8 +451,13 @@ LIBRES = (
 )
 
 
+# El bot de Meet entra con el token de subida de cada reunión y el enlace de
+# WhatsApp con su firma: los revisa rutas_reuniones.py, no la sesión.
+LIBRES_PATRON = re.compile(r"^/api/reuniones/[0-9a-f]{32}/(eventos|audio|hablantes)$|^/reuniones/accion$")
+
+
 def es_libre(ruta: str) -> bool:
-    return ruta in LIBRES
+    return ruta in LIBRES or bool(LIBRES_PATRON.match(ruta))
 
 
 def exige_admin(ruta: str, metodo: str) -> bool:

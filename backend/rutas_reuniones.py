@@ -1,0 +1,153 @@
+"""Rutas de las reuniones grabadas por el bot de Meet.
+
+- /api/reuniones/{id}/eventos|audio|hablantes: el bot, con el token de subida.
+- /api/reuniones, /api/reuniones/{id}, /grabar, /no-grabar, /preferencias: la persona, con su sesión.
+- /reuniones/accion: el enlace de WhatsApp (GET muestra, POST hace: la vista previa
+  de WhatsApp abre los enlaces con GET y no debe grabar ni cancelar nada).
+- /apps/reuniones: la página.
+"""
+
+import html
+from pathlib import Path
+
+from fastapi import APIRouter, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from pydantic import BaseModel
+
+from . import almacen_reuniones, reuniones
+from . import reuniones_datos as rd
+
+WEB = Path(__file__).resolve().parent.parent / "web"
+MAX_AUDIO = 20 * 1024 * 1024
+router = APIRouter()
+
+
+def _bot(peticion: Request, reunion_id: str) -> JSONResponse | None:
+    autorizacion = peticion.headers.get("authorization", "")
+    token = autorizacion[7:].strip() if autorizacion.lower().startswith("bearer ") else ""
+    if not reuniones.token_valido(reunion_id, token):
+        return JSONResponse(status_code=401, content={"error": "token"})
+    return None
+
+
+@router.post("/api/reuniones/{reunion_id}/eventos")
+async def bot_eventos(reunion_id: str, peticion: Request):
+    if (fallo := _bot(peticion, reunion_id)) is not None:
+        return fallo
+    reuniones.recibir_evento(reunion_id, await peticion.json())
+    return {"ok": True}
+
+
+@router.post("/api/reuniones/{reunion_id}/audio")
+async def bot_audio(reunion_id: str, n: int, peticion: Request):
+    if (fallo := _bot(peticion, reunion_id)) is not None:
+        return fallo
+    datos = await peticion.body()
+    if len(datos) > MAX_AUDIO:
+        return JSONResponse(status_code=413, content={"error": "grande"})
+    if not reuniones.recibir_audio(reunion_id, n, datos):
+        return JSONResponse(status_code=409, content={"error": "repetido"})
+    return {"ok": True}
+
+
+@router.post("/api/reuniones/{reunion_id}/hablantes")
+async def bot_hablantes(reunion_id: str, peticion: Request):
+    if (fallo := _bot(peticion, reunion_id)) is not None:
+        return fallo
+    reuniones.recibir_hablantes(reunion_id, (await peticion.json()).get("linea") or [])
+    return {"ok": True}
+
+
+# --- la persona -----------------------------------------------------------
+
+def _publica(r: dict, completa: bool = False) -> dict:
+    campos = ["id", "titulo", "inicio", "fin", "estado", "motivo", "duracion_s", "incompleta", "meet_url"]
+    salida = {k: r.get(k) for k in campos}
+    if completa:
+        salida.update(resumen=r.get("resumen"), puntos=r.get("puntos") or [], tareas=r.get("tareas") or [],
+                      transcripcion=r.get("transcripcion") or [], audio_borrado=bool(r.get("audio_borrado")),
+                      pedazos=[p["n"] for p in rd.pedazos(r["id"]) if p["estado"] == "transcrito"])
+    return salida
+
+
+@router.get("/api/reuniones")
+def lista(peticion: Request):
+    return {"reuniones": [_publica(r) for r in rd.listar_de(peticion.state.usuario.id)]}
+
+
+@router.get("/api/reuniones/preferencias")
+def ver_preferencias(peticion: Request):
+    return {"grabar_siempre": rd.grabar_siempre(peticion.state.usuario.id)}
+
+
+class Preferencias(BaseModel):
+    grabar_siempre: bool
+
+
+@router.put("/api/reuniones/preferencias")
+def guardar_preferencias(peticion: Request, datos: Preferencias):
+    rd.poner_grabar_siempre(peticion.state.usuario.id, datos.grabar_siempre)
+    return {"grabar_siempre": datos.grabar_siempre}
+
+
+@router.get("/api/reuniones/{reunion_id}")
+def detalle(reunion_id: str, peticion: Request):
+    r = rd.obtener(reunion_id)
+    if r is None or not rd.puede_ver(reunion_id, peticion.state.usuario.id):
+        return JSONResponse(status_code=404, content={"error": "No existe."})
+    return _publica(r, completa=True)
+
+
+@router.get("/api/reuniones/{reunion_id}/audio/{n}")
+def audio(reunion_id: str, n: int, peticion: Request):
+    r = rd.obtener(reunion_id)
+    if r is None or not rd.puede_ver(reunion_id, peticion.state.usuario.id) or r["audio_borrado"]:
+        return JSONResponse(status_code=404, content={"error": "No hay audio."})
+    try:
+        return {"url": almacen_reuniones.url_firmada(reunion_id, n)}
+    except almacen_reuniones.ErrorAlmacen:
+        return JSONResponse(status_code=502, content={"error": "No pude traer el audio."})
+
+
+@router.post("/api/reuniones/{reunion_id}/grabar")
+def grabar(reunion_id: str, peticion: Request):
+    return {"mensaje": reuniones.pedir(peticion.state.usuario.id, reunion_id)}
+
+
+@router.post("/api/reuniones/{reunion_id}/no-grabar")
+def no_grabar(reunion_id: str, peticion: Request):
+    return {"mensaje": reuniones.no_grabar(peticion.state.usuario.id, reunion_id)}
+
+
+# --- enlace de WhatsApp ---------------------------------------------------
+
+def _pagina(texto: str, formulario: str = "") -> HTMLResponse:
+    return HTMLResponse(
+        "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+        "<title>Jarvis · Reuniones</title><body style='font:18px system-ui;margin:2rem;background:#111;color:#eee'>"
+        f"<p>{html.escape(texto)}</p>{formulario}</body>")
+
+
+@router.get("/reuniones/accion")
+def accion_ver(u: str, r: str, a: str, f: str):
+    if not reuniones.verificar_enlace(u, r, a, f):
+        return _pagina("Este enlace no es válido.")
+    reunion = rd.obtener(r)
+    if reunion is None:
+        return _pagina("Esa reunión ya no existe.")
+    verbo = "Grabar" if a == "grabar" else "No grabar"
+    return _pagina(f"«{reunion['titulo']}»",
+                   f"<form method=post><button style='font-size:20px;padding:.6em 1.4em'>{verbo}</button></form>")
+
+
+@router.post("/reuniones/accion")
+def accion_hacer(u: str, r: str, a: str, f: str):
+    if not reuniones.verificar_enlace(u, r, a, f):
+        return HTMLResponse("Enlace no válido.", status_code=403)
+    texto = reuniones.pedir(u, r) if a == "grabar" else reuniones.no_grabar(u, r)
+    return _pagina(texto)
+
+
+@router.get("/apps/reuniones")
+def pagina():
+    return FileResponse(WEB / "apps-reuniones.html")

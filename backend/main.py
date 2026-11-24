@@ -59,6 +59,8 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     rutas_apps_correo,
     rutas_apps_whatsapp,
     rutas_estructura,
+    rutas_reuniones,
+    reuniones_trabajo,
     paneles_jh,
     supabase_sesion,
     version,
@@ -74,6 +76,7 @@ app.include_router(rutas_apps_whatsapp.router)   # /apps/whatsapp (rutas_apps_wh
 app.include_router(rutas_apps_correo.router)     # /apps/correo (rutas_apps_correo.py)
 app.include_router(rutas_apps_calendario.router) # /apps/calendario (rutas_apps_calendario.py)
 app.include_router(rutas_estructura.router)      # /api/apps/resumen (rutas_estructura.py)
+app.include_router(rutas_reuniones.router)       # /apps/reuniones y el bot de Meet (rutas_reuniones.py)
 
 
 @app.on_event("startup")
@@ -103,6 +106,8 @@ def al_arrancar():
     whatsapp_chats.arrancar()
     outlook.arrancar()
     calendario.arrancar()
+    # Transcribe y cierra las reuniones que graba el bot de Meet (si está configurado).
+    reuniones_trabajo.arrancar()
 
     if not supabase_sesion.configurado():
         print(
