@@ -19,6 +19,11 @@ RUTA = "/api/puente/cotizaciones/ventas-productos"
 CUERPO = {"desde": "2026-07-01T00:00:00Z", "hasta": "2026-07-09T00:00:00Z", "clientes": [76, 5853]}
 
 
+@pytest.fixture(autouse=True)
+def sin_cache_de_hasta(monkeypatch):
+    monkeypatch.setattr(puente_cotizaciones, "_hasta", {"t": 0.0, "fuente": None, "valor": None})
+
+
 @pytest.fixture
 def consultas(monkeypatch):
     pedidas = []
@@ -184,3 +189,15 @@ def test_ruta_factura_con_y_sin_clave(cliente, monkeypatch, factura_falsa):
     r = cliente.post(RUTA_FACTURA, json={"numero": 1010391175}, headers={"Authorization": f"Bearer {CLAVE}"})
     assert r.status_code == 200 and r.json()["lineas"][0]["codigo"] == "5741"
     assert cliente.post(RUTA_FACTURA, json={"numero": "x"}, headers={"Authorization": f"Bearer {CLAVE}"}).status_code == 400
+
+
+def test_factura_encontrada_no_recorre_la_vista_entera(factura_falsa):
+    puente_cotizaciones.factura(1010391175)
+    assert len(factura_falsa) == 1, "MAX(FechaHora) tarda ~12 s: solo si la factura no esta"
+
+
+def test_la_fecha_de_la_vista_se_guarda_unos_minutos(factura_falsa):
+    puente_cotizaciones.factura(404)
+    puente_cotizaciones.factura(404)
+    assert len([c for c in factura_falsa if "MAX(FechaHora)" in c["sql"]]) == 1
+    assert puente_cotizaciones.factura(1010391175)["datosHasta"] == "2026-10-19T15:12:06.913Z"

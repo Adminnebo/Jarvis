@@ -13,6 +13,7 @@ Las fechas del ERP no traen zona: salen marcadas como UTC ("...Z"), que es como 
 panel cuando va directo con el driver de MSSQL.
 """
 
+import time
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -30,6 +31,18 @@ SELECT nfactura, FechaHora, cliente, Codigo, Cantidad, TotalVenta FROM dbo.List_
  WHERE FechaHora >= %(desde)s AND FechaHora <= %(hasta)s AND cliente IN ({clientes})
 """
 SQL_HASTA = "SELECT MAX(FechaHora) AS hasta FROM dbo.List_VentasxProductosIA"
+HASTA_SEGUNDOS = 15 * 60   # MAX(FechaHora) recorre toda la vista (~12 s) y solo cambia cuando JH sincroniza
+_hasta = {"t": 0.0, "fuente": None, "valor": None}
+
+
+def _datos_hasta(id_fuente) -> str | None:
+    """Ultima venta que tiene la vista (ISO "Z"), guardada en memoria unos minutos."""
+    if _hasta["fuente"] == id_fuente and time.monotonic() - _hasta["t"] < HASTA_SEGUNDOS:
+        return _hasta["valor"]
+    filas = fuentes.consultar(id_fuente, SQL_HASTA, 1)
+    valor = _iso(filas[0]["hasta"]) if filas else None
+    _hasta.update(t=time.monotonic(), fuente=id_fuente, valor=valor)
+    return valor
 
 
 def _fecha(texto) -> datetime:
@@ -90,8 +103,7 @@ def ventas_productos(pedido: dict) -> dict:
             filas.append({"nfactura": _num(f["nfactura"]), "FechaHora": _iso(f["FechaHora"]), "cliente": _num(f["cliente"]),
                           "Codigo": str(f["Codigo"] or "").strip(), "Cantidad": float(f["Cantidad"] or 0),
                           "TotalVenta": float(f["TotalVenta"] or 0)})
-    hasta = fuentes.consultar(id_fuente, SQL_HASTA, 1)
-    return {"filas": filas, "datosHasta": _iso(hasta[0]["hasta"]) if hasta else None}
+    return {"filas": filas, "datosHasta": _datos_hasta(id_fuente)}
 
 
 # ---------- Una factura con sus productos (para verla desde el panel) ----------
@@ -117,10 +129,9 @@ def factura(numero: int) -> dict:
     """Cabecera y lineas de una factura. encontrada=False si la vista no la tiene (o se atraso)."""
     id_fuente = puente_reactivacion.fuente()
     filas = fuentes.consultar(id_fuente, SQL_FACTURA, 500, parametros={"numero": numero})
-    hasta = fuentes.consultar(id_fuente, SQL_HASTA, 1)
-    datos_hasta = _iso(hasta[0]["hasta"]) if hasta else None
-    if not filas:
-        return {"encontrada": False, "numero": numero, "datosHasta": datos_hasta}
+    if not filas:   # solo entonces hace falta decir hasta donde llega la base
+        return {"encontrada": False, "numero": numero, "datosHasta": _datos_hasta(id_fuente)}
+    datos_hasta = _hasta["valor"] if _hasta["fuente"] == id_fuente else None
     f0 = filas[0]
     return {
         "encontrada": True, "numero": numero, "datosHasta": datos_hasta,
