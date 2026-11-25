@@ -100,3 +100,30 @@ def test_no_se_puede_revocar_el_dispositivo_de_otro():
 
     assert dispositivos.revocar("admin", id_dispositivo) is False
     assert len(dispositivos.dispositivos_de("jorge")) == 1
+
+
+def test_una_cuenta_normal_vincula_su_reloj_y_solo_ve_los_suyos(monkeypatch):
+    """El reloj ya no es solo del super admin: cualquiera lo vincula desde Ajustes > Reloj."""
+    from fastapi.testclient import TestClient
+
+    from backend import acceso, supabase_sesion
+    from backend.main import app
+
+    monkeypatch.setenv("JARVIS_PASSWORD", "la-del-admin")
+    monkeypatch.setenv("JARVIS_CLAVE_SECRETA", "clave-de-pruebas-larga")
+    ana = acceso.Usuario("sb-ana-reloj", "Ana", "usuario")
+    monkeypatch.setattr(supabase_sesion, "entrar", lambda t: ana if t == "ana.jwt.firma" else None)
+    monkeypatch.setattr(supabase_sesion, "revalidar", lambda u: u)
+    monkeypatch.setattr(dispositivos, "_usuario_para", lambda uid: ana if uid == ana.id else None)
+    cliente = TestClient(app)
+    ana_h = {"Authorization": "Bearer ana.jwt.firma"}
+
+    dispositivos.generar_codigo("otro-usuario")
+    dispositivos.vincular(dispositivos.generar_codigo("otro-usuario")["codigo"], "Reloj ajeno")
+
+    r = cliente.post("/api/dispositivos/codigo", headers=ana_h)
+    assert r.status_code == 200
+    vinculo = dispositivos.vincular(r.json()["codigo"], "Reloj de Ana")
+    assert vinculo is not None
+    lista = cliente.get("/api/dispositivos", headers=ana_h).json()["dispositivos"]
+    assert [d["nombre"] for d in lista] == ["Reloj de Ana"]

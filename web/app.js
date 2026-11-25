@@ -886,6 +886,8 @@ async function cargarEstado() {
     }
     // Integraciones y avisos son de cada persona, no solo del super admin.
     $("btn-integraciones").hidden = false;
+    // El reloj tambien es de cada persona: vincula y ve solo los suyos (/api/dispositivos).
+    $("btn-dispositivos").hidden = false;
     $("btn-app-whatsapp").hidden = false;
     $("btn-app-correo").hidden = false;
     $("btn-app-calendario").hidden = false;
