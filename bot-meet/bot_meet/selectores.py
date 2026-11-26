@@ -52,17 +52,39 @@ JS_FOTO = """() => {
 # Cada mosaico de participante lleva data-participant-id; el nombre va en
 # data-self-name. "hablando" se reconoce con el selector configurable
 # (BOT_MEET_SEL_HABLANDO), que se calibra con una reunión real.
+# Calibrado con las reuniones reales del 2026-11-25:
+# - el nombre está en el texto del mosaico: "Más opciones para X" / "Fijar a X en la
+#   pantalla principal" (data-self-name solo existe en el Meet simulado viejo);
+# - una presentación es un mosaico más ("...la presentación de X"): no es una persona;
+# - el propio bot es el único mosaico con "Fondos y efectos";
+# - "hablando" = el mosaico tiene la clase de BOT_MEET_SEL_HABLANDO (real: .gjg47c).
 JS_ESTADO = """(selHablando) => {
-  const mosaicos = [...document.querySelectorAll('[data-participant-id]')];
-  const ids = new Set(mosaicos.map(m => m.getAttribute('data-participant-id')));
-  const hablando = [];
-  for (const m of mosaicos) {
+  const nombreDe = (m) => {
     const el = m.querySelector('[data-self-name]');
-    const nombre = (el ? el.getAttribute('data-self-name') : '').trim();
-    if (!nombre) continue;
+    if (el && el.getAttribute('data-self-name')) return el.getAttribute('data-self-name').trim();
+    const t = m.innerText || '';
+    const x = t.match(/Más opciones para (.+)/) || t.match(/Fijar a (.+?) en la pantalla principal/)
+           || t.match(/More options for (.+)/) || t.match(/Pin (.+?) to your main screen/);
+    return x ? x[1].trim() : '';
+  };
+  const vistos = new Map();
+  for (const m of document.querySelectorAll('[data-participant-id]')) {
+    const id = m.getAttribute('data-participant-id');
+    const t = m.innerText || '';
+    if (/presentación de|presentation/i.test(t)) continue;
+    const propio = /Fondos y efectos|Backgrounds and effects/.test(t);
     let habla = false;
     try { habla = m.matches(selHablando) || !!m.querySelector(selHablando); } catch (e) {}
-    if (habla && !hablando.includes(nombre)) hablando.push(nombre);
+    const previo = vistos.get(id);
+    vistos.set(id, {nombre: nombreDe(m) || previo?.nombre || '', propio: propio || !!previo?.propio,
+                    habla: habla || !!previo?.habla});
   }
-  return {total: ids.size, hablando};
+  const personas = [...vistos.values()];
+  const hayPropio = personas.some(p => p.propio);
+  const otros = personas.filter(p => !p.propio).length - (hayPropio ? 0 : 1);
+  const hablando = [];
+  for (const p of personas) if (p.habla && !p.propio && p.nombre && !hablando.includes(p.nombre)) hablando.push(p.nombre);
+  // Más de dos "hablando" a la vez no es una conversación: Meet le pone la clase a todos
+  // mientras reacomoda la pantalla (pasó al empezar una presentación). Ese segundo no cuenta.
+  return {personas: personas.length, otros: Math.max(otros, 0), hablando: hablando.length > 2 ? [] : hablando};
 }"""

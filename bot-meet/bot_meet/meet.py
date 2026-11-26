@@ -188,12 +188,15 @@ class MeetPlaywright:
         if not self._viva():
             return EstadoLlamada(False)
         try:
-            if not self._pagina.locator(S.CSS_EN_LLAMADA).count():
-                return EstadoLlamada(False)
             datos = self._pagina.evaluate(S.JS_ESTADO, self._sel_hablando)
+            # Dentro si está el botón de colgar o si hay mosaicos de personas: con alguien
+            # presentando el botón desaparecía y el bot se daba por caído (2026-11-25).
+            dentro = bool(self._pagina.locator(S.CSS_EN_LLAMADA).count()) or datos["personas"] > 0
         except PWError:
             return EstadoLlamada(False)
-        return EstadoLlamada(True, max(datos["total"] - 1, 0), datos["hablando"])
+        if not dentro:
+            return EstadoLlamada(False)
+        return EstadoLlamada(True, datos["otros"], datos["hablando"])
 
     def salir(self):
         try:
