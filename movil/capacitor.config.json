@@ -1,0 +1,7 @@
+{
+  "appId": "com.neboai.jarvis",
+  "appName": "Jarvis",
+  "webDir": "www",
+  "server": { "url": "https://asistente.neboaiconsulting.com", "cleartext": false },
+  "android": { "allowMixedContent": false }
+}
