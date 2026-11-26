@@ -153,16 +153,25 @@ def recibir_evento(reunion_id: str, datos: dict) -> None:
         _avisar(reunion_id, f"No pude entrar a «{r['titulo']}»: {motivo}.")
 
 
-def ruta_pedazo(reunion_id: str, n: int) -> Path:
+# Content-Type del pedazo → extensión. El bot manda ogg; Chrome/Android webm; Safari mp4.
+FORMATOS = {"audio/ogg": "ogg", "audio/webm": "webm", "audio/mp4": "mp4", "": "ogg"}
+
+
+def formato_de(content_type: str | None) -> str | None:
+    return FORMATOS.get((content_type or "").split(";")[0].strip().lower())
+
+
+def ruta_pedazo(reunion_id: str, n: int, formato: str = "ogg") -> Path:
     carpeta = Path(rutas.archivo(f"reuniones/{reunion_id}"))
     carpeta.mkdir(parents=True, exist_ok=True)
-    return carpeta / f"{n:05d}.ogg"
+    return carpeta / f"{n:05d}.{formato or 'ogg'}"
 
 
-def recibir_audio(reunion_id: str, n: int, datos: bytes) -> bool:
-    if not rd.guardar_pedazo(reunion_id, n):
+def recibir_audio(reunion_id: str, n: int, datos: bytes, formato: str = "ogg",
+                  inicio_s: int | None = None) -> bool:
+    if not rd.guardar_pedazo(reunion_id, n, formato, inicio_s):
         return False
-    ruta = ruta_pedazo(reunion_id, n)
+    ruta = ruta_pedazo(reunion_id, n, formato)
     tmp = ruta.with_suffix(".tmp")
     tmp.write_bytes(datos)
     tmp.replace(ruta)

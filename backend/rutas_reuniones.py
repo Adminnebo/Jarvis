@@ -39,15 +39,22 @@ async def bot_eventos(reunion_id: str, peticion: Request):
 
 
 @router.post("/api/reuniones/{reunion_id}/audio")
-async def bot_audio(reunion_id: str, n: int, peticion: Request):
+async def bot_audio(reunion_id: str, n: int, peticion: Request, inicio_s: int | None = None):
     if (fallo := _bot(peticion, reunion_id)) is not None:
         return fallo
+    formato = reuniones.formato_de(peticion.headers.get("content-type"))
+    if formato is None:
+        return JSONResponse(status_code=415, content={"error": "formato"})
     datos = await peticion.body()
     if len(datos) > MAX_AUDIO:
         return JSONResponse(status_code=413, content={"error": "grande"})
-    if not reuniones.recibir_audio(reunion_id, n, datos):
+    estado = rd.obtener(reunion_id)["estado"]
+    if estado == "lista":   # ya se resumió: lo que llega tarde no entra, pero el aparato lo suelta
+        return {"ok": False, "parar": True}
+    if not reuniones.recibir_audio(reunion_id, n, datos, formato, inicio_s):
         return JSONResponse(status_code=409, content={"error": "repetido"})
-    return {"ok": True}
+    # Si la sacaron (desde «Grabando ahora» u otro aparato), quien graba se entera aquí.
+    return {"ok": True, "parar": estado not in ("grabando", "esperando")}
 
 
 @router.post("/api/reuniones/{reunion_id}/hablantes")
@@ -128,8 +135,9 @@ def audio(reunion_id: str, n: int, peticion: Request):
     r = rd.obtener(reunion_id)
     if r is None or not rd.puede_ver(reunion_id, peticion.state.usuario.id) or r["audio_borrado"]:
         return JSONResponse(status_code=404, content={"error": "No hay audio."})
+    formato = next((p.get("formato") for p in rd.pedazos(reunion_id) if p["n"] == n), None) or "ogg"
     try:
-        return {"url": almacen_reuniones.url_firmada(reunion_id, n)}
+        return {"url": almacen_reuniones.url_firmada(reunion_id, n, formato=formato)}
     except almacen_reuniones.ErrorAlmacen:
         return JSONResponse(status_code=502, content={"error": "No pude traer el audio."})
 

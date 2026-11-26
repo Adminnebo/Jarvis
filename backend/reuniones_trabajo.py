@@ -26,13 +26,15 @@ def _usuario(reunion_id: str):
 
 def transcribir_pendientes() -> None:
     for reunion_id, n in rd.para_transcribir():
-        ruta = reuniones.ruta_pedazo(reunion_id, n)
+        pedazo = next(p for p in rd.pedazos(reunion_id) if p["n"] == n)
+        formato = pedazo.get("formato") or "ogg"
+        ruta = reuniones.ruta_pedazo(reunion_id, n, formato)
         if not ruta.exists():
             rd.marcar_pedazo(reunion_id, n, "fallido")
             continue
         try:
             segmentos = reuniones_ia.transcribir(ruta, _usuario(reunion_id))
-            almacen_reuniones.subir(reunion_id, n, ruta.read_bytes())
+            almacen_reuniones.subir(reunion_id, n, ruta.read_bytes(), formato)
         except Exception as error:  # noqa: BLE001 - se reintenta en la próxima vuelta
             print(f"  AVISO: no pude procesar el pedazo {n} de {reunion_id}: {error}")
             rd.marcar_pedazo(reunion_id, n, "recibido", sumar_intento=True)
@@ -86,9 +88,11 @@ def cerrar_terminadas() -> None:
 def borrar_audio_viejo() -> None:
     limite = (datetime.now(timezone.utc) - timedelta(days=RETENCION_DIAS)).isoformat()
     for reunion_id in rd.con_audio_desde_antes(limite):
-        numeros = [p["n"] for p in rd.pedazos(reunion_id) if p["estado"] == "transcrito"]
+        transcritos = [p for p in rd.pedazos(reunion_id) if p["estado"] == "transcrito"]
+        numeros = [p["n"] for p in transcritos]
+        formatos = {p["n"]: p.get("formato") or "ogg" for p in transcritos}
         try:
-            almacen_reuniones.borrar(reunion_id, numeros)
+            almacen_reuniones.borrar(reunion_id, numeros, formatos)
         except almacen_reuniones.ErrorAlmacen as error:
             print(f"  AVISO: no pude borrar el audio de {reunion_id}: {error}")
             continue

@@ -8,6 +8,7 @@ from pathlib import Path
 from . import cerebro, consumo
 
 PEDAZO_S = 300
+MIMES = {".ogg": "audio/ogg", ".webm": "audio/webm", ".mp4": "audio/mp4"}
 RESUMIR = (
     "Vas a recibir la transcripción de una reunión de trabajo, con quién dijo cada cosa. "
     "Devuelve SOLO un JSON con: \"resumen\" (3 a 6 líneas en español, lo que se habló y lo que "
@@ -26,11 +27,11 @@ def modelo_resumen() -> str:
     return os.getenv("JARVIS_MODELO_RESUMEN_REUNIONES", os.getenv("OPENAI_MODEL", "gpt-5.6-terra")).strip()
 
 
-def transcribir(ruta: Path, usuario) -> list[dict]:
+def transcribir(ruta: Path, usuario, voces=None) -> list[dict]:
     modelo = modelo_transcripcion()
     with open(ruta, "rb") as f:
         r = cerebro.cliente().audio.transcriptions.create(
-            model=modelo, file=(Path(ruta).name, f, "audio/ogg"), response_format="diarized_json",
+            model=modelo, file=(Path(ruta).name, f, MIMES.get(Path(ruta).suffix, "audio/ogg")), response_format="diarized_json",
             chunking_strategy="auto", language="es")
     segmentos = [{"inicio": float(s.start), "fin": float(s.end), "hablante": str(s.speaker),
                   "texto": (s.text or "").strip()} for s in (getattr(r, "segments", None) or [])]

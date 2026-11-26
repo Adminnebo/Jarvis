@@ -110,3 +110,24 @@ def test_grabar_desde_la_campanita(reunion, entrar):
     c = entrar("la-de-ana")
     assert "grabar" in c.post(f"/api/reuniones/{rid}/grabar").json()["mensaje"].lower()
     assert "ana" in rd.interesados(rid)
+
+
+def test_audio_con_formato_y_parar(reunion):
+    rid, token = reunion
+    c = TestClient(main.app)
+    cab = {"Authorization": f"Bearer {token}"}
+    c.post(f"/api/reuniones/{rid}/eventos", json={"tipo": "admitido"}, headers=cab)
+    r = c.post(f"/api/reuniones/{rid}/audio?n=1&inicio_s=0", content=b"W",
+               headers={**cab, "Content-Type": "audio/webm;codecs=opus"})
+    assert r.status_code == 200 and r.json() == {"ok": True, "parar": False}
+    (p,) = rd.pedazos(rid)
+    assert p["formato"] == "webm" and p["inicio_s"] == 0
+    assert reuniones.ruta_pedazo(rid, 1, "webm").read_bytes() == b"W"
+    malo = c.post(f"/api/reuniones/{rid}/audio?n=2", content=b"X", headers={**cab, "Content-Type": "video/avi"})
+    assert malo.status_code == 415
+    rd.actualizar(rid, estado="procesando")
+    r = c.post(f"/api/reuniones/{rid}/audio?n=2", content=b"O", headers={**cab, "Content-Type": "audio/ogg"})
+    assert r.json()["parar"] is True     # lo sacaron: el aparato deja de grabar
+    rd.actualizar(rid, estado="lista")
+    r = c.post(f"/api/reuniones/{rid}/audio?n=3", content=b"O", headers={**cab, "Content-Type": "audio/ogg"})
+    assert r.status_code == 200 and r.json()["parar"] is True and len(rd.pedazos(rid)) == 2   # ya cerrada: no se guarda

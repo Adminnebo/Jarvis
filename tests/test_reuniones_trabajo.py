@@ -14,10 +14,10 @@ def todo(monkeypatch):
     monkeypatch.setattr(bot_meet, "configurado", lambda: True)
     monkeypatch.setattr(bot_meet, "agendar", lambda *a: None)
     subidos, borrados, creados = [], [], []
-    monkeypatch.setattr(almacen_reuniones, "subir", lambda rid, n, d: subidos.append((rid, n)))
-    monkeypatch.setattr(almacen_reuniones, "borrar", lambda rid, ns: borrados.append((rid, list(ns))))
+    monkeypatch.setattr(almacen_reuniones, "subir", lambda rid, n, d, formato="ogg": subidos.append((rid, n)))
+    monkeypatch.setattr(almacen_reuniones, "borrar", lambda rid, ns, formatos=None: borrados.append((rid, list(ns))))
     monkeypatch.setattr(reuniones_ia, "transcribir",
-                        lambda ruta, usuario: [{"inicio": 0, "fin": 2, "hablante": "A", "texto": f"dicho en {ruta.stem}"}])
+                        lambda ruta, usuario, voces=None: [{"inicio": 0, "fin": 2, "hablante": "A", "texto": f"dicho en {ruta.stem}"}])
     monkeypatch.setattr(reuniones_ia, "resumir",
                         lambda titulo, texto, usuario: {"resumen": "Resumen.", "puntos_clave": [], "tareas": []})
     monkeypatch.setattr(avisos, "crear", lambda *a, **k: creados.append((a, k)) or True)
@@ -81,3 +81,11 @@ def test_texto_de_whatsapp_de_reunion_lista():
                                     "asunto": "https://asistente.neboaiconsulting.com/apps/reuniones#r1",
                                     "remitente": "Reuniones", "app": "reuniones"})
     assert texto.startswith("📝 Ventas") and "apps/reuniones#r1" in texto
+
+
+def test_transcribe_un_pedazo_webm(todo):
+    rid = todo["rid"]
+    reuniones.recibir_audio(rid, 1, b"W", "webm", 0)
+    reuniones_trabajo.transcribir_pendientes()
+    assert rd.pedazos(rid)[0]["estado"] == "transcrito"
+    assert not reuniones.ruta_pedazo(rid, 1, "webm").exists()

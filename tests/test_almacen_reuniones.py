@@ -36,3 +36,16 @@ def test_borrar_todo_el_audio(monkeypatch):
     al.borrar("r1", [1, 2])
     assert pedidos[0].method == "DELETE" and pedidos[0].url.path == "/storage/v1/object/reuniones"
     assert json.loads(pedidos[0].content) == {"prefixes": ["r1/00001.ogg", "r1/00002.ogg"]}
+
+
+def test_subir_webm(monkeypatch):
+    pedidos = preparar(monkeypatch, lambda r: httpx.Response(200, json={"Key": "x"}))
+    al.subir("r1", 3, b"WEBM", "webm")
+    assert pedidos[0].url.path == "/storage/v1/object/reuniones/r1/00003.webm"
+    assert pedidos[0].headers["content-type"] == "audio/webm"
+
+
+def test_borrar_con_formatos(monkeypatch):
+    pedidos = preparar(monkeypatch, lambda r: httpx.Response(200, json=[]))
+    al.borrar("r1", [1, 2], {2: "mp4"})
+    assert json.loads(pedidos[0].content) == {"prefixes": ["r1/00001.ogg", "r1/00002.mp4"]}
