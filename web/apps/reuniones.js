@@ -90,7 +90,8 @@ async function abrir(id) {
     seccion(caja, "Tareas", ul);
   }
 
-  const genericas = x.hablantes.filter((v) => /^(Hablante|Participante) /.test(v.etiqueta));
+  const genericas = x.tipo === "presencial" ? x.hablantes
+    : x.hablantes.filter((v) => /^(Hablante|Participante) /.test(v.etiqueta));
   if (genericas.length) {
     const voces = document.createElement("div");
     voces.className = "voces";
@@ -158,6 +159,116 @@ function pintarPresencial(e = grabadora.estado()) {
     + (e.pausaS ? ` Estuvo en pausa ${Math.max(1, Math.round(e.pausaS / 60))} min.` : "");
 }
 
+const mensajeMicrofono = (error) => error?.name === "NotAllowedError"
+  ? "Jarvis no tiene permiso para usar el micrófono. Actívalo en el navegador y vuelve a intentar."
+  : error?.message || "No pude empezar la grabación.";
+
+// ---------------------------------------------------------------- calibración
+// Antes de grabar, cada persona dice su nombre y lee una frase: esa muestra es la que
+// el modelo usa para reconocer su voz. Devuelve [{nombre, blob}], [] (sin nombres) o
+// null (canceló).
+const FRASES = [
+  "Buenos días a todos, hoy vamos a revisar los números del mes y decidir los próximos pasos.",
+  "Yo me encargo de mandar la propuesta al cliente antes del viernes por la tarde.",
+  "Antes de cerrar, repasemos las tareas pendientes y quién se ocupa de cada una.",
+  "La entrega se puede adelantar si confirmamos el pedido esta misma semana.",
+  "Me parece bien, pero necesito ver el presupuesto completo antes de aprobarlo.",
+  "Tomo nota y lo comento con el equipo de ventas en la reunión de mañana.",
+  "Propongo que hagamos una prueba pequeña primero y después lo ampliamos.",
+  "El cliente pidió dos cambios en el diseño y una fecha nueva de instalación.",
+  "Si les parece, dejamos la próxima reunión para el lunes a primera hora.",
+  "Gracias por venir, empecemos por lo más urgente y después lo demás.",
+];
+
+function calibrar() {
+  const d = $("calibrar");
+  const n = $("calibrar-n");
+  let total = 0, i = 0, muestras = [], blob = null, grabando = false, vuelta = null;
+  const mensaje = (t) => { $("calibrar-mensaje").textContent = t || ""; };
+  const pintarPersona = () => {
+    $("calibrar-cuantos").hidden = true;
+    $("calibrar-persona").hidden = false;
+    $("calibrar-saltar").hidden = true;
+    $("calibrar-muestra").hidden = false;
+    $("calibrar-paso").textContent = `Persona ${i + 1} de ${total}`;
+    $("calibrar-nombre").value = "";
+    $("calibrar-frase").textContent = `«${FRASES[i % FRASES.length]}»`;
+    $("calibrar-estado").textContent = "";
+    $("calibrar-muestra").textContent = "Grabar su voz (6 s)";
+    $("calibrar-seguir").textContent = i + 1 < total ? "Siguiente" : "Empezar a grabar";
+    $("calibrar-seguir").disabled = true;
+    blob = null;
+    mensaje("");
+    $("calibrar-nombre").focus();
+  };
+  const listo = () => { $("calibrar-seguir").disabled = grabando || !blob || !$("calibrar-nombre").value.trim(); };
+  return new Promise((resolver) => {
+    const fin = (valor) => {
+      clearInterval(vuelta);
+      d.close();
+      for (const [id, fn] of manejadores) $(id).removeEventListener(fn[0], fn[1]);
+      if (valor === null) grabadora.soltarMicrofono();
+      resolver(valor);
+    };
+    const manejadores = new Map([
+      ["calibrar-saltar", ["click", () => fin([])]],
+      ["calibrar-cerrar", ["click", () => fin(null)]],
+      ["calibrar-nombre", ["input", listo]],
+      ["calibrar-seguir", ["click", async () => {
+        if (!total) {
+          total = Math.max(1, Math.min(10, Number(n.value) || 1));
+          try {
+            await grabadora.abrirMicrofono();
+          } catch (error) {
+            mensaje(mensajeMicrofono(error));
+            total = 0;
+            return;
+          }
+          pintarPersona();
+          return;
+        }
+        const nombre = $("calibrar-nombre").value.trim();
+        if (muestras.some((m) => m.nombre.toLowerCase() === nombre.toLowerCase())) { mensaje("Ese nombre ya está."); return; }
+        muestras.push({ nombre, blob });
+        i += 1;
+        if (i < total) pintarPersona();
+        else fin(muestras);
+      }]],
+      ["calibrar-muestra", ["click", async () => {
+        grabando = true;
+        listo();
+        $("calibrar-muestra").disabled = true;
+        let quedan = 6;
+        $("calibrar-estado").textContent = `Grabando… ${quedan}`;
+        const cuenta = setInterval(() => { quedan -= 1; if (quedan > 0) $("calibrar-estado").textContent = `Grabando… ${quedan}`; }, 1000);
+        try {
+          blob = await grabadora.grabarMuestra(6);
+          $("calibrar-estado").textContent = "✓ Voz grabada";
+          $("calibrar-muestra").textContent = "Repetir";
+        } catch (error) {
+          mensaje(mensajeMicrofono(error));
+        } finally {
+          clearInterval(cuenta);
+          grabando = false;
+          $("calibrar-muestra").disabled = false;
+          listo();
+        }
+      }]],
+    ]);
+    for (const [id, fn] of manejadores) $(id).addEventListener(fn[0], fn[1]);
+    d.addEventListener("cancel", (e) => { e.preventDefault(); fin(null); }, { once: true });
+    $("calibrar-cuantos").hidden = false;
+    $("calibrar-persona").hidden = true;
+    $("calibrar-saltar").hidden = false;
+    $("calibrar-muestra").hidden = true;
+    $("calibrar-seguir").textContent = "Seguir";
+    $("calibrar-seguir").disabled = false;
+    mensaje("");
+    d.showModal();
+    vuelta = setInterval(() => { $("calibrar-nivel").style.transform = `scaleX(${grabadora.nivel().toFixed(2)})`; }, 150);
+  });
+}
+
 function prepararPresencial() {
   if (!grabadora.puedeGrabar()) {
     $("presencial-empezar").disabled = true;
@@ -166,17 +277,18 @@ function prepararPresencial() {
   $("presencial-empezar").addEventListener("click", async () => {
     const titulo = prompt("¿Cómo se llama la reunión? (opcional)", "");
     if (titulo === null) return;
+    const muestras = await calibrar();
+    if (muestras === null) return;   // canceló
     const boton = $("presencial-empezar");
     boton.disabled = true;
     $("presencial-mensaje").textContent = "Pidiendo el micrófono…";
     try {
-      await grabadora.empezar(titulo);
-      $("presencial-mensaje").textContent = "";
+      const e = await grabadora.empezar(titulo, { muestras });
+      $("presencial-mensaje").textContent = e.fallidas?.length
+        ? `No pude guardar la voz de ${e.fallidas.join(", ")}: saldrá como «Hablante» y puedes corregirlo después.` : "";
       cargarEnCurso();
     } catch (error) {
-      $("presencial-mensaje").textContent = error?.name === "NotAllowedError"
-        ? "Jarvis no tiene permiso para usar el micrófono. Actívalo en el navegador y vuelve a intentar."
-        : error?.message || "No pude empezar la grabación.";
+      $("presencial-mensaje").textContent = mensajeMicrofono(error);
     } finally {
       boton.disabled = !grabadora.puedeGrabar();
     }

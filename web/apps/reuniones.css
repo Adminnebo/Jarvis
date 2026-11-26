@@ -109,3 +109,35 @@ body.embebido { --k-barra: 0px; }
 .voces { display: flex; flex-wrap: wrap; gap: 8px; }
 .voz { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--k-linea); background: var(--k-panel); }
 .voz:hover { background: var(--k-hover); }
+
+/* ---------------------------------------------------------------- calibración */
+.calibrar { width: min(440px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--k-linea); border-radius: 14px;
+  background: var(--k-panel); color: var(--k-texto); }
+.calibrar::backdrop { background: #000a; }
+.calibrar form { position: relative; padding: 20px 20px 16px; }
+.calibrar h2 { margin: 0 0 10px; font: 600 17px/1.3 Inter, system-ui, sans-serif; }
+.calibrar [hidden] { display: none !important; }
+.calibrar .nota { margin: 0 0 12px; font-size: 13px; color: var(--k-tenue); }
+.calibrar label { display: block; font-size: 13px; color: var(--k-tenue); margin-bottom: 12px; }
+.calibrar input { display: block; width: 100%; margin-top: 6px; font: inherit; font-size: 16px; color: var(--k-texto);
+  background: var(--k-fondo); border: 1px solid var(--k-linea); border-radius: 8px; padding: 9px 11px; }
+.calibrar input:focus { outline: none; border-color: var(--k-azul); }
+.calibrar .cuantos input { width: 96px; }
+.calibrar .paso { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--k-tenue); }
+.calibrar blockquote { margin: 0 0 12px; padding: 12px 14px; border-radius: 10px; background: var(--k-fondo);
+  font-size: 17px; line-height: 1.45; text-wrap: pretty; }
+.calibrar .nivel { height: 6px; margin: 0 0 8px; border-radius: 3px; background: #3a3a3a; overflow: hidden; }
+.calibrar .nivel span { display: block; height: 100%; background: #81c995; transform-origin: left; transform: scaleX(0);
+  transition: transform .15s linear; }
+.calibrar .estado-muestra { min-height: 1.4em; margin: 0 0 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.calibrar .mensaje { margin: 0 0 8px; font-size: 13px; color: #f28b82; }
+.calibrar .mensaje:empty { display: none; }
+.calibrar .botones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.calibrar .botones button { min-height: 40px; padding: 0 16px; border-radius: 8px; font-weight: 500; }
+.calibrar .primario { background: var(--k-azul); color: #062e6f; }
+.calibrar .secundario { border: 1px solid var(--k-linea); }
+.calibrar .botones button:disabled { opacity: .5; cursor: default; }
+.calibrar .cerrar { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border-radius: 50%;
+  font-size: 20px; color: var(--k-tenue); }
+.calibrar .cerrar:hover { background: var(--k-hover); }
+@media (prefers-reduced-motion: reduce) { .calibrar .nivel span { transition: none; } }
