@@ -68,8 +68,9 @@ async def bot_hablantes(reunion_id: str, peticion: Request):
 # --- la persona -----------------------------------------------------------
 
 def _publica(r: dict, completa: bool = False) -> dict:
-    campos = ["id", "titulo", "inicio", "fin", "estado", "motivo", "duracion_s", "incompleta", "meet_url"]
+    campos = ["id", "titulo", "inicio", "fin", "estado", "motivo", "duracion_s", "incompleta", "meet_url", "tipo"]
     salida = {k: r.get(k) for k in campos}
+    salida["tipo"] = salida["tipo"] or "meet"
     if completa:
         salida.update(resumen=r.get("resumen"), puntos=r.get("puntos") or [], tareas=r.get("tareas") or [],
                       transcripcion=r.get("transcripcion") or [], audio_borrado=bool(r.get("audio_borrado")),
@@ -107,6 +108,15 @@ class Preferencias(BaseModel):
 def guardar_preferencias(peticion: Request, datos: Preferencias):
     rd.poner_grabar_siempre(peticion.state.usuario.id, datos.grabar_siempre)
     return {"grabar_siempre": datos.grabar_siempre}
+
+
+class Presencial(BaseModel):
+    titulo: str = ""
+
+
+@router.post("/api/reuniones/presencial")
+def presencial(peticion: Request, datos: Presencial):
+    return reuniones.crear_presencial(peticion.state.usuario.id, datos.titulo)
 
 
 class Link(BaseModel):

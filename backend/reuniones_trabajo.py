@@ -99,7 +99,22 @@ def borrar_audio_viejo() -> None:
         rd.actualizar(reunion_id, audio_borrado=1)
 
 
+TOPE_PRESENCIAL = timedelta(hours=4, minutes=10)
+
+
+def vencer_presenciales() -> None:
+    """Si el aparato murió sin avisar, la presencial se cierra con lo que llegó."""
+    ahora = datetime.now(timezone.utc)
+    for r in rd.en_estado("grabando"):
+        if r.get("tipo") != "presencial" or not r.get("grabando_desde"):
+            continue
+        if datetime.fromisoformat(r["grabando_desde"]) + TOPE_PRESENCIAL < ahora:
+            rd.actualizar(r["id"], estado="procesando", motivo="maximo", linea=[],
+                          terminada=ahora.isoformat(timespec="seconds"))
+
+
 def una_vuelta() -> None:
+    vencer_presenciales()
     transcribir_pendientes()
     cerrar_terminadas()
     avisos.mandar_pendientes()
