@@ -28,11 +28,17 @@ def modelo_resumen() -> str:
 
 
 def transcribir(ruta: Path, usuario, voces=None) -> list[dict]:
+    """voces: [(nombre, recorte.wav)] que el modelo debe reconocer por nombre."""
+    from . import reuniones_voces
     modelo = modelo_transcripcion()
+    extra = {}
+    if voces:
+        extra["extra_body"] = {"known_speaker_names": [n for n, _ in voces],
+                               "known_speaker_references": [reuniones_voces.data_url(p) for _, p in voces]}
     with open(ruta, "rb") as f:
         r = cerebro.cliente().audio.transcriptions.create(
             model=modelo, file=(Path(ruta).name, f, MIMES.get(Path(ruta).suffix, "audio/ogg")), response_format="diarized_json",
-            chunking_strategy="auto", language="es")
+            chunking_strategy="auto", language="es", **extra)
     segmentos = [{"inicio": float(s.start), "fin": float(s.end), "hablante": str(s.speaker),
                   "texto": (s.text or "").strip()} for s in (getattr(r, "segments", None) or [])]
     duracion = float(getattr(r, "duration", 0) or (segmentos[-1]["fin"] if segmentos else 0))

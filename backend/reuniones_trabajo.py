@@ -11,7 +11,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import almacen_reuniones, avisos, bot_meet, dispositivos, reuniones, reuniones_ia
+from . import almacen_reuniones, avisos, bot_meet, dispositivos, reuniones, reuniones_ia, reuniones_voces
 from . import reuniones_datos as rd
 
 RETENCION_DIAS = 90
@@ -26,14 +26,24 @@ def _usuario(reunion_id: str):
 
 def transcribir_pendientes() -> None:
     for reunion_id, n in rd.para_transcribir():
-        pedazo = next(p for p in rd.pedazos(reunion_id) if p["n"] == n)
-        formato = pedazo.get("formato") or "ogg"
+        r = rd.obtener(reunion_id)
+        presencial = bool(r and r.get("tipo") == "presencial")
+        todos = {p["n"]: p for p in rd.pedazos(reunion_id)}
+        # Las voces se reconocen en orden: este espera a los anteriores (a los que aún no
+        # llegaron, solo mientras se graba; al terminar se sigue con lo que hay).
+        if presencial and (any(m < n and p["estado"] == "recibido" for m, p in todos.items())
+                           or (r["estado"] == "grabando" and any(m not in todos for m in range(1, n)))):
+            continue
+        formato = todos[n].get("formato") or "ogg"
         ruta = reuniones.ruta_pedazo(reunion_id, n, formato)
         if not ruta.exists():
             rd.marcar_pedazo(reunion_id, n, "fallido")
             continue
         try:
-            segmentos = reuniones_ia.transcribir(ruta, _usuario(reunion_id))
+            voces = reuniones_voces.cargar(reunion_id) if presencial else None
+            segmentos = reuniones_ia.transcribir(ruta, _usuario(reunion_id), voces=voces)
+            if presencial:
+                segmentos = reuniones_voces.unificar(reunion_id, ruta, segmentos)
             almacen_reuniones.subir(reunion_id, n, ruta.read_bytes(), formato)
         except Exception as error:  # noqa: BLE001 - se reintenta en la próxima vuelta
             print(f"  AVISO: no pude procesar el pedazo {n} de {reunion_id}: {error}")

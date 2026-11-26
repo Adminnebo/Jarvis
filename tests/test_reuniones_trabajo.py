@@ -54,7 +54,7 @@ def test_no_cierra_si_falta_un_pedazo_por_transcribir(todo, monkeypatch):
     rid = todo["rid"]
     reuniones.recibir_audio(rid, 1, b"A")
 
-    def falla(ruta, usuario):
+    def falla(ruta, usuario, voces=None):
         raise RuntimeError("OpenAI caído")
     monkeypatch.setattr(reuniones_ia, "transcribir", falla)
     reuniones.recibir_hablantes(rid, [])
@@ -89,3 +89,22 @@ def test_transcribe_un_pedazo_webm(todo):
     reuniones_trabajo.transcribir_pendientes()
     assert rd.pedazos(rid)[0]["estado"] == "transcrito"
     assert not reuniones.ruta_pedazo(rid, 1, "webm").exists()
+
+
+def test_presencial_se_transcribe_en_orden_y_con_voces(todo, monkeypatch):
+    from backend import reuniones_voces
+    pedidos = []
+    monkeypatch.setattr(reuniones_ia, "transcribir",
+                        lambda ruta, usuario, voces=None: pedidos.append((ruta.stem, voces)) or
+                        [{"inicio": 0, "fin": 3, "hablante": "A", "texto": "x"}])
+    monkeypatch.setattr(reuniones_voces, "cargar", lambda rid: [("Hablante 1", "v.wav")])
+    monkeypatch.setattr(reuniones_voces, "unificar", lambda rid, ruta, s: [{**x, "hablante": "Hablante 1"} for x in s])
+    x = reuniones.crear_presencial("u1", "En persona")
+    reuniones.recibir_audio(x["id"], 2, b"W", "webm", 300)   # llega el 2 antes que el 1
+    reuniones_trabajo.transcribir_pendientes()
+    assert pedidos == []                                       # espera al 1
+    reuniones.recibir_audio(x["id"], 1, b"W", "webm", 0)
+    reuniones_trabajo.transcribir_pendientes()
+    assert [p[0] for p in pedidos] == ["00001", "00002"]
+    assert pedidos[0][1] == [("Hablante 1", "v.wav")]
+    assert {p["segmentos"][0]["hablante"] for p in rd.pedazos(x["id"])} == {"Hablante 1"}

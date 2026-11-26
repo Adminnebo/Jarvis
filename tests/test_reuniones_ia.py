@@ -88,3 +88,17 @@ def test_resumir_si_el_modelo_no_da_json(monkeypatch):
 
 def test_precio_por_minuto_del_modelo():
     assert consumo.PRECIOS_POR_DEFECTO["gpt-4o-transcribe-diarize"]["minuto"] == 0.006
+
+
+def test_transcribir_con_voces_conocidas(monkeypatch, tmp_path):
+    falso = OpenAIFalso(segmentos=[{"start": 0, "end": 2, "speaker": "Hablante 1", "text": "hola"}])
+    monkeypatch.setattr(cerebro, "cliente", lambda: falso)
+    ruta = tmp_path / "00002.webm"
+    ruta.write_bytes(b"W")
+    voz = tmp_path / "Hablante 1.wav"
+    voz.write_bytes(b"RIFF")
+    reuniones_ia.transcribir(ruta, None, voces=[("Hablante 1", voz)])
+    (pedido,) = falso.pedidos
+    assert pedido["file"][2] == "audio/webm"
+    assert pedido["extra_body"]["known_speaker_names"] == ["Hablante 1"]
+    assert pedido["extra_body"]["known_speaker_references"][0].startswith("data:audio/wav;base64,")
