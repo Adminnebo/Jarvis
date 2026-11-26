@@ -174,6 +174,7 @@ def test_se_cae_y_vuelve_a_entrar_una_vez():
     m = MeetFalso([ResultadoEntrada("admitido"), ResultadoEntrada("admitido")], estados)
     r, g, s = correr(m)
     assert r == "terminada" and g.inicios == 2
+    assert m.capturas == ["fuera-de-la-llamada"]   # queda rastro de qué vio al caerse
 
 
 def test_se_cae_dos_veces_queda_incompleta():

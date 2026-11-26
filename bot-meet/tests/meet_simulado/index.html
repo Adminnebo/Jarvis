@@ -1,5 +1,7 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><title>Meet simulado</title></head>
+<html lang="es"><head><meta charset="utf-8"><title>Meet simulado</title>
+<!-- En el Meet real cada texto del mosaico va en su línea (innerText con \n). -->
+<style>#mosaico span { display: block; }</style></head>
 <body>
 <div id="previa">
   <button aria-label="Desactivar micrófono" onclick="this.dataset.apagado=1">mic</button>
@@ -36,6 +38,15 @@
     <div data-participant-id="yo"><span data-self-name="Jarvis · Notas"></span></div>
     <div data-participant-id="p1"><span data-self-name="Ana"></span><i></i></div>
   </div>
+  <!-- ?real=1: mosaicos como los del Meet real (2026-11-25): sin data-self-name, el
+       nombre en "Más opciones para X", la clase gjg47c al hablar, una presentación y
+       el propio bot con "Fondos y efectos". -->
+  <template id="mosaico-real">
+    <div data-participant-id="spaces/x/devices/1"><span>keep_outline</span><span>Fijar a Jorge Salamanca en la pantalla principal</span><span>Más opciones para Jorge Salamanca</span><span>Jorge Salamanca</span><div class="voz"></div></div>
+    <div data-participant-id="spaces/x/devices/2"><span>Fijar a Edmond Constantin en la pantalla principal</span><span>Más opciones para Edmond Constantin</span><span>Edmond Constantin</span><div class="voz"></div></div>
+    <div data-participant-id="spaces/x/devices/3"><span>Dejar de fijar la presentación de Jorge Salamanca en la pantalla principal</span><div class="voz gjg47c"></div></div>
+    <div data-participant-id="spaces/x/devices/4"><span>Fondos y efectos</span><span>Más opciones para notas notas</span><span>notas notas</span></div>
+  </template>
   <button aria-label="Abandonar la llamada" onclick="salir()">colgar</button>
 </div>
 <div id="fuera" hidden>Saliste de la llamada</div>
@@ -71,6 +82,10 @@ function elegir(li) { document.getElementById('recepcion').textContent = li.text
 function enviar(t) { const li = document.createElement('li'); li.textContent = t.value; document.getElementById('mensajes').append(li); t.value=''; }
 function salir() { document.getElementById('llamada').remove(); document.getElementById('fuera').hidden = false; }
 window.hablar = (id, si) => { const i = document.querySelector(`[data-participant-id="${id}"] i`); if (si) i.setAttribute('data-hablando', '1'); else i.removeAttribute('data-hablando'); };
+if (q.get('real')) document.getElementById('mosaico').replaceChildren(document.getElementById('mosaico-real').content.cloneNode(true));
+// ?sin_colgar=1: como con alguien presentando, el botón de colgar no está en el DOM.
+if (q.get('sin_colgar')) document.querySelector('[aria-label="Abandonar la llamada"]').remove();
+window.hablaReal = (n, si) => document.querySelectorAll('#mosaico [data-participant-id]')[n].querySelector('.voz').classList.toggle('gjg47c', si);
 window.quitar = (id) => document.querySelector(`[data-participant-id="${id}"]`).remove();
 </script>
 </body></html>

@@ -25,9 +25,13 @@ no el registro dice «no se pudo leer GitHub».
   en CPU, el t3.small rinde 40 % de un núcleo sostenido entre sus dos vCPU, así
   que con dos bots a la vez gasta créditos de CPU.
 - Audio: Opus mono 16 kHz, ~2,2 MB por cada 5 min (unos 27 MB por hora), voces a -24 dB de media.
-- Quién habla: el Meet real no trae `data-self-name` en los mosaicos, así que la
-  línea de hablantes sale vacía y Jarvis pone «Participante». Calibrarlo queda
-  pendiente (`BOT_MEET_SEL_HABLANDO` y `JS_ESTADO` en `selectores.py`).
+- Quién habla (calibrado el 2026-11-25 con `BOT_MEET_CALIBRAR_S` y
+  `analizar_calibracion`): el nombre sale de «Más opciones para X» en el texto del
+  mosaico, la presentación y el propio bot («Fondos y efectos») no cuentan, y
+  «hablando» es la clase `.gjg47c` → `BOT_MEET_SEL_HABLANDO=.gjg47c` en `bot.env`.
+  Si Google cambia la página y los nombres vuelven a salir como «Participante»,
+  repetir la calibración: `BOT_MEET_CALIBRAR_S=240`, una reunión por turnos y
+  `python -m bot_meet.herramientas.analizar_calibracion`.
 
 ## Iniciar sesión con la cuenta de Google del bot (una vez, o si se cierra)
 

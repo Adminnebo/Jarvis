@@ -74,12 +74,17 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
                     dormir(1)
                     continue
                 _log(sesion, "fuera de la llamada")
+                # Para saber qué pasó (las caídas del 2026-11-25 no dejaron rastro).
+                meet.captura("fuera-de-la-llamada")
+                meet.volcar("fuera-de-la-llamada")
                 ausente_desde = None
                 grabador.detener()
                 _pasar_pedazos(grabador, subidor, todos=True)
                 if not reintento_usado:
                     reintento_usado = True
-                    if meet.unirse(sesion.meet_url, espera_admision_s).estado == "admitido":
+                    otra = meet.unirse(sesion.meet_url, espera_admision_s)
+                    _log(sesion, f"reintento: {otra.estado} {otra.motivo}")
+                    if otra.estado == "admitido":
                         grabador.iniciar()
                         dormir(1)
                         continue
