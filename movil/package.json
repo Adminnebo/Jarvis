@@ -1,0 +1,9 @@
+{
+  "name": "jarvis-movil",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Jarvis para Android: abre el Jarvis de siempre y graba reuniones presenciales con la pantalla apagada.",
+  "scripts": { "sync": "cap sync android" },
+  "dependencies": { "@capacitor/android": "7.6.10", "@capacitor/core": "7.6.10" },
+  "devDependencies": { "@capacitor/cli": "7.6.10" }
+}
