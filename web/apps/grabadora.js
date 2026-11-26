@@ -8,6 +8,8 @@
    pantalla apagada y sube él mismo; aquí solo se le pasa la reunión y se lee su estado.
    Ver docs/superpowers/specs/2026-11-26-reuniones-presenciales-design.md. */
 
+import { EmisorNiveles, abrirMicrofonoParaNiveles } from "./niveles.js";
+
 const TIPOS = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
 const BD = "jarvis-grabadora";
 const PRUEBA_S = Number(new URLSearchParams(location.search).get("pedazo_s")) || 0;   // ?pedazo_s=10 para probar
@@ -52,17 +54,18 @@ const avisar = () => oyentes.forEach((fn) => { try { fn(estado()); } catch { /* 
 
 export function estado() {
   if (!g) return { grabando: false };
-  return { grabando: true, id: g.id, titulo: g.titulo, nativo: !!g.nativo,
+  return { grabando: true, id: g.id, titulo: g.titulo, nativo: !!g.nativo, sala: g.sala || null,
            segundos: Math.max(0, Math.round((Date.now() - g.inicioMs) / 1000)), pausaS: g.pausaS || 0 };
 }
 
 // ---------------------------------------------------------------- micrófono y muestras
 let microfono = null;   // abierto antes de grabar (calibración): lo reusa la grabación
 
-/** Abre el micrófono (lo pide al navegador una sola vez) y prepara la barrita. */
-export async function abrirMicrofono() {
+/** Abre el micrófono (lo pide al navegador una sola vez) y prepara la barrita. En una
+ *  sala va sin control de ganancia: si no, emparejaría a quien habla lejos y cerca. */
+export async function abrirMicrofono({ sala = false } = {}) {
   if (!microfono || !microfono.getAudioTracks().some((t) => t.readyState === "live")) {
-    microfono = await navigator.mediaDevices.getUserMedia({
+    microfono = sala ? await abrirMicrofonoParaNiveles() : await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     prepararNivel(microfono);
   }
@@ -102,14 +105,16 @@ async function subirMuestras(id, token, muestras) {
 }
 
 // ---------------------------------------------------------------- empezar
-/** muestras: [{nombre, blob}] de la calibración (vacío = sin calibrar). */
-export async function empezar(titulo = "", { muestras = [] } = {}) {
+/** muestras: [{nombre, blob}] de la calibración (vacío = sin calibrar).
+ *  sala: cada participante entra con su teléfono (salas.py); este también manda niveles.
+ *  En el APK una sala graba desde la página: el servicio nativo no deja medir a la vez. */
+export async function empezar(titulo = "", { muestras = [], sala = false } = {}) {
   if (g) return estado();
-  const plugin = nativo();
+  const plugin = sala ? null : nativo();
   let stream = null;
-  if (!plugin) stream = await abrirMicrofono();   // el micrófono primero: si lo niegan, no se crea la reunión
+  if (!plugin) stream = await abrirMicrofono({ sala });   // el micrófono primero: si lo niegan, no se crea la reunión
   const r = await fetch("/api/reuniones/presencial", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ titulo }) });
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ titulo, sala }) });
   if (!r.ok) {
     soltarMicrofono();
     throw new Error("No pude empezar la grabación. Inténtalo otra vez.");
@@ -134,6 +139,12 @@ export async function empezar(titulo = "", { muestras = [] } = {}) {
   await poner("reuniones", { id: x.id, token: x.token, titulo: x.titulo, terminada: false });
   g = { id: x.id, token: x.token, titulo: x.titulo, inicioMs: Date.now(), stream, n: 0, pedazoS, maxS: x.max_s };
   microfono = null;   // ahora es de la grabación: terminar() lo cierra
+  if (x.sala) {
+    g.sala = { codigo: x.sala, link: x.link };
+    g.emisor = new EmisorNiveles(stream, { codigo: x.sala, participante: x.participante, token: x.participante_token,
+                                           ahora_ms: x.ahora_ms });
+    g.emisor.empezar();
+  }
   nuevoPedazo();
   mantenerPantalla();
   avisar();
@@ -187,8 +198,9 @@ document.addEventListener("visibilitychange", async () => {
   try { if (g.rec.state !== "inactive") g.rec.stop(); } catch { /* ya parado */ }
   g.pausaS = (g.pausaS || 0) + Math.round((Date.now() - (g.ocultoDesde || Date.now())) / 1000);
   try {
-    g.stream = await abrirMicrofono();
+    g.stream = await abrirMicrofono({ sala: !!g.sala });
     microfono = null;
+    g.emisor?.cambiarMicrofono(g.stream);
     nuevoPedazo();
   } catch {
     terminar("usuario");
@@ -231,6 +243,7 @@ export async function terminar(motivo = "usuario") {
     return;
   }
   clearTimeout(actual.corte);
+  actual.emisor?.parar();
   const listo = actual.rec?.detenido;
   try { if (actual.rec.state !== "inactive") actual.rec.stop(); } catch { /* ya parado */ }
   await listo;

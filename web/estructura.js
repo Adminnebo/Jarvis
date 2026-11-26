@@ -268,6 +268,10 @@ async function abrirAvisos(boton) {
           estado.marcos.get("reuniones")?.contentWindow?.postMessage({ tipo: "abrir", id: a.hilo }, location.origin);
           return;
         }
+        if (a.tipo === "sala" && /^https?:\/\//.test(a.asunto || "")) {   // invitación a una sala presencial
+          window.open(a.asunto, "_blank", "noopener");
+          return;
+        }
         if (a.tipo !== "correo") return;
         if (a.app === "whatsapp") { ir("whatsapp"); estado.marcos.get("whatsapp")?.contentWindow?.postMessage({ tipo: "abrir", id: a.hilo }, location.origin); }
         else if (a.app === "gmail") { ir("correo"); estado.marcos.get("correo")?.contentWindow?.postMessage({ tipo: "abrir", id: a.hilo }, location.origin); }

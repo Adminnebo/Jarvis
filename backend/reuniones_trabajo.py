@@ -11,7 +11,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import almacen_reuniones, avisos, bot_meet, dispositivos, reuniones, reuniones_ia, reuniones_voces
+from . import almacen_reuniones, avisos, bot_meet, dispositivos, reuniones, reuniones_ia, reuniones_voces, salas
 from . import reuniones_datos as rd
 
 RETENCION_DIAS = 90
@@ -83,7 +83,9 @@ def cerrar(r: dict) -> None:
     por_n = {p["n"]: p["segmentos"] or [] for p in pedazos if p["estado"] == "transcrito"}
     inicios = {p["n"]: p["inicio_s"] for p in pedazos if p.get("inicio_s") is not None}
     faltan = any(p["estado"] == "fallido" for p in pedazos)
-    texto = reuniones_ia.con_nombres(por_n, r["linea"] or [], inicios=inicios)
+    # Con sala, quién habla sale de los micrófonos de cada teléfono (salas.py).
+    linea = salas.linea(r["id"]) if r.get("sala") else (r["linea"] or [])
+    texto = reuniones_ia.con_nombres(por_n, linea, inicios=inicios)
     usuario = _usuario(r["id"])
     resumen = reuniones_ia.resumir(r["titulo"], texto, usuario) if texto else {
         "resumen": "No se escuchó conversación en la grabación.", "puntos_clave": [], "tareas": [], "nombres": {}}
@@ -97,6 +99,8 @@ def cerrar(r: dict) -> None:
                      f"{BASE}/apps/reuniones#{r['id']}", f"{r['titulo']}: {corto}",
                      con_whatsapp=True, tipo="reunion-lista", app="reuniones")
     shutil.rmtree(reuniones.ruta_pedazo(r["id"], 1).parent, ignore_errors=True)
+    if r.get("sala"):
+        salas.borrar_niveles(r["id"])
 
 
 def cerrar_terminadas() -> None:

@@ -1,0 +1,37 @@
+/* Página del participante de una sala presencial: oscura como el resto de Jarvis. */
+:root {
+  --k-fondo: #1b1b1b;
+  --k-panel: #232323;
+  --k-linea: #3a3a3a;
+  --k-texto: #e3e3e3;
+  --k-tenue: #a6a6a6;
+  --k-azul: #a8c7fa;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body { background: var(--k-fondo); color: var(--k-texto); font: 16px/1.5 Roboto, Inter, system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+.sala { max-width: 440px; margin: 0 auto; padding: max(28px, env(safe-area-inset-top)) 16px 40px; }
+.marca { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--k-tenue); }
+h1 { margin: 0 0 20px; font: 600 24px/1.25 Inter, system-ui, sans-serif; overflow-wrap: anywhere; text-wrap: balance; }
+.aviso { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+  background: #2a1f1f; border: 1px solid #5f2b2b; color: #f6aea9; font-size: 14px; }
+.punto { width: 10px; height: 10px; flex: none; border-radius: 50%; background: #ea4335; }
+.explica { margin: 0 0 18px; font-size: 14px; color: var(--k-tenue); text-wrap: pretty; }
+.explica strong { color: var(--k-texto); font-weight: 500; }
+label { display: block; margin: 0 0 14px; font-size: 13px; color: var(--k-tenue); }
+input { display: block; width: 100%; margin-top: 6px; font: inherit; font-size: 16px; color: var(--k-texto);
+  background: var(--k-panel); border: 1px solid var(--k-linea); border-radius: 10px; padding: 12px; }
+input:focus { outline: none; border-color: var(--k-azul); }
+button { width: 100%; min-height: 50px; border: 0; border-radius: 12px; background: var(--k-azul); color: #062e6f;
+  font: 600 16px/1 Inter, system-ui, sans-serif; cursor: pointer; }
+button:disabled { opacity: .6; cursor: default; }
+.mensaje { margin: 12px 0 0; font-size: 14px; color: #f28b82; }
+.mensaje:empty { display: none; }
+.estoy { margin: 0 0 18px; font-size: 18px; }
+.nivel { height: 10px; margin: 0 0 18px; border-radius: 5px; background: #3a3a3a; overflow: hidden; }
+.nivel span { display: block; height: 100%; background: #81c995; transform-origin: left; transform: scaleX(0);
+  transition: transform .15s linear; }
+@media (prefers-reduced-motion: reduce) { .nivel span { transition: none; } }

@@ -302,7 +302,8 @@ _ESQUEMA = """
         creada TEXT NOT NULL,
         grabando_desde TEXT,
         tipo TEXT,
-        nombres TEXT
+        nombres TEXT,
+        sala TEXT
     );
 
     CREATE TABLE IF NOT EXISTS reunion_interesados (
@@ -323,6 +324,27 @@ _ESQUEMA = """
         PRIMARY KEY (reunion_id, n)
     );
 
+    -- Sala de una presencial (salas.py): quién entró con su teléfono y cuánto oyó
+    -- su micrófono en cada segundo (para saber quién habla). Los niveles se borran
+    -- al cerrar la reunión.
+    CREATE TABLE IF NOT EXISTS reunion_participantes (
+        id TEXT PRIMARY KEY,
+        reunion_id TEXT NOT NULL REFERENCES reuniones (id) ON DELETE CASCADE,
+        nombre TEXT NOT NULL,
+        usuario_id TEXT,
+        token_hash TEXT NOT NULL,
+        unido TEXT NOT NULL,
+        visto TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS reunion_niveles (
+        reunion_id TEXT NOT NULL,
+        participante_id TEXT NOT NULL,
+        segundo INTEGER NOT NULL,
+        nivel REAL NOT NULL,
+        PRIMARY KEY (reunion_id, participante_id, segundo)
+    );
+
     CREATE TABLE IF NOT EXISTS reuniones_preferencias (
         usuario_id TEXT PRIMARY KEY,
         grabar_siempre INTEGER NOT NULL DEFAULT 0
@@ -338,6 +360,7 @@ _COLUMNAS_NUEVAS = (
     ("reuniones", "nombres", "TEXT"),          # JSON {"Hablante 1": "Jorge"} (IA + persona)
     ("reunion_pedazos", "formato", "TEXT"),    # ogg / webm / mp4 (NULL = ogg, el del bot)
     ("reunion_pedazos", "inicio_s", "INTEGER"),  # segundo de la reunión en que empieza
+    ("reuniones", "sala", "TEXT"),             # código de la sala de una presencial (salas.py)
 )
 
 

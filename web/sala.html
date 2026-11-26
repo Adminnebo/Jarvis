@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1b1b1b">
+  <meta name="robots" content="noindex">
+  <title>Sala de reunión · Jarvis</title>
+  <link rel="stylesheet" href="/apps/sala.css">
+</head>
+<body>
+  <main class="sala">
+    <p class="marca">Jarvis · Reunión presencial</p>
+    <h1 id="titulo">Cargando…</h1>
+
+    <section id="entrar" hidden>
+      <p class="aviso"><span class="punto" aria-hidden="true"></span> Esta reunión se está grabando para tomar notas.</p>
+      <p class="explica">Deja tu teléfono frente a ti con esta página abierta: tu micrófono solo sirve para saber
+        <strong>cuándo hablas tú</strong>. No se sube tu audio.</p>
+      <label id="caja-nombre">Tu nombre
+        <input id="nombre" autocomplete="name" maxlength="60" placeholder="Ej.: Lucas Pérez">
+      </label>
+      <button id="boton-entrar" type="button">Entrar a la reunión</button>
+      <p class="mensaje" id="mensaje" role="alert"></p>
+    </section>
+
+    <section id="dentro" hidden>
+      <p class="estoy">Estás en la reunión como <strong id="yo"></strong></p>
+      <div class="nivel" aria-hidden="true"><span id="nivel"></span></div>
+      <p class="explica">Deja esta pantalla abierta y el teléfono frente a ti. Si se bloquea, vuelve a abrirla.</p>
+      <p class="mensaje" id="mensaje-dentro" role="status"></p>
+    </section>
+
+    <section id="fin" hidden>
+      <p class="estoy" id="texto-fin">La reunión terminó. ¡Gracias!</p>
+    </section>
+  </main>
+  <script type="module" src="/apps/sala.js"></script>
+</body>
+</html>

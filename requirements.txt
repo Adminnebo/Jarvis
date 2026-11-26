@@ -18,3 +18,6 @@ pymssql>=2.3
 
 # Zonas horarias (America/Santo_Domingo) en la imagen slim y en Windows.
 tzdata>=2024.1
+
+# El QR de la sala de una reunión presencial (rutas_salas.py), en SVG y sin dependencias.
+segno==1.6.6
