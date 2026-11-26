@@ -377,9 +377,11 @@ def _anotar_para_la_voz(usuario: acceso.Usuario, mensajes: list[dict],
 
 def responder(
     mensajes: list[dict], usuario: acceso.Usuario, extra: str = "",
-    dispositivo: str = "navegador",
+    dispositivo: str = "navegador", guardar: bool = True,
 ) -> Iterator[dict]:
     """Genera la respuesta como un flujo de eventos.
+
+    Con guardar=False no toca la conversacion guardada (la usa la sala de juntas).
 
     Eventos posibles:
       {"tipo": "texto",       "dato": fragmento de texto}
@@ -474,8 +476,11 @@ def responder(
             if adjuntos_del_turno:
                 respuesta["adjuntos"] = adjuntos_del_turno
             mensajes.append(respuesta)
-            memoria.guardar_conversacion(usuario.id, mensajes)
-            _anotar_para_la_voz(usuario, mensajes, dispositivo)
+            # La sala de juntas de la oficina 3D no guarda: la reunion no es la conversacion
+            # de la persona con Jarvis (no la ve en su chat ni la retoma la voz).
+            if guardar:
+                memoria.guardar_conversacion(usuario.id, mensajes)
+                _anotar_para_la_voz(usuario, mensajes, dispositivo)
             yield {"tipo": "fin", "dato": mensajes}
             return
 
