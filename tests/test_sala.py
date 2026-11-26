@@ -61,3 +61,64 @@ def test_sin_pregunta_o_sin_respuesta(cliente_admin, monkeypatch):
     r = cliente_admin.post("/api/sala", json={"nombre": "Ventas", "pregunta": "¿Y?"})
     assert r.status_code == 502 and r.json()["error"] == "sin cuota"
 
+
+
+# --------------------------------------------------------------------------
+# La voz natural de la sala (/api/sala/voz)
+# --------------------------------------------------------------------------
+
+def test_la_voz_devuelve_el_mp3_y_anota_el_consumo(cliente_admin, monkeypatch):
+    import base64
+    import json
+
+    from backend import consumo, sala_voz
+
+    pedidos = []
+
+    class Resp:
+        headers = {"Content-Type": "text/event-stream"}
+
+        def __init__(self, cuerpo):
+            self.cuerpo = cuerpo
+
+        def read(self):
+            return self.cuerpo
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def urlopen_falso(pedido, timeout=0):
+        pedidos.append(json.loads(pedido.data))
+        eventos = [
+            {"type": "speech.audio.delta", "audio": base64.b64encode(b"ID3-uno").decode()},
+            {"type": "speech.audio.delta", "audio": base64.b64encode(b"-dos").decode()},
+            {"type": "speech.audio.done", "usage": {"input_tokens": 20, "output_tokens": 250}},
+        ]
+        return Resp("\n\n".join("data: " + json.dumps(e) for e in eventos).encode())
+
+    monkeypatch.setattr(sala_voz.urllib.request, "urlopen", urlopen_falso)
+    monkeypatch.setattr(cerebro, "clave_openai", lambda: "sk-prueba")
+
+    r = cliente_admin.post("/api/sala/voz", json={"texto": "Llevamos  239 millones.", "voz": "verse"})
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg"
+    assert r.content == b"ID3-uno-dos"
+    [p] = pedidos
+    assert p["voice"] == "verse" and p["input"] == "Llevamos 239 millones." and p["stream_format"] == "sse"
+    assert "República Dominicana" in p["instructions"]
+    [registro] = [x for x in consumo.todos() if x["modo"] == "tts"]
+    assert registro["dispositivo"] == "oficina"
+
+
+def test_la_voz_desconocida_cae_en_una_valida_y_sin_texto_es_400(cliente_admin, monkeypatch):
+    from backend import sala_voz
+
+    vistos = []
+    monkeypatch.setattr(sala_voz, "sintetizar", lambda texto, voz, clave, instr="": (vistos.append(voz), (b"mp3", None))[1])
+    monkeypatch.setattr(cerebro, "clave_openai", lambda: "sk-prueba")
+    assert cliente_admin.post("/api/sala/voz", json={"texto": "  "}).status_code == 400
+    assert cliente_admin.post("/api/sala/voz", json={"texto": "Hola", "voz": "inventada"}).status_code == 200
+    # la validación de la voz la hace sintetizar (cae en "alloy" si no existe)
+    assert vistos == ["inventada"] and "alloy" in sala_voz.VOCES
