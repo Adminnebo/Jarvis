@@ -146,8 +146,8 @@ def cada() -> int:
 
 def arrancar() -> None:
     if not bot_meet.configurado():
+        # Las presenciales no necesitan el bot: el trabajador corre igual.
         print("\n  AVISO: el bot de reuniones está apagado (faltan BOT_MEET_URL o BOT_MEET_SECRETO).\n")
-        return
 
     def vigilar() -> None:
         ultimo_borrado = 0.0

@@ -3,6 +3,7 @@
    Un enlace /apps/reuniones#<id> (el del WhatsApp) deja el id en sessionStorage antes de
    que comun.js redirija a la estructura, y aqui se abre al cargar. */
 import { EMBEBIDO, enEstructura } from "./comun.js";
+import * as grabadora from "./grabadora.js";
 
 const PENDIENTE = "jarvis-reunion-abrir";
 if (!EMBEBIDO && location.hash.length > 1) {
@@ -69,7 +70,8 @@ async function abrir(id) {
   h.textContent = x.titulo;
   const sub = document.createElement("p");
   sub.className = "sub";
-  sub.textContent = `${hora(x.inicio)} · ${ESTADOS[x.estado] || x.estado}` + (x.incompleta ? " · grabación incompleta" : "");
+  sub.textContent = `${hora(x.inicio)} · ${ESTADOS[x.estado] || x.estado}` + (x.tipo === "presencial" ? " · en persona" : "")
+    + (x.incompleta ? " · grabación incompleta" : "");
   caja.append(h, sub);
   estructura.contexto(`Reuniones: reunión grabada «${x.titulo}» del ${hora(x.inicio)}, id ${x.id}`, x.titulo);
   if (x.estado !== "lista") return;
@@ -86,6 +88,28 @@ async function abrir(id) {
       ul.append(li);
     }
     seccion(caja, "Tareas", ul);
+  }
+
+  const genericas = x.hablantes.filter((v) => /^(Hablante|Participante) /.test(v.etiqueta));
+  if (genericas.length) {
+    const voces = document.createElement("div");
+    voces.className = "voces";
+    for (const v of genericas) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "voz";
+      b.textContent = v.nombre;
+      b.title = v.nombre === v.etiqueta ? "Tocar para poner el nombre" : `${v.etiqueta} · tocar para cambiar`;
+      b.addEventListener("click", async () => {
+        const a = prompt(`¿Quién es «${v.etiqueta}»? (vacío = sin nombre)`, v.nombre === v.etiqueta ? "" : v.nombre);
+        if (a === null) return;
+        const r = await fetch(`/api/reuniones/${encodeURIComponent(id)}/nombres`, {
+          method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ de: v.etiqueta, a }) });
+        if (r.ok) abrir(id);
+      });
+      voces.append(b);
+    }
+    seccion(caja, "Quién habló (toca para corregir)", voces);
   }
 
   if (!x.audio_borrado && x.pedazos.length) {
@@ -117,10 +141,68 @@ async function abrir(id) {
   seccion(caja, "Transcripción", texto);
 }
 
+// ---------------------------------------------------------------- presencial
+// El teléfono o la computadora graban la reunión en la sala (grabadora.js).
+const NOTA = {
+  web: "Deja la pantalla prendida y Jarvis abierto: si bloqueas el teléfono, la grabación se pausa.",
+  nativo: "Puedes bloquear el teléfono: sigue grabando (lo ves en la notificación).",
+};
+
+function pintarPresencial(e = grabadora.estado()) {
+  $("presencial-empezar").hidden = e.grabando;
+  $("presencial-grabando").hidden = !e.grabando;
+  if (!e.grabando) return;
+  $("presencial-titulo").textContent = e.titulo;
+  $("presencial-reloj").textContent = desde(new Date(Date.now() - e.segundos * 1000).toISOString());
+  $("presencial-nota").textContent = (e.nativo ? NOTA.nativo : NOTA.web)
+    + (e.pausaS ? ` Estuvo en pausa ${Math.max(1, Math.round(e.pausaS / 60))} min.` : "");
+}
+
+function prepararPresencial() {
+  if (!grabadora.puedeGrabar()) {
+    $("presencial-empezar").disabled = true;
+    $("presencial-mensaje").textContent = "Este navegador no puede grabar audio.";
+  }
+  $("presencial-empezar").addEventListener("click", async () => {
+    const titulo = prompt("¿Cómo se llama la reunión? (opcional)", "");
+    if (titulo === null) return;
+    const boton = $("presencial-empezar");
+    boton.disabled = true;
+    $("presencial-mensaje").textContent = "Pidiendo el micrófono…";
+    try {
+      await grabadora.empezar(titulo);
+      $("presencial-mensaje").textContent = "";
+      cargarEnCurso();
+    } catch (error) {
+      $("presencial-mensaje").textContent = error?.name === "NotAllowedError"
+        ? "Jarvis no tiene permiso para usar el micrófono. Actívalo en el navegador y vuelve a intentar."
+        : error?.message || "No pude empezar la grabación.";
+    } finally {
+      boton.disabled = !grabadora.puedeGrabar();
+    }
+  });
+  $("presencial-terminar").addEventListener("click", async () => {
+    if (!confirm("¿Terminar la grabación? Jarvis la resume en unos minutos.")) return;
+    $("presencial-terminar").disabled = true;
+    await grabadora.terminar("usuario");
+    $("presencial-terminar").disabled = false;
+    $("presencial-mensaje").textContent = "Listo. Te aviso cuando esté el resumen.";
+    setTimeout(() => { cargarEnCurso(); cargarLista(); }, 3000);
+  });
+  grabadora.alCambiar((e) => { pintarPresencial(e); cargarEnCurso(); });
+  pintarPresencial();
+  setInterval(() => {
+    const e = grabadora.estado();
+    if (!e.grabando) return;
+    pintarPresencial(e);
+    $("presencial-nivel").style.transform = `scaleX(${grabadora.nivel().toFixed(2)})`;
+  }, 250);
+}
+
 // ---------------------------------------------------------------- en curso
 // Lo que el bot tiene agendado, esperando entrar o grabando: cada 15 s se pide de nuevo
 // y el reloj de "grabando hace" corre cada segundo sin pedir nada.
-let enCurso = [];
+let todasEnCurso = [];
 const desde = (iso) => {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
   const h = Math.floor(s / 3600);
@@ -128,13 +210,17 @@ const desde = (iso) => {
 };
 
 function textoEstado(x) {
-  if (x.estado === "grabando" && x.grabando_desde) return `Grabando · ${desde(x.grabando_desde)}`;
+  if (x.estado === "grabando" && x.grabando_desde)
+    return `${x.tipo === "presencial" ? "En persona · " : ""}Grabando · ${desde(x.grabando_desde)}`;
   if (x.estado === "esperando") return "Esperando que lo admitan";
   return `Agendada · ${new Date(x.inicio).toLocaleTimeString("es", { hour: "numeric", minute: "2-digit" })}`;
 }
 
 function pintarEnCurso() {
   const caja = $("en-curso");
+  // La que se graba en este aparato ya tiene su tarjeta grande arriba.
+  const aqui = grabadora.estado().id;
+  const enCurso = todasEnCurso.filter((x) => x.id !== aqui);
   caja.hidden = !enCurso.length;
   caja.replaceChildren();
   if (!enCurso.length) return;
@@ -154,15 +240,23 @@ function pintarEnCurso() {
     info.append(nombre, estado);
     const boton = document.createElement("button");
     boton.type = "button";
-    boton.textContent = x.estado === "agendada" ? "No grabar" : "Sacar al bot";
+    const presencial = x.tipo === "presencial";
+    boton.textContent = presencial ? "Terminar" : x.estado === "agendada" ? "No grabar" : "Sacar al bot";
     boton.addEventListener("click", async () => {
-      const pregunta = x.estado === "agendada"
-        ? `¿Cancelar la grabación de «${x.titulo}»?`
-        : `¿Sacar al bot de «${x.titulo}»? Sale para todos; lo grabado hasta ahora se resume igual.`;
+      const pregunta = presencial
+        ? `¿Terminar la grabación de «${x.titulo}»? Lo grabado hasta ahora se resume igual.`
+        : x.estado === "agendada"
+          ? `¿Cancelar la grabación de «${x.titulo}»?`
+          : `¿Sacar al bot de «${x.titulo}»? Sale para todos; lo grabado hasta ahora se resume igual.`;
       if (!confirm(pregunta)) return;
       boton.disabled = true;
-      const r = await fetch(`/api/reuniones/${encodeURIComponent(x.id)}/sacar`, { method: "POST" });
-      estado.textContent = r.ok ? (await r.json()).mensaje : "No se pudo, inténtalo otra vez.";
+      if (presencial && grabadora.estado().id === x.id) {   // se graba en este aparato
+        await grabadora.terminar("usuario");
+        estado.textContent = "Listo. Te aviso cuando esté el resumen.";
+      } else {   // en otro aparato: se entera al subir el próximo pedazo
+        const r = await fetch(`/api/reuniones/${encodeURIComponent(x.id)}/sacar`, { method: "POST" });
+        estado.textContent = r.ok ? (await r.json()).mensaje : "No se pudo, inténtalo otra vez.";
+      }
       setTimeout(() => { cargarEnCurso(); cargarLista(); }, 4000);
     });
     fila.append(info, boton);
@@ -173,13 +267,13 @@ function pintarEnCurso() {
 async function cargarEnCurso() {
   try {
     const r = await fetch("/api/reuniones/en-curso");
-    enCurso = r.ok ? (await r.json()).reuniones : [];
+    todasEnCurso = r.ok ? (await r.json()).reuniones : [];
   } catch { /* sin red: se reintenta en la próxima vuelta */ }
   pintarEnCurso();
 }
 
 setInterval(() => {
-  for (const x of enCurso) {
+  for (const x of todasEnCurso) {
     const e = document.querySelector(`.en-curso .estado[data-id="${x.id}"]`);
     if (e && x.estado === "grabando" && x.grabando_desde) e.textContent = textoEstado(x);
   }
@@ -218,3 +312,5 @@ if (EMBEBIDO) {
   try { inicial = sessionStorage.getItem(PENDIENTE); sessionStorage.removeItem(PENDIENTE); } catch { /* nada */ }
   if (inicial) abrir(inicial);
 }
+
+prepararPresencial();

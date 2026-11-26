@@ -17,6 +17,19 @@
   </header>
   <main class="reuniones">
     <div class="columna">
+      <section id="presencial" class="presencial" aria-label="Grabar una reunión en persona">
+        <button id="presencial-empezar" type="button" class="boton-grabar">
+          <span class="punto" aria-hidden="true"></span> Grabar reunión presencial
+        </button>
+        <div id="presencial-grabando" class="presencial-grabando" hidden>
+          <p class="presencial-titulo" id="presencial-titulo"></p>
+          <p class="reloj" id="presencial-reloj">00:00</p>
+          <div class="nivel" aria-hidden="true"><span id="presencial-nivel"></span></div>
+          <p class="nota" id="presencial-nota"></p>
+          <button id="presencial-terminar" type="button">Terminar</button>
+        </div>
+        <p class="mensaje" id="presencial-mensaje" role="status"></p>
+      </section>
       <section id="en-curso" class="en-curso" aria-label="Grabando ahora" hidden></section>
       <form id="grabar-link" class="grabar-link">
         <label for="link-meet">Grabar un Meet que no está en el calendario</label>
