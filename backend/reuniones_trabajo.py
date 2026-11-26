@@ -66,19 +66,26 @@ def _lista_para_cerrar(r: dict) -> bool:
     return (datetime.now(timezone.utc) - terminada).total_seconds() > ESPERA_HABLANTES_S
 
 
+def _duracion(r: dict, pedazos: list[dict]) -> int:
+    if r.get("tipo") == "presencial" and r.get("grabando_desde") and r.get("terminada"):
+        return int((datetime.fromisoformat(r["terminada"]) - datetime.fromisoformat(r["grabando_desde"])).total_seconds())
+    return max((p["n"] for p in pedazos), default=0) * reuniones_ia.PEDAZO_S
+
+
 def cerrar(r: dict) -> None:
     pedazos = rd.pedazos(r["id"])
     por_n = {p["n"]: p["segmentos"] or [] for p in pedazos if p["estado"] == "transcrito"}
+    inicios = {p["n"]: p["inicio_s"] for p in pedazos if p.get("inicio_s") is not None}
     faltan = any(p["estado"] == "fallido" for p in pedazos)
-    texto = reuniones_ia.con_nombres(por_n, r["linea"] or [])
+    texto = reuniones_ia.con_nombres(por_n, r["linea"] or [], inicios=inicios)
     usuario = _usuario(r["id"])
     resumen = reuniones_ia.resumir(r["titulo"], texto, usuario) if texto else {
-        "resumen": "No se escuchó conversación en la grabación.", "puntos_clave": [], "tareas": []}
-    duracion = max((p["n"] for p in pedazos), default=0) * reuniones_ia.PEDAZO_S
+        "resumen": "No se escuchó conversación en la grabación.", "puntos_clave": [], "tareas": [], "nombres": {}}
     rd.actualizar(r["id"], estado="lista", transcripcion=texto, resumen=resumen["resumen"],
-                  puntos=resumen["puntos_clave"], tareas=resumen["tareas"], duracion_s=duracion,
-                  incompleta=int(bool(r["incompleta"]) or faltan))
-    corto = resumen["resumen"].split("\n")[0][:300]
+                  puntos=resumen["puntos_clave"], tareas=resumen["tareas"], duracion_s=_duracion(r, pedazos),
+                  nombres=resumen.get("nombres") or {}, incompleta=int(bool(r["incompleta"]) or faltan))
+    puesta = reuniones.con_nombres_puestos(rd.obtener(r["id"]))
+    corto = (puesta["resumen"] or "").split("\n")[0][:300]
     for usuario_id in rd.interesados(r["id"]):
         avisos.crear(usuario_id, f"reunion-lista:{r['id']}", r["id"], "Reuniones",
                      f"{BASE}/apps/reuniones#{r['id']}", f"{r['titulo']}: {corto}",

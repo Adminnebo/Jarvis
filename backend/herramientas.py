@@ -767,9 +767,10 @@ def grabar_meet(link: str, titulo: str = "", usuario: str = "") -> str:
 
 
 def _buscar_reuniones(texto: str, desde: str, hasta: str, usuario: str) -> str:
+    from . import reuniones
     from . import reuniones_datos as rd
 
-    encontradas = rd.buscar_texto(usuario, texto, desde, hasta)
+    encontradas = [reuniones.con_nombres_puestos(r) for r in rd.buscar_texto(usuario, texto, desde, hasta)]
     if not encontradas:
         return f"No encontré reuniones grabadas que hablen de «{texto}»."
     partes = []

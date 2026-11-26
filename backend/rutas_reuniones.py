@@ -72,9 +72,12 @@ def _publica(r: dict, completa: bool = False) -> dict:
     salida = {k: r.get(k) for k in campos}
     salida["tipo"] = salida["tipo"] or "meet"
     if completa:
-        salida.update(resumen=r.get("resumen"), puntos=r.get("puntos") or [], tareas=r.get("tareas") or [],
-                      transcripcion=r.get("transcripcion") or [], audio_borrado=bool(r.get("audio_borrado")),
-                      pedazos=[p["n"] for p in rd.pedazos(r["id"]) if p["estado"] == "transcrito"])
+        mapa = r.get("nombres") or {}
+        p = reuniones.con_nombres_puestos(r)
+        salida.update(resumen=p.get("resumen"), puntos=p.get("puntos") or [], tareas=p.get("tareas") or [],
+                      transcripcion=p.get("transcripcion") or [], audio_borrado=bool(r.get("audio_borrado")),
+                      hablantes=[{"etiqueta": e, "nombre": mapa.get(e, e)} for e in reuniones.etiquetas(r)],
+                      pedazos=[x["n"] for x in rd.pedazos(r["id"]) if x["estado"] == "transcrito"])
     return salida
 
 
@@ -138,6 +141,21 @@ def detalle(reunion_id: str, peticion: Request):
     if r is None or not rd.puede_ver(reunion_id, peticion.state.usuario.id):
         return JSONResponse(status_code=404, content={"error": "No existe."})
     return _publica(r, completa=True)
+
+
+class Renombre(BaseModel):
+    de: str
+    a: str = ""
+
+
+@router.put("/api/reuniones/{reunion_id}/nombres")
+def nombres(reunion_id: str, peticion: Request, datos: Renombre):
+    fallo = reuniones.renombrar(peticion.state.usuario.id, reunion_id, datos.de, datos.a)
+    if fallo == "no_existe":
+        return JSONResponse(status_code=404, content={"error": "No existe."})
+    if fallo == "etiqueta":
+        return JSONResponse(status_code=400, content={"error": "Esa voz no está en la reunión."})
+    return _publica(rd.obtener(reunion_id), completa=True)
 
 
 @router.get("/api/reuniones/{reunion_id}/audio/{n}")

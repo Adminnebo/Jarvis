@@ -19,7 +19,7 @@ def todo(monkeypatch):
     monkeypatch.setattr(reuniones_ia, "transcribir",
                         lambda ruta, usuario, voces=None: [{"inicio": 0, "fin": 2, "hablante": "A", "texto": f"dicho en {ruta.stem}"}])
     monkeypatch.setattr(reuniones_ia, "resumir",
-                        lambda titulo, texto, usuario: {"resumen": "Resumen.", "puntos_clave": [], "tareas": []})
+                        lambda titulo, texto, usuario: {"resumen": "Resumen.", "puntos_clave": [], "tareas": [], "nombres": {}})
     monkeypatch.setattr(avisos, "crear", lambda *a, **k: creados.append((a, k)) or True)
     monkeypatch.setattr(avisos, "mandar_pendientes", lambda: None)
     r = reuniones.proponer("u1", EVENTO)
@@ -108,3 +108,20 @@ def test_presencial_se_transcribe_en_orden_y_con_voces(todo, monkeypatch):
     assert [p[0] for p in pedidos] == ["00001", "00002"]
     assert pedidos[0][1] == [("Hablante 1", "v.wav")]
     assert {p["segmentos"][0]["hablante"] for p in rd.pedazos(x["id"])} == {"Hablante 1"}
+
+
+def test_cerrar_presencial_guarda_nombres_y_duracion(todo, monkeypatch):
+    # El doble de transcribir devuelve la voz "A"; unificar (real) la vuelve "Hablante 1"
+    # (el recorte con ffmpeg falla sobre b"W" y se sigue sin referencia).
+    monkeypatch.setattr(reuniones_ia, "resumir", lambda titulo, texto, usuario: {
+        "resumen": "R", "puntos_clave": [], "tareas": [], "nombres": {"Hablante 1": "Jorge"}})
+    x = reuniones.crear_presencial("u1", "En persona")
+    rd.actualizar(x["id"], grabando_desde="2026-12-01T14:00:00+00:00")
+    reuniones.recibir_audio(x["id"], 1, b"W", "webm", 0)
+    reuniones_trabajo.transcribir_pendientes()
+    reuniones.recibir_evento(x["id"], {"tipo": "terminado", "motivo": "usuario"})
+    rd.actualizar(x["id"], terminada="2026-12-01T14:12:30+00:00")
+    reuniones_trabajo.cerrar_terminadas()
+    r = rd.obtener(x["id"])
+    assert r["estado"] == "lista" and r["duracion_s"] == 750 and r["nombres"] == {"Hablante 1": "Jorge"}
+    assert r["transcripcion"][0]["quien"] == "Hablante 1"   # en la base, la etiqueta

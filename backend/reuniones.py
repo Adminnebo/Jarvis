@@ -284,3 +284,49 @@ def crear_presencial(usuario_id: str, titulo: str = "") -> dict:
                   grabando_desde=_ahora_iso())
     return {"id": r["id"], "token": token, "titulo": titulo, "pedazo_s": 300,
             "max_s": int(DURACION_PRESENCIAL.total_seconds())}
+
+
+# --------------------------------------------------------------------------
+# Nombres: en la base quedan las etiquetas; el mapa (IA + persona) se aplica al mostrar
+# --------------------------------------------------------------------------
+
+def _reemplazar(texto, mapa: dict):
+    if not texto or not mapa:
+        return texto
+    patron = re.compile("(?:" + "|".join(re.escape(k) for k in sorted(mapa, key=len, reverse=True)) + r")(?!\d)")
+    return patron.sub(lambda m: mapa[m.group(0)], texto)
+
+
+def con_nombres_puestos(r: dict) -> dict:
+    mapa = r.get("nombres") or {}
+    if not mapa:
+        return r
+    return {**r, "resumen": _reemplazar(r.get("resumen"), mapa),
+            "puntos": [_reemplazar(p, mapa) for p in r.get("puntos") or []],
+            "tareas": [{**t, "quien": _reemplazar(t.get("quien"), mapa), "que": _reemplazar(t.get("que"), mapa)}
+                       for t in r.get("tareas") or []],
+            "transcripcion": [{**x, "quien": mapa.get(x["quien"], x["quien"])} for x in r.get("transcripcion") or []]}
+
+
+def etiquetas(r: dict) -> list[str]:
+    vistas = []
+    for x in r.get("transcripcion") or []:
+        if x["quien"] not in vistas:
+            vistas.append(x["quien"])
+    return vistas
+
+
+def renombrar(usuario_id: str, reunion_id: str, de: str, a: str) -> str | None:
+    """None si quedó; si no, el motivo ('no_existe' o 'etiqueta')."""
+    r = rd.obtener(reunion_id)
+    if r is None or not rd.puede_ver(reunion_id, usuario_id):
+        return "no_existe"
+    if de not in etiquetas(r):
+        return "etiqueta"
+    mapa = dict(r.get("nombres") or {})
+    if a.strip():
+        mapa[de] = a.strip()[:60]
+    else:
+        mapa.pop(de, None)
+    rd.actualizar(reunion_id, nombres=mapa)
+    return None

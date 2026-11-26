@@ -75,3 +75,43 @@ def test_tope_de_cuatro_horas():
     reuniones_trabajo.vencer_presenciales()
     r = rd.obtener(x["id"])
     assert r["estado"] == "procesando" and r["motivo"] == "maximo" and r["linea"] == []
+
+
+def lista_con_transcripcion(usuario="admin"):
+    x = reuniones.crear_presencial(usuario, "Con Lucas")
+    rd.actualizar(x["id"], estado="lista", resumen="Hablante 2 presenta. Hablante 10 calla.",
+                  puntos=["Hablante 2 trae números"], tareas=[{"quien": "Hablante 2", "que": "mandar a Hablante 1"}],
+                  transcripcion=[{"t": 0, "quien": "Hablante 1", "texto": "hola Lucas"},
+                                 {"t": 5, "quien": "Hablante 2", "texto": "hola"}],
+                  nombres={"Hablante 1": "Jorge"})
+    return x["id"]
+
+
+def test_detalle_con_nombres_puestos_y_renombrar(entrar):
+    rid = lista_con_transcripcion()
+    c = entrar("la-del-admin")
+    d = c.get(f"/api/reuniones/{rid}").json()
+    assert d["tipo"] == "presencial"
+    assert d["hablantes"] == [{"etiqueta": "Hablante 1", "nombre": "Jorge"},
+                              {"etiqueta": "Hablante 2", "nombre": "Hablante 2"}]
+    assert d["transcripcion"][0]["quien"] == "Jorge"
+    d = c.put(f"/api/reuniones/{rid}/nombres", json={"de": "Hablante 2", "a": "Lucas"}).json()
+    assert d["resumen"] == "Lucas presenta. Hablante 10 calla."      # Hablante 10 no es Hablante 1
+    assert d["puntos"] == ["Lucas trae números"]
+    assert d["tareas"] == [{"quien": "Lucas", "que": "mandar a Jorge"}]
+    assert [x["quien"] for x in d["transcripcion"]] == ["Jorge", "Lucas"]
+    # Vacío = vuelve a la etiqueta; una etiqueta que no está = 400; otra persona = 404.
+    d = c.put(f"/api/reuniones/{rid}/nombres", json={"de": "Hablante 1", "a": ""}).json()
+    assert d["transcripcion"][0]["quien"] == "Hablante 1"
+    assert c.put(f"/api/reuniones/{rid}/nombres", json={"de": "Hablante 7", "a": "X"}).status_code == 400
+    assert entrar("la-de-ana").put(f"/api/reuniones/{rid}/nombres", json={"de": "Hablante 1", "a": "X"}).status_code == 404
+    assert rd.obtener(rid)["transcripcion"][0]["quien"] == "Hablante 1"   # en la base quedan las etiquetas
+
+
+def test_buscar_reuniones_con_los_nombres_puestos():
+    from backend import herramientas
+    rid = lista_con_transcripcion()
+    texto = herramientas._buscar_reuniones("presenta", "", "", "admin")
+    assert "Con Lucas" in texto and "Hablante 2 presenta" in texto
+    reuniones.renombrar("admin", rid, "Hablante 2", "Lucas")
+    assert "Lucas presenta" in herramientas._buscar_reuniones("presenta", "", "", "admin")
