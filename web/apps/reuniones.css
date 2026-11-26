@@ -77,3 +77,35 @@ body.embebido { --k-barra: 0px; }
   .reuniones aside { max-height: 40vh; }
   .reuniones #detalle { padding: 16px; }
 }
+
+/* ---------------------------------------------------------------- presencial */
+.presencial [hidden] { display: none !important; }
+.presencial { padding: 14px 12px 12px; border-bottom: 1px solid var(--k-linea); }
+.boton-grabar { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  border-radius: 10px; border: 1px solid #5f2b2b; color: #f6aea9; background: #2a1f1f; font-weight: 500; }
+.boton-grabar:hover:not(:disabled) { background: #3a2323; }
+.boton-grabar:disabled { opacity: .5; cursor: default; }
+.boton-grabar .punto { width: 10px; height: 10px; border-radius: 50%; background: #ea4335; flex: none; }
+.presencial-grabando { padding: 14px 12px; border-radius: 12px; border: 1px solid #5f2b2b; background: #2a1f1f;
+  text-align: center; }
+.presencial-titulo { margin: 0 0 2px; font-weight: 500; overflow-wrap: anywhere; }
+.presencial-grabando .reloj { margin: 2px 0 10px; font: 500 34px/1.1 Roboto, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.presencial-grabando .reloj::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: #ea4335;
+  animation: latido 1.6s ease-in-out infinite; }
+.presencial .nivel { height: 6px; max-width: 240px; margin: 0 auto 10px; border-radius: 3px; background: #3a3a3a; overflow: hidden; }
+.presencial .nivel span { display: block; height: 100%; background: #81c995; transform-origin: left; transform: scaleX(0);
+  transition: transform .15s linear; }
+.presencial-grabando .nota { margin: 0 0 12px; font-size: 12.5px; color: var(--k-tenue); }
+.presencial-grabando button { min-height: 40px; padding: 0 26px; border-radius: 8px; background: #ea4335; color: #fff;
+  font-weight: 500; }
+.presencial-grabando button:disabled { opacity: .6; cursor: default; }
+.presencial .mensaje { margin: 8px 0 0; font-size: 12.5px; color: var(--k-tenue); }
+.presencial .mensaje:empty { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .presencial-grabando .reloj::before { animation: none; }
+  .presencial .nivel span { transition: none; }
+}
+.voces { display: flex; flex-wrap: wrap; gap: 8px; }
+.voz { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--k-linea); background: var(--k-panel); }
+.voz:hover { background: var(--k-hover); }

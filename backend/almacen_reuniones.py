@@ -30,32 +30,33 @@ def _http() -> httpx.Client:
     return httpx.Client(timeout=60)
 
 
-def _ruta(reunion_id: str, n: int) -> str:
-    return f"{reunion_id}/{n:05d}.ogg"
+def _ruta(reunion_id: str, n: int, formato: str = "ogg") -> str:
+    return f"{reunion_id}/{n:05d}.{formato}"
 
 
-def subir(reunion_id: str, n: int, datos: bytes) -> None:
+def subir(reunion_id: str, n: int, datos: bytes, formato: str = "ogg") -> None:
     with _http() as http:
-        r = http.post(f"{_base()}/object/{_bucket()}/{_ruta(reunion_id, n)}", content=datos,
-                      headers={**_cabeceras(), "Content-Type": "audio/ogg", "x-upsert": "true"})
+        r = http.post(f"{_base()}/object/{_bucket()}/{_ruta(reunion_id, n, formato)}", content=datos,
+                      headers={**_cabeceras(), "Content-Type": f"audio/{formato}", "x-upsert": "true"})
     if not r.is_success:
         raise ErrorAlmacen(f"Storage respondió {r.status_code}: {r.text[:200]}")
 
 
-def url_firmada(reunion_id: str, n: int, segundos: int = 3600) -> str:
+def url_firmada(reunion_id: str, n: int, segundos: int = 3600, formato: str = "ogg") -> str:
     with _http() as http:
-        r = http.post(f"{_base()}/object/sign/{_bucket()}/{_ruta(reunion_id, n)}",
+        r = http.post(f"{_base()}/object/sign/{_bucket()}/{_ruta(reunion_id, n, formato)}",
                       json={"expiresIn": segundos}, headers=_cabeceras())
     if not r.is_success:
         raise ErrorAlmacen(f"Storage respondió {r.status_code}")
     return _base() + r.json()["signedURL"]
 
 
-def borrar(reunion_id: str, numeros: list[int]) -> None:
+def borrar(reunion_id: str, numeros: list[int], formatos: dict[int, str] | None = None) -> None:
     if not numeros:
         return
+    formatos = formatos or {}
     with _http() as http:
         r = http.request("DELETE", f"{_base()}/object/{_bucket()}", headers=_cabeceras(),
-                         json={"prefixes": [_ruta(reunion_id, n) for n in numeros]})
+                         json={"prefixes": [_ruta(reunion_id, n, formatos.get(n) or "ogg") for n in numeros]})
     if not r.is_success:
         raise ErrorAlmacen(f"Storage respondió {r.status_code}")

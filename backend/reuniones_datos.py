@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from . import basedatos
 
-JSON = ("linea", "transcripcion", "puntos", "tareas")
+JSON = ("linea", "transcripcion", "puntos", "tareas", "nombres")
 MAX_INTENTOS = 3
 
 
@@ -96,12 +96,12 @@ def en_curso_de(usuario_id: str) -> list[dict]:
     return [_fila(f) for f in filas]
 
 
-def guardar_pedazo(reunion_id: str, n: int) -> bool:
+def guardar_pedazo(reunion_id: str, n: int, formato: str = "ogg", inicio_s: int | None = None) -> bool:
     """True si es nuevo; el mismo pedazo dos veces no se guarda otra vez."""
     with basedatos.conexion() as con:
         cursor = con.execute(
-            "INSERT OR IGNORE INTO reunion_pedazos (reunion_id, n, estado) VALUES (?, ?, 'recibido')",
-            (reunion_id, n))
+            "INSERT OR IGNORE INTO reunion_pedazos (reunion_id, n, estado, formato, inicio_s) "
+            "VALUES (?, ?, 'recibido', ?, ?)", (reunion_id, n, formato, inicio_s))
         return cursor.rowcount == 1
 
 

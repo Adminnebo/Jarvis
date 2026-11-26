@@ -83,8 +83,38 @@ def test_resumir_si_el_modelo_no_da_json(monkeypatch):
     monkeypatch.setattr(cerebro, "cliente", lambda: falso)
     monkeypatch.setattr(cerebro, "anotar_consumo", lambda *a, **k: None)
     r = reuniones_ia.resumir("Ventas", [], usuario=None)
-    assert r == {"resumen": "no es json", "puntos_clave": [], "tareas": []}
+    assert r == {"resumen": "no es json", "puntos_clave": [], "tareas": [], "nombres": {}}
 
 
 def test_precio_por_minuto_del_modelo():
     assert consumo.PRECIOS_POR_DEFECTO["gpt-4o-transcribe-diarize"]["minuto"] == 0.006
+
+
+def test_transcribir_con_voces_conocidas(monkeypatch, tmp_path):
+    falso = OpenAIFalso(segmentos=[{"start": 0, "end": 2, "speaker": "Hablante 1", "text": "hola"}])
+    monkeypatch.setattr(cerebro, "cliente", lambda: falso)
+    ruta = tmp_path / "00002.webm"
+    ruta.write_bytes(b"W")
+    voz = tmp_path / "Hablante 1.wav"
+    voz.write_bytes(b"RIFF")
+    reuniones_ia.transcribir(ruta, None, voces=[("Hablante 1", voz)])
+    (pedido,) = falso.pedidos
+    assert pedido["file"][2] == "audio/webm"
+    assert pedido["extra_body"]["known_speaker_names"] == ["Hablante 1"]
+    assert pedido["extra_body"]["known_speaker_references"][0].startswith("data:audio/wav;base64,")
+
+
+def test_resumir_devuelve_los_nombres_deducidos(monkeypatch):
+    falso = OpenAIFalso(resumen={"resumen": "R", "puntos_clave": [], "tareas": [],
+                                 "nombres": {"Hablante 1": "Jorge", "Hablante 9": "Nadie", "Hablante 2": 3}})
+    monkeypatch.setattr(cerebro, "cliente", lambda: falso)
+    texto = [{"t": 0, "quien": "Hablante 1", "texto": "soy Jorge"}, {"t": 2, "quien": "Hablante 2", "texto": "ok"}]
+    d = reuniones_ia.resumir("T", texto, None)
+    assert d["nombres"] == {"Hablante 1": "Jorge"}   # solo texto, y solo etiquetas que existen
+
+
+def test_nombres_con_inicios_reales():
+    pedazos = {1: [{"inicio": 0, "fin": 1, "hablante": "Hablante 1", "texto": "a"}],
+               2: [{"inicio": 2, "fin": 3, "hablante": "Hablante 1", "texto": "b"}]}
+    salida = reuniones_ia.con_nombres(pedazos, [], inicios={1: 0, 2: 400})
+    assert [(x["t"], x["quien"]) for x in salida] == [(0, "Hablante 1"), (402, "Hablante 1")]

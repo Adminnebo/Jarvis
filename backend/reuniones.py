@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import re
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
@@ -133,6 +134,12 @@ def recibir_evento(reunion_id: str, datos: dict) -> None:
     if tipo not in ESTADOS:
         return
     r = rd.obtener(reunion_id)
+    presencial = r.get("tipo") == "presencial"
+    if tipo == "terminado" and r["estado"] in ("procesando", "lista"):
+        # Llega tarde (la sacaron, o el aparato reintentó): no reabre ni cambia la hora.
+        if presencial and r["estado"] == "procesando":
+            rd.actualizar(reunion_id, linea=[])
+        return
     if tipo == "rechazado" and datos.get("motivo") == "cancelada":
         # Lo sacaron desde Jarvis mientras esperaba entrar: no es un rechazo.
         rd.actualizar(reunion_id, estado="cancelada", motivo="cancelada")
@@ -141,6 +148,8 @@ def recibir_evento(reunion_id: str, datos: dict) -> None:
     if tipo == "terminado":
         cambios.update(terminada=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                        incompleta=int(bool(datos.get("incompleta"))), motivo=datos.get("motivo"))
+        if presencial:
+            cambios["linea"] = []   # no hay mosaicos: nadie va a mandar hablantes
     elif tipo in ("rechazado", "fallo"):
         cambios["motivo"] = datos.get("motivo")
     elif tipo == "admitido" and not r.get("grabando_desde"):
@@ -153,16 +162,25 @@ def recibir_evento(reunion_id: str, datos: dict) -> None:
         _avisar(reunion_id, f"No pude entrar a «{r['titulo']}»: {motivo}.")
 
 
-def ruta_pedazo(reunion_id: str, n: int) -> Path:
+# Content-Type del pedazo → extensión. El bot manda ogg; Chrome/Android webm; Safari mp4.
+FORMATOS = {"audio/ogg": "ogg", "audio/webm": "webm", "audio/mp4": "mp4", "": "ogg"}
+
+
+def formato_de(content_type: str | None) -> str | None:
+    return FORMATOS.get((content_type or "").split(";")[0].strip().lower())
+
+
+def ruta_pedazo(reunion_id: str, n: int, formato: str = "ogg") -> Path:
     carpeta = Path(rutas.archivo(f"reuniones/{reunion_id}"))
     carpeta.mkdir(parents=True, exist_ok=True)
-    return carpeta / f"{n:05d}.ogg"
+    return carpeta / f"{n:05d}.{formato or 'ogg'}"
 
 
-def recibir_audio(reunion_id: str, n: int, datos: bytes) -> bool:
-    if not rd.guardar_pedazo(reunion_id, n):
+def recibir_audio(reunion_id: str, n: int, datos: bytes, formato: str = "ogg",
+                  inicio_s: int | None = None) -> bool:
+    if not rd.guardar_pedazo(reunion_id, n, formato, inicio_s):
         return False
-    ruta = ruta_pedazo(reunion_id, n)
+    ruta = ruta_pedazo(reunion_id, n, formato)
     tmp = ruta.with_suffix(".tmp")
     tmp.write_bytes(datos)
     tmp.replace(ruta)
@@ -217,7 +235,8 @@ def en_curso(usuario_id: str) -> list[dict]:
             except ValueError:
                 pass
         salida.append({"id": r["id"], "titulo": r["titulo"], "estado": r["estado"], "inicio": r["inicio"],
-                       "grabando_desde": r.get("grabando_desde"), "meet_url": r["meet_url"]})
+                       "grabando_desde": r.get("grabando_desde"), "meet_url": r["meet_url"],
+                       "tipo": r.get("tipo") or "meet"})
     return sorted(salida, key=lambda x: (ORDEN_EN_CURSO[x["estado"]], x["inicio"]))
 
 
@@ -229,6 +248,9 @@ def sacar(usuario_id: str, reunion_id: str) -> str:
         return "No encontré esa reunión."
     if r["estado"] not in rd.EN_CURSO:
         return f"El bot ya no está en «{r['titulo']}»."
+    if r.get("tipo") == "presencial":
+        rd.actualizar(reunion_id, estado="procesando", motivo="sacada", terminada=_ahora_iso())
+        return f"Listo, terminé la grabación de «{r['titulo']}». Se resume en unos minutos."
     try:
         bot_meet.cancelar(reunion_id)
     except bot_meet.ErrorBot as error:
@@ -238,3 +260,73 @@ def sacar(usuario_id: str, reunion_id: str) -> str:
         rd.actualizar(reunion_id, estado="cancelada")
         return f"Listo, el bot no va a entrar a «{r['titulo']}»."
     return f"Listo, saco al bot de «{r['titulo']}». Lo grabado hasta ahora se resume en unos minutos."
+
+
+# --------------------------------------------------------------------------
+# Presenciales: el aparato de la persona hace de bot (mismo token, mismas rutas)
+# --------------------------------------------------------------------------
+
+DURACION_PRESENCIAL = timedelta(hours=4)   # tope; el trabajador cierra las que se pasan
+
+
+def _ahora_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def crear_presencial(usuario_id: str, titulo: str = "") -> dict:
+    ahora = datetime.now(ZONA).replace(microsecond=0)
+    titulo = (titulo or "").strip()[:200] or f"Reunión presencial de las {ahora:%H:%M}"
+    r = rd.crear_o_obtener(f"presencial:{uuid.uuid4().hex}", "", titulo, ahora.isoformat(),
+                           (ahora + DURACION_PRESENCIAL).isoformat())
+    token = secrets.token_urlsafe(32)
+    rd.interesar(r["id"], usuario_id, True)
+    rd.actualizar(r["id"], tipo="presencial", estado="grabando", token_hash=_hash(token),
+                  grabando_desde=_ahora_iso())
+    return {"id": r["id"], "token": token, "titulo": titulo, "pedazo_s": 300,
+            "max_s": int(DURACION_PRESENCIAL.total_seconds())}
+
+
+# --------------------------------------------------------------------------
+# Nombres: en la base quedan las etiquetas; el mapa (IA + persona) se aplica al mostrar
+# --------------------------------------------------------------------------
+
+def _reemplazar(texto, mapa: dict):
+    if not texto or not mapa:
+        return texto
+    patron = re.compile("(?:" + "|".join(re.escape(k) for k in sorted(mapa, key=len, reverse=True)) + r")(?!\d)")
+    return patron.sub(lambda m: mapa[m.group(0)], texto)
+
+
+def con_nombres_puestos(r: dict) -> dict:
+    mapa = r.get("nombres") or {}
+    if not mapa:
+        return r
+    return {**r, "resumen": _reemplazar(r.get("resumen"), mapa),
+            "puntos": [_reemplazar(p, mapa) for p in r.get("puntos") or []],
+            "tareas": [{**t, "quien": _reemplazar(t.get("quien"), mapa), "que": _reemplazar(t.get("que"), mapa)}
+                       for t in r.get("tareas") or []],
+            "transcripcion": [{**x, "quien": mapa.get(x["quien"], x["quien"])} for x in r.get("transcripcion") or []]}
+
+
+def etiquetas(r: dict) -> list[str]:
+    vistas = []
+    for x in r.get("transcripcion") or []:
+        if x["quien"] not in vistas:
+            vistas.append(x["quien"])
+    return vistas
+
+
+def renombrar(usuario_id: str, reunion_id: str, de: str, a: str) -> str | None:
+    """None si quedó; si no, el motivo ('no_existe' o 'etiqueta')."""
+    r = rd.obtener(reunion_id)
+    if r is None or not rd.puede_ver(reunion_id, usuario_id):
+        return "no_existe"
+    if de not in etiquetas(r):
+        return "etiqueta"
+    mapa = dict(r.get("nombres") or {})
+    if a.strip():
+        mapa[de] = a.strip()[:60]
+    else:
+        mapa.pop(de, None)
+    rd.actualizar(reunion_id, nombres=mapa)
+    return None

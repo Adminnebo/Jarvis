@@ -717,13 +717,28 @@ llega por WhatsApp. Jarvis las consulta con `buscar_reuniones`.
 - **Costo:** la transcripción con hablantes (`gpt-4o-transcribe-diarize`)
   cobra por tokens: unos $0.06 cada 5 minutos (~$0.75 la hora), más el resumen.
   Se anota en Consumo como `transcripcion`, dispositivo `reuniones`.
-- **Nombres:** mientras el bot no esté calibrado para leer quién habla en Meet,
-  las voces salen como «Participante A/B…»; el resumen usa el nombre real si se
-  dice en la conversación.
+- **Nombres:** el bot lee quién habla en los mosaicos de Meet. Las voces que
+  quedan sin nombre («Participante A», «Hablante 2») se pueden tocar en el
+  detalle para ponérselo; la IA ya propone los que se dicen en la conversación.
+  En la base quedan las etiquetas y el mapa `nombres` se aplica al mostrar.
+
+### Reuniones presenciales
+
+En Reuniones, **Grabar reunión presencial**: el teléfono o la computadora hacen
+de bot. Jarvis crea la reunión con un token de subida y el aparato manda pedazos
+de 5 minutos a las mismas rutas del bot (`grabadora.js`: un `MediaRecorder` por
+pedazo, cola en IndexedDB si se cae la red). En el navegador la pantalla tiene
+que quedar prendida (si se bloquea, se pausa y sigue al volver); el APK de
+Android (`movil/`) graba con la pantalla apagada. Tope de 4 horas.
+
+Las voces se reconocen pedazo a pedazo en orden: del primero en que aparece cada
+una se recorta un trozo con ffmpeg (`reuniones_voces.py`) y se le pasa al modelo
+como voz conocida en los siguientes, para que «Hablante 2» siga siendo el mismo
+(hasta 4 voces). Ver `docs/superpowers/specs/2026-11-26-reuniones-presenciales-design.md`.
 
 | Variable | |
 |---|---|
-| `BOT_MEET_URL` | `https://bot-meet.neboaiconsulting.com`. Sin ella (o sin el secreto) todo esto queda apagado |
+| `BOT_MEET_URL` | `https://bot-meet.neboaiconsulting.com`. Sin ella (o sin el secreto) el bot queda apagado; las presenciales siguen |
 | `BOT_MEET_SECRETO` | El mismo de `/opt/bot-meet/bot.env` en el EC2 del bot |
 | `JARVIS_MODELO_REUNIONES` | Opcional: modelo de transcripción (por defecto `gpt-4o-transcribe-diarize`) |
 | `JARVIS_MODELO_RESUMEN_REUNIONES` | Opcional: modelo del resumen (por defecto `OPENAI_MODEL`) |

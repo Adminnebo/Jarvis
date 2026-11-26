@@ -300,7 +300,9 @@ _ESQUEMA = """
         incompleta INTEGER NOT NULL DEFAULT 0,
         audio_borrado INTEGER NOT NULL DEFAULT 0,
         creada TEXT NOT NULL,
-        grabando_desde TEXT
+        grabando_desde TEXT,
+        tipo TEXT,
+        nombres TEXT
     );
 
     CREATE TABLE IF NOT EXISTS reunion_interesados (
@@ -316,6 +318,8 @@ _ESQUEMA = """
         estado TEXT NOT NULL,
         intentos INTEGER NOT NULL DEFAULT 0,
         segmentos TEXT,
+        formato TEXT,
+        inicio_s INTEGER,
         PRIMARY KEY (reunion_id, n)
     );
 
@@ -330,6 +334,10 @@ _ESQUEMA = """
 # las agrega a una base que ya existía, así que se agregan aquí una sola vez.
 _COLUMNAS_NUEVAS = (
     ("reuniones", "grabando_desde", "TEXT"),   # cuándo entró el bot (para "lleva 12 min")
+    ("reuniones", "tipo", "TEXT"),             # NULL = Meet; 'presencial'
+    ("reuniones", "nombres", "TEXT"),          # JSON {"Hablante 1": "Jorge"} (IA + persona)
+    ("reunion_pedazos", "formato", "TEXT"),    # ogg / webm / mp4 (NULL = ogg, el del bot)
+    ("reunion_pedazos", "inicio_s", "INTEGER"),  # segundo de la reunión en que empieza
 )
 
 

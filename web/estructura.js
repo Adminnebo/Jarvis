@@ -52,7 +52,7 @@ function ir(id, { empujar = true } = {}) {
     const marco = document.createElement("iframe");
     marco.src = vista.src();
     marco.title = vista.nombre;
-    marco.allow = "microphone; camera; autoplay; clipboard-read; clipboard-write; fullscreen";
+    marco.allow = "microphone; camera; autoplay; clipboard-read; clipboard-write; fullscreen; screen-wake-lock";
     $("vistas").appendChild(marco);
     estado.marcos.set(vista.id, marco);
     if (vista.id === "jarvis" && location.search) history.replaceState(null, "", "/" + location.hash);
@@ -440,7 +440,7 @@ async function arrancar() {
       marco.src = v.src();
       marco.title = v.nombre;
       marco.classList.add("oculta");
-      marco.allow = "microphone; camera; autoplay; clipboard-read; clipboard-write; fullscreen";
+      marco.allow = "microphone; camera; autoplay; clipboard-read; clipboard-write; fullscreen; screen-wake-lock";
       $("vistas").appendChild(marco);
       estado.marcos.set(v.id, marco);
     }
