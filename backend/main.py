@@ -415,6 +415,12 @@ class PeticionDeSala(BaseModel):
     panel: str = ""                 # el panel de JH de su area (paneles_jh.PANELES), para consultar_panel
 
 
+class PeticionDeVozSala(BaseModel):
+    texto: str
+    voz: str = "alloy"              # una de sala_voz.VOCES: cada agente de la oficina tiene la suya
+    instrucciones: str = ""
+
+
 class PeticionDeChat(BaseModel):
     mensaje: str
     # El cliente puede pedir respuestas cortas para su pantalla. Va aparte del
@@ -571,6 +577,27 @@ def sala(peticion_http: Request, peticion: PeticionDeSala):
     if not texto.strip():
         return JSONResponse(status_code=502, content={"error": errores[0] if errores else "No hubo respuesta."})
     return {"texto": texto.strip(), "herramientas": herramientas}
+
+
+@app.post("/api/sala/voz")
+def voz_de_sala(peticion_http: Request, peticion: PeticionDeVozSala):
+    """La voz natural de un agente de la oficina 3D: MP3 del TTS de OpenAI, anotado como "oficina"."""
+    from . import sala_voz
+
+    texto = " ".join((peticion.texto or "").split())[:1200]
+    if not texto:
+        return JSONResponse(status_code=400, content={"error": "Falta el texto."})
+    try:
+        mp3, uso = sala_voz.sintetizar(texto, peticion.voz, cerebro.clave_openai(), peticion.instrucciones)
+    except Exception as error:  # noqa: BLE001 - sin clave, cuota, red: la oficina cae en la voz del navegador
+        print(f"[sala/voz] {error}")
+        return JSONResponse(status_code=502, content={"error": str(error)[:300]})
+    if uso:
+        try:
+            consumo.registrar("tts", sala_voz.MODELO, uso, usuario=peticion_http.state.usuario, dispositivo="oficina")
+        except Exception as error:  # noqa: BLE001
+            print(f"[sala/voz] no se anoto el consumo: {error}")
+    return Response(content=mp3, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/chat")
