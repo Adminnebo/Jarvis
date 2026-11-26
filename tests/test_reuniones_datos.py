@@ -77,3 +77,36 @@ def test_buscar_texto_solo_las_suyas():
     rd.actualizar(r["id"], estado="lista", resumen="Se habló del precio del alambre")
     assert [x["id"] for x in rd.buscar_texto("u1", "alambre")] == [r["id"]]
     assert rd.buscar_texto("u2", "alambre") == []
+
+
+def test_pedazo_guarda_formato_e_inicio():
+    r = rd.crear_o_obtener("presencial:t1", "", "En persona", INI, FIN)
+    assert rd.guardar_pedazo(r["id"], 1, "webm", 0)
+    assert rd.guardar_pedazo(r["id"], 2, "webm", 312)
+    assert not rd.guardar_pedazo(r["id"], 2, "webm", 312)   # repetido
+    assert [(p["n"], p["formato"], p["inicio_s"]) for p in rd.pedazos(r["id"])] == [(1, "webm", 0), (2, "webm", 312)]
+    rd.actualizar(r["id"], tipo="presencial", nombres={"Hablante 1": "Jorge"})
+    x = rd.obtener(r["id"])
+    assert x["tipo"] == "presencial" and x["nombres"] == {"Hablante 1": "Jorge"}
+
+
+def test_columnas_de_presenciales_en_una_base_vieja():
+    import sqlite3
+    from backend import basedatos
+    ruta = basedatos.archivo()
+    basedatos._preparadas.discard(str(ruta))
+    ruta.unlink(missing_ok=True)
+    con = sqlite3.connect(ruta)
+    con.execute("CREATE TABLE reuniones (id TEXT PRIMARY KEY, clave TEXT NOT NULL UNIQUE, meet_url TEXT NOT NULL, "
+                "titulo TEXT NOT NULL, inicio TEXT NOT NULL, fin TEXT NOT NULL, estado TEXT NOT NULL, motivo TEXT, "
+                "token_hash TEXT, linea TEXT, transcripcion TEXT, resumen TEXT, puntos TEXT, tareas TEXT, "
+                "duracion_s INTEGER, terminada TEXT, incompleta INTEGER NOT NULL DEFAULT 0, "
+                "audio_borrado INTEGER NOT NULL DEFAULT 0, creada TEXT NOT NULL)")
+    con.execute("CREATE TABLE reunion_pedazos (reunion_id TEXT NOT NULL, n INTEGER NOT NULL, estado TEXT NOT NULL, "
+                "intentos INTEGER NOT NULL DEFAULT 0, segmentos TEXT, PRIMARY KEY (reunion_id, n))")
+    con.commit()
+    con.close()
+    with basedatos.conexion() as c:
+        cols = {f[1] for f in c.execute("PRAGMA table_info(reuniones)")}
+        cols_p = {f[1] for f in c.execute("PRAGMA table_info(reunion_pedazos)")}
+    assert {"tipo", "nombres", "grabando_desde"} <= cols and {"formato", "inicio_s"} <= cols_p
