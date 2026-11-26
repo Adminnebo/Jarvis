@@ -229,6 +229,8 @@ def _texto_whatsapp(aviso: dict) -> str:
         enlace = aviso["asunto"] if (aviso["asunto"] or "").startswith("http") else ""
         video = "Meet" if "meet.google" in enlace else "Teams"
         return f"📅 {aviso['resumen']}" + (f"\n{video}: {enlace}" if enlace else "")
+    if aviso["tipo"] == "sala":
+        return f"🎙️ {aviso['resumen']}\nEntrar: {aviso['asunto']}"
     if aviso["tipo"] == "reunion-lista":
         return f"📝 {aviso['resumen']}\nCompleta: {aviso['asunto']}"
     remitente = (aviso["remitente"] or "").split("<")[0].split(" (+")[0].strip().strip('"') or aviso["remitente"]

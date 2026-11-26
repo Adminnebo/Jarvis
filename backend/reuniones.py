@@ -273,17 +273,26 @@ def _ahora_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def crear_presencial(usuario_id: str, titulo: str = "") -> dict:
+def crear_presencial(usuario_id: str, titulo: str = "", sala: bool = False, nombre: str = "") -> dict:
+    """sala: además, una sala donde cada participante entra con su teléfono (salas.py);
+    quien organiza es el primer participante y su teléfono también manda niveles."""
+    from . import salas
     ahora = datetime.now(ZONA).replace(microsecond=0)
     titulo = (titulo or "").strip()[:200] or f"Reunión presencial de las {ahora:%H:%M}"
     r = rd.crear_o_obtener(f"presencial:{uuid.uuid4().hex}", "", titulo, ahora.isoformat(),
                            (ahora + DURACION_PRESENCIAL).isoformat())
     token = secrets.token_urlsafe(32)
     rd.interesar(r["id"], usuario_id, True)
+    codigo = salas.nuevo_codigo() if sala else None
     rd.actualizar(r["id"], tipo="presencial", estado="grabando", token_hash=_hash(token),
-                  grabando_desde=_ahora_iso())
-    return {"id": r["id"], "token": token, "titulo": titulo, "pedazo_s": 300,
-            "max_s": int(DURACION_PRESENCIAL.total_seconds())}
+                  grabando_desde=_ahora_iso(), sala=codigo)
+    salida = {"id": r["id"], "token": token, "titulo": titulo, "pedazo_s": 300,
+              "max_s": int(DURACION_PRESENCIAL.total_seconds())}
+    if codigo:
+        yo = salas.agregar(r["id"], (nombre or "Quien organiza").strip()[:60], usuario_id)
+        salida.update(sala=codigo, link=salas.link(codigo), participante=yo["participante"],
+                      participante_token=yo["token"], ahora_ms=yo["ahora_ms"])
+    return salida
 
 
 # --------------------------------------------------------------------------

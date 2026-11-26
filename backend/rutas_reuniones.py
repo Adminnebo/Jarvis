@@ -137,11 +137,13 @@ def guardar_preferencias(peticion: Request, datos: Preferencias):
 
 class Presencial(BaseModel):
     titulo: str = ""
+    sala: bool = False   # cada participante entra con su teléfono (salas.py)
 
 
 @router.post("/api/reuniones/presencial")
 def presencial(peticion: Request, datos: Presencial):
-    return reuniones.crear_presencial(peticion.state.usuario.id, datos.titulo)
+    u = peticion.state.usuario
+    return reuniones.crear_presencial(u.id, datos.titulo, sala=datos.sala, nombre=u.nombre)
 
 
 class Link(BaseModel):

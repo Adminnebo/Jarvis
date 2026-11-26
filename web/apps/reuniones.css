@@ -81,7 +81,12 @@ body.embebido { --k-barra: 0px; }
 /* ---------------------------------------------------------------- presencial */
 .presencial [hidden] { display: none !important; }
 .presencial { padding: 14px 12px 12px; border-bottom: 1px solid var(--k-linea); }
-.boton-grabar { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 10px;
+.presencial-botones { display: flex; gap: 8px; }
+.boton-sala { flex: none; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--k-linea);
+  font-weight: 500; }
+.boton-sala:hover:not(:disabled) { background: var(--k-hover); }
+.boton-sala:disabled { opacity: .5; cursor: default; }
+.boton-grabar { flex: 1; min-width: 0; width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 10px;
   border-radius: 10px; border: 1px solid #5f2b2b; color: #f6aea9; background: #2a1f1f; font-weight: 500; }
 .boton-grabar:hover:not(:disabled) { background: #3a2323; }
 .boton-grabar:disabled { opacity: .5; cursor: default; }
@@ -141,3 +146,25 @@ body.embebido { --k-barra: 0px; }
   font-size: 20px; color: var(--k-tenue); }
 .calibrar .cerrar:hover { background: var(--k-hover); }
 @media (prefers-reduced-motion: reduce) { .calibrar .nivel span { transition: none; } }
+
+/* ---------------------------------------------------------------- sala */
+.sala-caja { margin: 0 0 14px; padding: 12px; border-radius: 10px; background: var(--k-fondo); text-align: center; }
+.sala-caja img { display: block; width: 168px; height: 168px; margin: 0 auto 10px; border-radius: 8px; background: #fff; }
+.sala-link { display: flex; gap: 6px; margin: 0 0 8px; }
+.sala-link input { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; color: var(--k-texto); background: var(--k-panel);
+  border: 1px solid var(--k-linea); border-radius: 8px; padding: 7px 9px; }
+.sala-link button, .presencial-grabando .sala-invitar { min-height: 34px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid var(--k-linea); background: transparent; color: var(--k-texto); font-weight: 500; }
+.presencial-grabando .sala-invitar { width: 100%; margin: 0 0 10px; }
+.sala-titulo { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--k-tenue); }
+.sala-gente { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 0; padding: 0; list-style: none; }
+.sala-gente li { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--k-linea); font-size: 12.5px; color: var(--k-tenue); }
+.sala-gente li.conectado { color: var(--k-texto); border-color: #2f5a3d; }
+.sala-gente li.conectado::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px;
+  border-radius: 50%; background: #81c995; vertical-align: 1px; }
+.invitar-lista { max-height: 50vh; overflow-y: auto; margin: 0 0 8px; padding: 0; list-style: none; }
+.invitar-lista li { border-bottom: 1px solid var(--k-linea); }
+.invitar-lista label { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 2px; color: var(--k-texto);
+  font-size: 15px; cursor: pointer; }
+.invitar-lista input { display: inline-block; width: 18px; height: 18px; margin: 0; }
+.invitar-lista .vacio { padding: 10px 2px; color: var(--k-tenue); font-size: 13px; }

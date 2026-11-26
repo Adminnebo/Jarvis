@@ -734,7 +734,20 @@ Android (`movil/`) graba con la pantalla apagada. Tope de 4 horas.
 Las voces se reconocen pedazo a pedazo en orden: del primero en que aparece cada
 una se recorta un trozo con ffmpeg (`reuniones_voces.py`) y se le pasa al modelo
 como voz conocida en los siguientes, para que «Hablante 2» siga siendo el mismo
-(hasta 4 voces). Ver `docs/superpowers/specs/2026-11-26-reuniones-presenciales-design.md`.
+(hasta 4 voces).
+
+**Con nombres:**
+
+- **Calibración (un teléfono):** antes de grabar se dice cuántas personas son y
+  cada una lee una frase (6 s); la muestra queda como voz conocida con su nombre
+  (`POST /api/reuniones/{id}/voces`). Con más de 4 voces cada pedazo se transcribe
+  una vez por grupo de hasta 4 y se une (cuesta una transcripción por grupo).
+- **Sala (cada uno con su teléfono):** «Crear sala» muestra un QR y un link
+  (`/sala/<codigo>`, entran invitados sin cuenta) e «Invitar del equipo» (aviso en
+  Jarvis + WhatsApp). Solo el teléfono de quien organiza graba audio; los demás
+  mandan cuánto oye su micrófono (`salas.py`, `web/apps/niveles.js`) y el que más
+  oye en cada segundo dice quién habla: la misma `linea` que usa el bot de Meet.
+  Los del equipo que entran reciben el resumen; los invitados externos no. Ver `docs/superpowers/specs/2026-11-26-reuniones-presenciales-design.md`.
 
 | Variable | |
 |---|---|

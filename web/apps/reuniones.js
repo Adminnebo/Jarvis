@@ -147,15 +147,120 @@ async function abrir(id) {
 const NOTA = {
   web: "Deja la pantalla prendida y Jarvis abierto: si bloqueas el teléfono, la grabación se pausa.",
   nativo: "Puedes bloquear el teléfono: sigue grabando (lo ves en la notificación).",
+  sala: "Este teléfono graba el audio: deja la pantalla prendida. Los demás entran con el QR o el link.",
 };
 
+// ---------------------------------------------------------------- sala
+// Cada participante entra con su teléfono (link/QR o invitación): así se sabe quién habla.
+let salaPintada = null;
+function pintarSala(e) {
+  const caja = $("sala-caja");
+  caja.hidden = !e.sala;
+  if (!e.sala) { salaPintada = null; return; }
+  if (salaPintada === e.id) return;
+  salaPintada = e.id;
+  $("sala-qr").src = `/api/reuniones/${encodeURIComponent(e.id)}/sala/qr.svg`;
+  $("sala-link").value = e.sala.link;
+  cargarGenteSala();
+}
+
+async function cargarGenteSala() {
+  const e = grabadora.estado();
+  if (!e.sala) return;
+  try {
+    const r = await fetch(`/api/reuniones/${encodeURIComponent(e.id)}/sala`);
+    if (!r.ok) return;
+    const { participantes } = await r.json();
+    const ul = $("sala-gente");
+    ul.replaceChildren();
+    for (const p of participantes) {
+      const li = document.createElement("li");
+      const conectado = p.visto_hace_s !== null && p.visto_hace_s < 15;
+      li.className = conectado ? "conectado" : "";
+      li.textContent = p.nombre;
+      li.title = conectado ? "Conectado" : "Sin señal hace un rato (¿se bloqueó su pantalla?)";
+      ul.append(li);
+    }
+  } catch { /* sin red: en la próxima vuelta */ }
+}
+
+function prepararSala() {
+  $("presencial-sala").addEventListener("click", async () => {
+    const titulo = prompt("¿Cómo se llama la reunión? (opcional)", "");
+    if (titulo === null) return;
+    const boton = $("presencial-sala");
+    boton.disabled = true;
+    $("presencial-mensaje").textContent = "Pidiendo el micrófono…";
+    try {
+      await grabadora.empezar(titulo, { sala: true });
+      $("presencial-mensaje").textContent = "";
+      cargarEnCurso();
+    } catch (error) {
+      $("presencial-mensaje").textContent = mensajeMicrofono(error);
+    } finally {
+      boton.disabled = !grabadora.puedeGrabar();
+    }
+  });
+  $("sala-copiar").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("sala-link").value); $("sala-copiar").textContent = "Copiado"; }
+    catch { $("sala-link").select(); }
+    setTimeout(() => { $("sala-copiar").textContent = "Copiar"; }, 2000);
+  });
+  $("sala-invitar").addEventListener("click", async () => {
+    const d = $("invitar");
+    const lista = $("invitar-lista");
+    lista.innerHTML = '<li class="vacio">Cargando…</li>';
+    $("invitar-mensaje").textContent = "";
+    $("invitar-mandar").disabled = false;
+    d.showModal();
+    try {
+      const { equipo } = await (await fetch("/api/reuniones/equipo")).json();
+      lista.replaceChildren();
+      if (!equipo.length) lista.innerHTML = '<li class="vacio">No encontré a nadie más del equipo que use Jarvis. Comparte el link.</li>';
+      for (const p of equipo) {
+        const li = document.createElement("li");
+        const label = document.createElement("label");
+        const caja = document.createElement("input");
+        caja.type = "checkbox";
+        caja.value = p.id;
+        label.append(caja, document.createTextNode(` ${p.nombre}`));
+        li.append(label);
+        lista.append(li);
+      }
+    } catch {
+      lista.innerHTML = '<li class="vacio">No pude cargar el equipo.</li>';
+    }
+  });
+  $("invitar-cancelar").addEventListener("click", () => $("invitar").close());
+  $("invitar-mandar").addEventListener("click", async () => {
+    const usuarios = [...$("invitar-lista").querySelectorAll("input:checked")].map((c) => c.value);
+    if (!usuarios.length) { $("invitar-mensaje").textContent = "Elige al menos a una persona."; return; }
+    $("invitar-mandar").disabled = true;
+    const e = grabadora.estado();
+    try {
+      const r = await fetch(`/api/reuniones/${encodeURIComponent(e.id)}/invitar`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ usuarios }) });
+      const { enviadas = 0 } = r.ok ? await r.json() : {};
+      $("invitar-mensaje").textContent = enviadas ? `Listo: ${enviadas === 1 ? "invitación enviada" : `${enviadas} invitaciones enviadas`}.`
+        : "No se pudo mandar. ¿Ya los habías invitado?";
+      if (enviadas) setTimeout(() => $("invitar").close(), 1500);
+    } catch {
+      $("invitar-mensaje").textContent = "No se pudo mandar, inténtalo otra vez.";
+    } finally {
+      $("invitar-mandar").disabled = false;
+    }
+  });
+  setInterval(cargarGenteSala, 5000);
+}
+
 function pintarPresencial(e = grabadora.estado()) {
-  $("presencial-empezar").hidden = e.grabando;
+  $("presencial-botones").hidden = e.grabando;
   $("presencial-grabando").hidden = !e.grabando;
+  pintarSala(e);
   if (!e.grabando) return;
   $("presencial-titulo").textContent = e.titulo;
   $("presencial-reloj").textContent = desde(new Date(Date.now() - e.segundos * 1000).toISOString());
-  $("presencial-nota").textContent = (e.nativo ? NOTA.nativo : NOTA.web)
+  $("presencial-nota").textContent = (e.sala ? NOTA.sala : e.nativo ? NOTA.nativo : NOTA.web)
     + (e.pausaS ? ` Estuvo en pausa ${Math.max(1, Math.round(e.pausaS / 60))} min.` : "");
 }
 
@@ -270,8 +375,10 @@ function calibrar() {
 }
 
 function prepararPresencial() {
+  prepararSala();
   if (!grabadora.puedeGrabar()) {
     $("presencial-empezar").disabled = true;
+    $("presencial-sala").disabled = true;
     $("presencial-mensaje").textContent = "Este navegador no puede grabar audio.";
   }
   $("presencial-empezar").addEventListener("click", async () => {

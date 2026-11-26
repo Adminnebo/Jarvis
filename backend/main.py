@@ -60,6 +60,7 @@ from . import (  # noqa: E402 - despues de load_dotenv a proposito
     rutas_apps_whatsapp,
     rutas_estructura,
     rutas_reuniones,
+    rutas_salas,
     reuniones_trabajo,
     paneles_jh,
     supabase_sesion,
@@ -76,6 +77,7 @@ app.include_router(rutas_apps_whatsapp.router)   # /apps/whatsapp (rutas_apps_wh
 app.include_router(rutas_apps_correo.router)     # /apps/correo (rutas_apps_correo.py)
 app.include_router(rutas_apps_calendario.router) # /apps/calendario (rutas_apps_calendario.py)
 app.include_router(rutas_estructura.router)      # /api/apps/resumen (rutas_estructura.py)
+app.include_router(rutas_salas.router)           # /sala/<codigo> y su API (rutas_salas.py); antes que /api/reuniones/{id}
 app.include_router(rutas_reuniones.router)       # /apps/reuniones y el bot de Meet (rutas_reuniones.py)
 
 

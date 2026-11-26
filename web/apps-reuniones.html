@@ -18,14 +18,29 @@
   <main class="reuniones">
     <div class="columna">
       <section id="presencial" class="presencial" aria-label="Grabar una reunión en persona">
-        <button id="presencial-empezar" type="button" class="boton-grabar">
-          <span class="punto" aria-hidden="true"></span> Grabar reunión presencial
-        </button>
+        <div class="presencial-botones" id="presencial-botones">
+          <button id="presencial-empezar" type="button" class="boton-grabar">
+            <span class="punto" aria-hidden="true"></span> Grabar en persona
+          </button>
+          <button id="presencial-sala" type="button" class="boton-sala" title="Cada uno entra con su teléfono: así se sabe quién habla">
+            Crear sala
+          </button>
+        </div>
         <div id="presencial-grabando" class="presencial-grabando" hidden>
           <p class="presencial-titulo" id="presencial-titulo"></p>
           <p class="reloj" id="presencial-reloj">00:00</p>
           <div class="nivel" aria-hidden="true"><span id="presencial-nivel"></span></div>
           <p class="nota" id="presencial-nota"></p>
+          <div class="sala-caja" id="sala-caja" hidden>
+            <img id="sala-qr" alt="QR para entrar a la sala" width="168" height="168">
+            <div class="sala-link">
+              <input id="sala-link" readonly aria-label="Link de la sala">
+              <button type="button" id="sala-copiar">Copiar</button>
+            </div>
+            <button type="button" id="sala-invitar" class="sala-invitar">Invitar del equipo</button>
+            <p class="sala-titulo">En la sala</p>
+            <ul id="sala-gente" class="sala-gente"></ul>
+          </div>
           <button id="presencial-terminar" type="button">Terminar</button>
         </div>
         <p class="mensaje" id="presencial-mensaje" role="status"></p>
@@ -43,6 +58,18 @@
     </div>
     <section id="detalle" aria-live="polite"><p class="vacio">Elige una reunión.</p></section>
   </main>
+  <dialog id="invitar" class="calibrar" aria-labelledby="invitar-titulo">
+    <form method="dialog">
+      <h2 id="invitar-titulo">Invitar del equipo</h2>
+      <p class="nota">Les llega un aviso en Jarvis y por WhatsApp con el link. Cuando entran, también reciben el resumen.</p>
+      <ul id="invitar-lista" class="invitar-lista"></ul>
+      <p class="mensaje" id="invitar-mensaje" role="status"></p>
+      <div class="botones">
+        <button type="button" id="invitar-cancelar" class="secundario">Cerrar</button>
+        <button type="button" id="invitar-mandar" class="primario">Mandar invitación</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="calibrar" class="calibrar" aria-labelledby="calibrar-titulo">
     <form method="dialog" id="calibrar-form">
       <h2 id="calibrar-titulo">¿Quién va a hablar?</h2>
