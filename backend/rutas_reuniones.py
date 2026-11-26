@@ -57,6 +57,28 @@ async def bot_audio(reunion_id: str, n: int, peticion: Request, inicio_s: int | 
     return {"ok": True, "parar": estado not in ("grabando", "esperando")}
 
 
+MOTIVOS_MUESTRA = {"nombre": "Falta el nombre.", "repetido": "Ese nombre ya está.",
+                   "muchas": "Son 10 personas como mucho.", "audio": "No pude leer la grabación, repítela."}
+
+
+@router.post("/api/reuniones/{reunion_id}/voces")
+async def voces(reunion_id: str, nombre: str, peticion: Request):
+    """La muestra de voz de una persona (calibración de una presencial)."""
+    from . import reuniones_voces
+    if (fallo := _bot(peticion, reunion_id)) is not None:
+        return fallo
+    formato = reuniones.formato_de(peticion.headers.get("content-type"))
+    if formato is None:
+        return JSONResponse(status_code=415, content={"error": "formato"})
+    datos = await peticion.body()
+    if len(datos) > MAX_AUDIO:
+        return JSONResponse(status_code=413, content={"error": "grande"})
+    motivo = reuniones_voces.guardar_muestra(reunion_id, nombre, datos, formato)
+    if motivo:
+        return JSONResponse(status_code=400, content={"error": MOTIVOS_MUESTRA[motivo]})
+    return {"ok": True, "voces": reuniones_voces.conocidas(reunion_id)}
+
+
 @router.post("/api/reuniones/{reunion_id}/hablantes")
 async def bot_hablantes(reunion_id: str, peticion: Request):
     if (fallo := _bot(peticion, reunion_id)) is not None:
