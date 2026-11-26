@@ -41,7 +41,13 @@ def transcribir_pendientes() -> None:
             continue
         try:
             voces = reuniones_voces.cargar(reunion_id) if presencial else None
-            segmentos = reuniones_ia.transcribir(ruta, _usuario(reunion_id), voces=voces)
+            if voces and len(voces) > reuniones_voces.MAX_VOCES:
+                # El modelo acepta 4 voces conocidas por llamada: una por grupo, y se unen.
+                llamadas = [reuniones_ia.transcribir(ruta, _usuario(reunion_id), voces=g)
+                            for g in reuniones_voces.grupos(voces)]
+                segmentos = reuniones_voces.unir(llamadas, {n for n, _ in voces})
+            else:
+                segmentos = reuniones_ia.transcribir(ruta, _usuario(reunion_id), voces=voces)
             if presencial:
                 segmentos = reuniones_voces.unificar(reunion_id, ruta, segmentos)
             almacen_reuniones.subir(reunion_id, n, ruta.read_bytes(), formato)
@@ -146,8 +152,11 @@ def cada() -> int:
 
 def arrancar() -> None:
     if not bot_meet.configurado():
-        # Las presenciales no necesitan el bot: el trabajador corre igual.
         print("\n  AVISO: el bot de reuniones está apagado (faltan BOT_MEET_URL o BOT_MEET_SECRETO).\n")
+    # Las presenciales no necesitan el bot, pero sí con qué transcribir. (Sin la clave
+    # tampoco arranca en las pruebas, donde un hilo suelto procesaría reuniones ajenas.)
+    if not (bot_meet.configurado() or os.getenv("OPENAI_API_KEY", "").strip()):
+        return
 
     def vigilar() -> None:
         ultimo_borrado = 0.0

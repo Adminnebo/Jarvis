@@ -125,3 +125,24 @@ def test_cerrar_presencial_guarda_nombres_y_duracion(todo, monkeypatch):
     r = rd.obtener(x["id"])
     assert r["estado"] == "lista" and r["duracion_s"] == 750 and r["nombres"] == {"Hablante 1": "Jorge"}
     assert r["transcripcion"][0]["quien"] == "Hablante 1"   # en la base, la etiqueta
+
+
+def test_con_mas_de_cuatro_voces_transcribe_por_grupos(todo, monkeypatch):
+    from backend import reuniones_voces
+    monkeypatch.setattr(reuniones_voces, "recortar", lambda o, i, f, d: d.write_bytes(b"WAV") or True)
+    pedidos = []
+
+    def transcribir(ruta, usuario, voces=None):
+        pedidos.append([n for n, _ in voces])
+        if "Eva" in pedidos[-1]:
+            return [{"inicio": 0, "fin": 3, "hablante": "Eva", "texto": "x"}]
+        return [{"inicio": 0, "fin": 3, "hablante": "A", "texto": "hola"}]
+    monkeypatch.setattr(reuniones_ia, "transcribir", transcribir)
+    x = reuniones.crear_presencial("u1", "Muchos")
+    for n in ["Ana", "Beto", "Caro", "Dani", "Eva", "Fede"]:
+        assert reuniones_voces.guardar_muestra(x["id"], n, b"W", "webm") is None
+    reuniones.recibir_audio(x["id"], 1, b"W", "webm", 0)
+    reuniones_trabajo.transcribir_pendientes()
+    assert pedidos == [["Ana", "Beto", "Caro"], ["Dani", "Eva", "Fede"]]
+    (p,) = rd.pedazos(x["id"])
+    assert p["segmentos"][0]["hablante"] == "Eva" and p["segmentos"][0]["texto"] == "hola"
