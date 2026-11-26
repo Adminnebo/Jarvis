@@ -26,7 +26,7 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
     try:
         subidor.evento("esperando")
         subidor.vaciar()
-        r = meet.unirse(sesion.meet_url, espera_admision_s)
+        r = meet.unirse(sesion.meet_url, espera_admision_s, debe_parar)
         if r.estado == "rechazado":
             subidor.evento("rechazado", motivo=r.motivo)
             subidor.vaciar()
@@ -82,7 +82,7 @@ def ejecutar_sesion(sesion, meet, grabador, subidor, debe_parar,
                 _pasar_pedazos(grabador, subidor, todos=True)
                 if not reintento_usado:
                     reintento_usado = True
-                    otra = meet.unirse(sesion.meet_url, espera_admision_s)
+                    otra = meet.unirse(sesion.meet_url, espera_admision_s, debe_parar)
                     _log(sesion, f"reintento: {otra.estado} {otra.motivo}")
                     if otra.estado == "admitido":
                         grabador.iniciar()

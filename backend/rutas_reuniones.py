@@ -75,6 +75,17 @@ def lista(peticion: Request):
     return {"reuniones": [_publica(r) for r in rd.listar_de(peticion.state.usuario.id)]}
 
 
+@router.get("/api/reuniones/en-curso")
+def en_curso(peticion: Request):
+    """Lo que el bot tiene agendado, esperando entrar o grabando, de quien pregunta."""
+    return {"reuniones": reuniones.en_curso(peticion.state.usuario.id)}
+
+
+@router.post("/api/reuniones/{reunion_id}/sacar")
+def sacar(reunion_id: str, peticion: Request):
+    return {"mensaje": reuniones.sacar(peticion.state.usuario.id, reunion_id)}
+
+
 @router.get("/api/reuniones/preferencias")
 def ver_preferencias(peticion: Request):
     # disponible: sin bot configurado, Integraciones no muestra el interruptor.

@@ -30,7 +30,7 @@ class MeetFalso:
         self.chat, self.salio, self.cerrado, self.capturas = [], False, False, []
         self.reloj = None
 
-    def unirse(self, url, espera_s):
+    def unirse(self, url, espera_s, debe_parar=None):
         return self.entradas.pop(0)
 
     def solo_audio(self):

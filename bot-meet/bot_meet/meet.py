@@ -87,7 +87,7 @@ class MeetPlaywright:
         return bool(salir.count()) and salir.first.is_visible()
 
     # --- entrar --------------------------------------------------------
-    def unirse(self, url: str, espera_s: int) -> ResultadoEntrada:
+    def unirse(self, url: str, espera_s: int, debe_parar=None) -> ResultadoEntrada:
         if not self._viva():
             self.cerrar()
             self._abrir()
@@ -113,6 +113,8 @@ class MeetPlaywright:
                 rechazo = p.get_by_text(S.TEXTO_RECHAZADO)
                 if rechazo.count() and rechazo.first.is_visible():  # get_by_text cuenta lo oculto
                     return ResultadoEntrada("rechazado", "rechazado")
+                if debe_parar is not None and debe_parar():   # lo sacaron desde Jarvis
+                    return ResultadoEntrada("rechazado", "cancelada")
                 if time.monotonic() >= limite:
                     self.captura("sin-admision")
                     return ResultadoEntrada("rechazado", "sin_respuesta")

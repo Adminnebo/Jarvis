@@ -113,6 +113,14 @@ def test_apaga_micro_y_camara_antes_de_entrar(meet):
     assert meet._pagina.locator('[aria-label="Desactivar cámara"]').get_attribute("data-apagado") == "1"
 
 
+def test_sacarlo_mientras_espera_que_lo_admitan(meet):
+    # Desde Jarvis lo sacan mientras está en la sala de espera: no espera los 10 minutos.
+    import time
+    pedido = time.monotonic() + 1.5
+    r = meet.unirse(PAGINA + "?admitir_ms=60000", espera_s=600, debe_parar=lambda: time.monotonic() > pedido)
+    assert (r.estado, r.motivo) == ("rechazado", "cancelada")
+
+
 def test_rechazado(meet):
     assert meet.unirse(PAGINA + "?rechazar=1&admitir_ms=200", espera_s=10).estado == "rechazado"
 

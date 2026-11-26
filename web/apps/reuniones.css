@@ -25,6 +25,23 @@ body.embebido { --k-barra: 0px; }
 .reuniones { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; height: calc(100vh - var(--k-barra)); }
 .reuniones .columna { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--k-linea); }
 .reuniones aside { overflow-y: auto; padding: 4px 8px 12px; flex: 1; }
+.en-curso { padding: 12px 12px 10px; border-bottom: 1px solid var(--k-linea); background: #1f2326; }
+.en-curso h2 { font: 600 11px/1 Inter, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--k-tenue); margin: 0 0 8px; }
+.en-curso-fila { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.en-curso-fila + .en-curso-fila { border-top: 1px solid var(--k-linea); }
+.en-curso-fila > div { flex: 1; min-width: 0; }
+.en-curso-fila strong { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.en-curso-fila .estado { display: block; font-size: 12px; color: var(--k-tenue); font-variant-numeric: tabular-nums; }
+.en-curso-fila.vivo .estado { color: #f28b82; }
+.en-curso-fila.vivo .estado::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px;
+  border-radius: 50%; background: #ea4335; vertical-align: 1px; animation: latido 1.6s ease-in-out infinite; }
+@keyframes latido { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .en-curso-fila.vivo .estado::before { animation: none; } }
+.en-curso-fila button { flex: none; padding: 6px 12px; border-radius: 8px; font-size: 12.5px;
+  border: 1px solid #5f2b2b; color: #f28b82; background: transparent; }
+.en-curso-fila button:hover:not(:disabled) { background: #3a2323; }
+.en-curso-fila button:disabled { opacity: .6; cursor: default; }
 .grabar-link { padding: 14px 12px 10px; border-bottom: 1px solid var(--k-linea); }
 .grabar-link label { display: block; font-size: 12px; color: var(--k-tenue); margin-bottom: 6px; }
 .grabar-link .fila-form { display: flex; gap: 6px; }
