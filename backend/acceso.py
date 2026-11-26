@@ -453,7 +453,7 @@ LIBRES = (
 
 # El bot de Meet entra con el token de subida de cada reunión y el enlace de
 # WhatsApp con su firma: los revisa rutas_reuniones.py, no la sesión.
-LIBRES_PATRON = re.compile(r"^/api/reuniones/[0-9a-f]{32}/(eventos|audio|hablantes)$|^/reuniones/accion$")
+LIBRES_PATRON = re.compile(r"^/api/reuniones/[0-9a-f]{32}/(eventos|audio|hablantes|voces)$|^/reuniones/accion$")
 
 
 def es_libre(ruta: str) -> bool:

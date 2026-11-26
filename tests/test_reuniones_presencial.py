@@ -115,3 +115,19 @@ def test_buscar_reuniones_con_los_nombres_puestos():
     assert "Con Lucas" in texto and "Hablante 2 presenta" in texto
     reuniones.renombrar("admin", rid, "Hablante 2", "Lucas")
     assert "Lucas presenta" in herramientas._buscar_reuniones("presenta", "", "", "admin")
+
+
+def test_muestras_de_voz(entrar, monkeypatch):
+    from backend import reuniones_voces
+    monkeypatch.setattr(reuniones_voces, "recortar", lambda o, i, f, d: d.write_bytes(b"WAV") or True)
+    x = entrar("la-del-admin").post("/api/reuniones/presencial", json={}).json()
+    afuera = TestClient(main.app)
+    cab = {"Authorization": f"Bearer {x['token']}", "Content-Type": "audio/webm"}
+    r = afuera.post(f"/api/reuniones/{x['id']}/voces?nombre=Jorge", content=b"W", headers=cab)
+    assert r.status_code == 200 and r.json()["voces"] == ["Jorge"]
+    r = afuera.post(f"/api/reuniones/{x['id']}/voces?nombre=jorge", content=b"W", headers=cab)
+    assert r.status_code == 400 and "ya está" in r.json()["error"]
+    assert afuera.post(f"/api/reuniones/{x['id']}/voces?nombre=Ana", content=b"W",
+                       headers={**cab, "Content-Type": "text/plain"}).status_code == 415
+    assert afuera.post(f"/api/reuniones/{x['id']}/voces?nombre=Ana", content=b"W",
+                       headers={"Authorization": "Bearer otro", "Content-Type": "audio/webm"}).status_code == 401

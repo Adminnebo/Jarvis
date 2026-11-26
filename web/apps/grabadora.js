@@ -56,24 +56,69 @@ export function estado() {
            segundos: Math.max(0, Math.round((Date.now() - g.inicioMs) / 1000)), pausaS: g.pausaS || 0 };
 }
 
+// ---------------------------------------------------------------- micrófono y muestras
+let microfono = null;   // abierto antes de grabar (calibración): lo reusa la grabación
+
+/** Abre el micrófono (lo pide al navegador una sola vez) y prepara la barrita. */
+export async function abrirMicrofono() {
+  if (!microfono || !microfono.getAudioTracks().some((t) => t.readyState === "live")) {
+    microfono = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    prepararNivel(microfono);
+  }
+  return microfono;
+}
+
+export function soltarMicrofono() {
+  microfono?.getTracks().forEach((t) => t.stop());
+  microfono = null;
+}
+
+/** Graba `segundos` con el micrófono abierto y devuelve el audio (la muestra de una voz). */
+export async function grabarMuestra(segundos = 6) {
+  const stream = await abrirMicrofono();
+  const tipo = TIPOS.find((t) => window.MediaRecorder.isTypeSupported?.(t)) || "";
+  const rec = new MediaRecorder(stream, tipo ? { mimeType: tipo } : undefined);
+  const partes = [];
+  rec.ondataavailable = (e) => { if (e.data?.size) partes.push(e.data); };
+  const listo = new Promise((ok) => { rec.onstop = ok; });
+  rec.start();
+  await new Promise((ok) => setTimeout(ok, segundos * 1000));
+  rec.stop();
+  await listo;
+  return new Blob(partes, { type: (rec.mimeType || tipo || "audio/webm").split(";")[0] });
+}
+
+async function subirMuestras(id, token, muestras) {
+  const fallidas = [];
+  for (const m of muestras) {
+    try {
+      const r = await fetch(`/api/reuniones/${id}/voces?nombre=${encodeURIComponent(m.nombre)}`, {
+        method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": m.blob.type }, body: m.blob });
+      if (!r.ok) fallidas.push(m.nombre);
+    } catch { fallidas.push(m.nombre); }
+  }
+  return fallidas;
+}
+
 // ---------------------------------------------------------------- empezar
-export async function empezar(titulo = "") {
+/** muestras: [{nombre, blob}] de la calibración (vacío = sin calibrar). */
+export async function empezar(titulo = "", { muestras = [] } = {}) {
   if (g) return estado();
   const plugin = nativo();
   let stream = null;
-  if (!plugin) {   // el micrófono primero: si lo niegan, no se crea la reunión
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-  }
+  if (!plugin) stream = await abrirMicrofono();   // el micrófono primero: si lo niegan, no se crea la reunión
   const r = await fetch("/api/reuniones/presencial", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ titulo }) });
   if (!r.ok) {
-    stream?.getTracks().forEach((t) => t.stop());
+    soltarMicrofono();
     throw new Error("No pude empezar la grabación. Inténtalo otra vez.");
   }
   const x = await r.json();
   const pedazoS = PRUEBA_S || x.pedazo_s;
+  const fallidas = muestras.length ? await subirMuestras(x.id, x.token, muestras) : [];
   if (plugin) {
+    soltarMicrofono();   // el servicio nativo necesita el micrófono libre
     try {
       await plugin.iniciar({ reunionId: x.id, token: x.token, titulo: x.titulo, base: location.origin,
                              pedazoS, maxS: x.max_s });
@@ -84,15 +129,15 @@ export async function empezar(titulo = "") {
     g = { id: x.id, titulo: x.titulo, inicioMs: Date.now(), nativo: true };
     vigilarNativo();
     avisar();
-    return estado();
+    return { ...estado(), fallidas };
   }
   await poner("reuniones", { id: x.id, token: x.token, titulo: x.titulo, terminada: false });
   g = { id: x.id, token: x.token, titulo: x.titulo, inicioMs: Date.now(), stream, n: 0, pedazoS, maxS: x.max_s };
-  prepararNivel(stream);
+  microfono = null;   // ahora es de la grabación: terminar() lo cierra
   nuevoPedazo();
   mantenerPantalla();
   avisar();
-  return estado();
+  return { ...estado(), fallidas };
 }
 
 function nuevoPedazo() {
@@ -142,8 +187,8 @@ document.addEventListener("visibilitychange", async () => {
   try { if (g.rec.state !== "inactive") g.rec.stop(); } catch { /* ya parado */ }
   g.pausaS = (g.pausaS || 0) + Math.round((Date.now() - (g.ocultoDesde || Date.now())) / 1000);
   try {
-    g.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    prepararNivel(g.stream);
+    g.stream = await abrirMicrofono();
+    microfono = null;
     nuevoPedazo();
   } catch {
     terminar("usuario");

@@ -43,6 +43,32 @@
     </div>
     <section id="detalle" aria-live="polite"><p class="vacio">Elige una reunión.</p></section>
   </main>
+  <dialog id="calibrar" class="calibrar" aria-labelledby="calibrar-titulo">
+    <form method="dialog" id="calibrar-form">
+      <h2 id="calibrar-titulo">¿Quién va a hablar?</h2>
+      <div id="calibrar-cuantos">
+        <p class="nota">Si cada persona graba unos segundos su voz antes de empezar, la transcripción sale con su nombre.</p>
+        <label class="cuantos">¿Cuántas personas son?
+          <input id="calibrar-n" type="number" min="1" max="10" value="2" inputmode="numeric">
+        </label>
+      </div>
+      <div id="calibrar-persona" hidden>
+        <p class="paso" id="calibrar-paso"></p>
+        <label>Nombre <input id="calibrar-nombre" autocomplete="off" maxlength="60" placeholder="Ej.: Lucas"></label>
+        <p class="nota">Pídele que lea en voz alta, con el teléfono como va a quedar en la mesa:</p>
+        <blockquote id="calibrar-frase"></blockquote>
+        <div class="nivel" aria-hidden="true"><span id="calibrar-nivel"></span></div>
+        <p class="estado-muestra" id="calibrar-estado" role="status"></p>
+      </div>
+      <p class="mensaje" id="calibrar-mensaje" role="alert"></p>
+      <div class="botones">
+        <button type="button" id="calibrar-saltar" class="secundario">Grabar sin nombres</button>
+        <button type="button" id="calibrar-muestra" class="secundario" hidden>Grabar su voz (6 s)</button>
+        <button type="button" id="calibrar-seguir" class="primario">Seguir</button>
+      </div>
+      <button type="button" id="calibrar-cerrar" class="cerrar" aria-label="Cancelar">×</button>
+    </form>
+  </dialog>
   <script type="module" src="/apps/reuniones.js"></script>
 </body>
 </html>
