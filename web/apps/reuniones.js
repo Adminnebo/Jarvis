@@ -19,7 +19,7 @@ const hora = (iso) => new Date(iso).toLocaleString("es", { dateStyle: "medium", 
 const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 let abierta = null;
 
-const estructura = enEstructura("reuniones", { refrescar: () => cargarLista(), abrir: (id) => abrir(id) });
+const estructura = enEstructura("reuniones", { refrescar: () => { cargarLista(); cargarEnCurso(); }, abrir: (id) => abrir(id) });
 
 async function cargarLista() {
   const r = await fetch("/api/reuniones");
@@ -117,6 +117,75 @@ async function abrir(id) {
   seccion(caja, "Transcripción", texto);
 }
 
+// ---------------------------------------------------------------- en curso
+// Lo que el bot tiene agendado, esperando entrar o grabando: cada 15 s se pide de nuevo
+// y el reloj de "grabando hace" corre cada segundo sin pedir nada.
+let enCurso = [];
+const desde = (iso) => {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  const h = Math.floor(s / 3600);
+  return h ? `${h} h ${String(Math.floor(s / 60) % 60).padStart(2, "0")} min` : mmss(s);
+};
+
+function textoEstado(x) {
+  if (x.estado === "grabando" && x.grabando_desde) return `Grabando · ${desde(x.grabando_desde)}`;
+  if (x.estado === "esperando") return "Esperando que lo admitan";
+  return `Agendada · ${new Date(x.inicio).toLocaleTimeString("es", { hour: "numeric", minute: "2-digit" })}`;
+}
+
+function pintarEnCurso() {
+  const caja = $("en-curso");
+  caja.hidden = !enCurso.length;
+  caja.replaceChildren();
+  if (!enCurso.length) return;
+  const t = document.createElement("h2");
+  t.textContent = enCurso.some((x) => x.estado === "grabando") ? "Grabando ahora" : "Próximas del bot";
+  caja.append(t);
+  for (const x of enCurso) {
+    const fila = document.createElement("div");
+    fila.className = "en-curso-fila" + (x.estado === "grabando" ? " vivo" : "");
+    const info = document.createElement("div");
+    const nombre = document.createElement("strong");
+    nombre.textContent = x.titulo;
+    const estado = document.createElement("span");
+    estado.className = "estado";
+    estado.dataset.id = x.id;
+    estado.textContent = textoEstado(x);
+    info.append(nombre, estado);
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.textContent = x.estado === "agendada" ? "No grabar" : "Sacar al bot";
+    boton.addEventListener("click", async () => {
+      const pregunta = x.estado === "agendada"
+        ? `¿Cancelar la grabación de «${x.titulo}»?`
+        : `¿Sacar al bot de «${x.titulo}»? Sale para todos; lo grabado hasta ahora se resume igual.`;
+      if (!confirm(pregunta)) return;
+      boton.disabled = true;
+      const r = await fetch(`/api/reuniones/${encodeURIComponent(x.id)}/sacar`, { method: "POST" });
+      estado.textContent = r.ok ? (await r.json()).mensaje : "No se pudo, inténtalo otra vez.";
+      setTimeout(() => { cargarEnCurso(); cargarLista(); }, 4000);
+    });
+    fila.append(info, boton);
+    caja.append(fila);
+  }
+}
+
+async function cargarEnCurso() {
+  try {
+    const r = await fetch("/api/reuniones/en-curso");
+    enCurso = r.ok ? (await r.json()).reuniones : [];
+  } catch { /* sin red: se reintenta en la próxima vuelta */ }
+  pintarEnCurso();
+}
+
+setInterval(() => {
+  for (const x of enCurso) {
+    const e = document.querySelector(`.en-curso .estado[data-id="${x.id}"]`);
+    if (e && x.estado === "grabando" && x.grabando_desde) e.textContent = textoEstado(x);
+  }
+}, 1000);
+setInterval(cargarEnCurso, 15000);
+
 $("grabar-link").addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = e.currentTarget;
@@ -132,7 +201,7 @@ $("grabar-link").addEventListener("submit", async (e) => {
     const datos = await r.json();
     mensaje.textContent = r.ok ? `${datos.mensaje} Admítelo cuando pida entrar.` : datos.mensaje;
     mensaje.classList.toggle("mal", !r.ok);
-    if (r.ok) { form.reset(); cargarLista(); }
+    if (r.ok) { form.reset(); cargarLista(); cargarEnCurso(); }
   } catch {
     mensaje.textContent = "No se pudo, inténtalo otra vez.";
     mensaje.classList.add("mal");
@@ -144,7 +213,7 @@ $("grabar-link").addEventListener("submit", async (e) => {
 // Suelta (fuera de la estructura) la página ya se está yendo a /#reuniones: si siguiera,
 // podría leer y borrar el id pendiente antes que la vista de verdad (pasaba en celular).
 if (EMBEBIDO) {
-  await cargarLista();
+  await Promise.all([cargarLista(), cargarEnCurso()]);
   let inicial = null;
   try { inicial = sessionStorage.getItem(PENDIENTE); sessionStorage.removeItem(PENDIENTE); } catch { /* nada */ }
   if (inicial) abrir(inicial);

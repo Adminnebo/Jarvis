@@ -45,6 +45,26 @@ def test_pedazos_sin_repetir():
     assert rd.para_transcribir() == [(r["id"], 2)]
 
 
+def test_agrega_grabando_desde_a_una_base_vieja(tmp_path, monkeypatch):
+    # Una base creada antes de la columna: al abrirla se agrega sola.
+    import sqlite3
+    from backend import basedatos
+    ruta = basedatos.archivo()
+    basedatos._preparadas.discard(str(ruta))
+    ruta.unlink(missing_ok=True)
+    con = sqlite3.connect(ruta)
+    con.execute("CREATE TABLE reuniones (id TEXT PRIMARY KEY, clave TEXT NOT NULL UNIQUE, meet_url TEXT NOT NULL, "
+                "titulo TEXT NOT NULL, inicio TEXT NOT NULL, fin TEXT NOT NULL, estado TEXT NOT NULL, motivo TEXT, "
+                "token_hash TEXT, linea TEXT, transcripcion TEXT, resumen TEXT, puntos TEXT, tareas TEXT, "
+                "duracion_s INTEGER, terminada TEXT, incompleta INTEGER NOT NULL DEFAULT 0, "
+                "audio_borrado INTEGER NOT NULL DEFAULT 0, creada TEXT NOT NULL)")
+    con.commit()
+    con.close()
+    r = nueva()
+    rd.actualizar(r["id"], grabando_desde="2026-11-26T14:00:00+00:00")
+    assert rd.obtener(r["id"])["grabando_desde"] == "2026-11-26T14:00:00+00:00"
+
+
 def test_grabar_siempre():
     assert rd.grabar_siempre("u1") is False
     rd.poner_grabar_siempre("u1", True)

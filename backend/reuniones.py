@@ -133,12 +133,18 @@ def recibir_evento(reunion_id: str, datos: dict) -> None:
     if tipo not in ESTADOS:
         return
     r = rd.obtener(reunion_id)
+    if tipo == "rechazado" and datos.get("motivo") == "cancelada":
+        # Lo sacaron desde Jarvis mientras esperaba entrar: no es un rechazo.
+        rd.actualizar(reunion_id, estado="cancelada", motivo="cancelada")
+        return
     cambios = {"estado": ESTADOS[tipo]}
     if tipo == "terminado":
         cambios.update(terminada=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                        incompleta=int(bool(datos.get("incompleta"))), motivo=datos.get("motivo"))
     elif tipo in ("rechazado", "fallo"):
         cambios["motivo"] = datos.get("motivo")
+    elif tipo == "admitido" and not r.get("grabando_desde"):
+        cambios["grabando_desde"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     rd.actualizar(reunion_id, **cambios)
     motivo = MOTIVOS.get(datos.get("motivo") or "", datos.get("motivo") or "")
     if tipo == "rechazado":
@@ -188,3 +194,47 @@ def grabar_link(usuario_id: str, link: str, titulo: str = "") -> str:
               "conferencing": {"url": url}}
     reunion = proponer(usuario_id, evento)
     return pedir(usuario_id, reunion["id"])
+
+
+# --------------------------------------------------------------------------
+# En curso: qué está grabando el bot y sacarlo
+# --------------------------------------------------------------------------
+
+ORDEN_EN_CURSO = {"grabando": 0, "esperando": 1, "agendada": 2}
+VENCE_DESPUES = timedelta(minutes=15)   # lo mismo que espera el bot después del fin
+
+
+def en_curso(usuario_id: str) -> list[dict]:
+    """Grabando, esperando que lo admitan o agendadas (en ese orden), de las que pidió la
+    persona. Una agendada cuya hora ya pasó no sale: el bot nunca entró y no va a entrar."""
+    ahora = datetime.now(timezone.utc)
+    salida = []
+    for r in rd.en_curso_de(usuario_id):
+        if r["estado"] == "agendada":
+            try:
+                if datetime.fromisoformat(r["fin"]) + VENCE_DESPUES < ahora:
+                    continue
+            except ValueError:
+                pass
+        salida.append({"id": r["id"], "titulo": r["titulo"], "estado": r["estado"], "inicio": r["inicio"],
+                       "grabando_desde": r.get("grabando_desde"), "meet_url": r["meet_url"]})
+    return sorted(salida, key=lambda x: (ORDEN_EN_CURSO[x["estado"]], x["inicio"]))
+
+
+def sacar(usuario_id: str, reunion_id: str) -> str:
+    """Saca al bot (para todos). Lo grabado hasta ahora se transcribe y resume igual:
+    el bot, al salir, manda su "terminado" con motivo cancelada."""
+    r = rd.obtener(reunion_id)
+    if r is None or not rd.puede_ver(reunion_id, usuario_id):
+        return "No encontré esa reunión."
+    if r["estado"] not in rd.EN_CURSO:
+        return f"El bot ya no está en «{r['titulo']}»."
+    try:
+        bot_meet.cancelar(reunion_id)
+    except bot_meet.ErrorBot as error:
+        print(f"  AVISO: no pude sacar al bot de {reunion_id}: {error}")
+        return f"No pude sacar al bot de «{r['titulo']}». Inténtalo de nuevo en un momento."
+    if r["estado"] == "agendada":   # todavía no había entrado: no hay nada que procesar
+        rd.actualizar(reunion_id, estado="cancelada")
+        return f"Listo, el bot no va a entrar a «{r['titulo']}»."
+    return f"Listo, saco al bot de «{r['titulo']}». Lo grabado hasta ahora se resume en unos minutos."

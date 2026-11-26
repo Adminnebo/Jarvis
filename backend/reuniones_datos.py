@@ -82,6 +82,20 @@ def listar_de(usuario_id: str, limite: int = 100) -> list[dict]:
     return [_fila(f) for f in filas]
 
 
+EN_CURSO = ("agendada", "esperando", "grabando")
+
+
+def en_curso_de(usuario_id: str) -> list[dict]:
+    """Las que pidió y todavía no terminan: agendadas, esperando que lo admitan o grabando."""
+    marcas = ", ".join("?" * len(EN_CURSO))
+    with basedatos.conexion() as con:
+        filas = con.execute(
+            "SELECT r.* FROM reuniones r JOIN reunion_interesados i ON i.reunion_id = r.id "
+            f"WHERE i.usuario_id = ? AND i.quiere = 1 AND r.estado IN ({marcas}) ORDER BY r.inicio",
+            (usuario_id, *EN_CURSO)).fetchall()
+    return [_fila(f) for f in filas]
+
+
 def guardar_pedazo(reunion_id: str, n: int) -> bool:
     """True si es nuevo; el mismo pedazo dos veces no se guarda otra vez."""
     with basedatos.conexion() as con:

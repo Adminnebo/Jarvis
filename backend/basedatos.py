@@ -299,7 +299,8 @@ _ESQUEMA = """
         terminada TEXT,
         incompleta INTEGER NOT NULL DEFAULT 0,
         audio_borrado INTEGER NOT NULL DEFAULT 0,
-        creada TEXT NOT NULL
+        creada TEXT NOT NULL,
+        grabando_desde TEXT
     );
 
     CREATE TABLE IF NOT EXISTS reunion_interesados (
@@ -325,6 +326,20 @@ _ESQUEMA = """
 """
 
 
+# Columnas que llegaron después de crear su tabla: CREATE TABLE IF NOT EXISTS no
+# las agrega a una base que ya existía, así que se agregan aquí una sola vez.
+_COLUMNAS_NUEVAS = (
+    ("reuniones", "grabando_desde", "TEXT"),   # cuándo entró el bot (para "lleva 12 min")
+)
+
+
+def _agregar_columnas(con) -> None:
+    for tabla, columna, tipo in _COLUMNAS_NUEVAS:
+        existentes = {f[1] for f in con.execute(f"PRAGMA table_info({tabla})")}
+        if existentes and columna not in existentes:
+            con.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
+
+
 def archivo():
     return rutas.archivo("jarvis.db")
 
@@ -348,6 +363,7 @@ def conexion():
     with _candado:
         if str(ruta) not in _preparadas:
             con.executescript(_ESQUEMA)
+            _agregar_columnas(con)
             con.commit()
             _preparadas.add(str(ruta))
 

@@ -156,6 +156,64 @@ def test_herramienta_grabar_meet(bot):
     assert "voy a grabar" in texto and len(bot["agendadas"]) == 1
 
 
+def test_en_curso_con_la_hora_en_que_entro(bot):
+    rid = _agendada(bot)
+    assert [(x["id"], x["estado"], x["grabando_desde"]) for x in reuniones.en_curso("u1")] == [(rid, "agendada", None)]
+    reuniones.recibir_evento(rid, {"tipo": "admitido"})
+    (x,) = reuniones.en_curso("u1")
+    assert x["estado"] == "grabando" and x["grabando_desde"]
+    assert reuniones.en_curso("u2") == []          # solo las de quien la pidió
+    reuniones.recibir_evento(rid, {"tipo": "terminado", "motivo": "solo", "incompleta": False})
+    assert reuniones.en_curso("u1") == []          # procesando ya no está "en curso"
+
+
+def test_en_curso_primero_lo_que_graba_y_sin_agendadas_vencidas(bot):
+    from datetime import datetime, timedelta
+    ahora = datetime.now(reuniones.ZONA).replace(microsecond=0)
+    vieja = {**EVENTO, "conferencing": {"url": "https://meet.google.com/aaa-bbbb-ccc"},
+             "start": (ahora - timedelta(hours=3)).isoformat(), "end": (ahora - timedelta(hours=2)).isoformat()}
+    futura = {**EVENTO, "conferencing": {"url": "https://meet.google.com/ddd-eeee-fff"},
+              "start": (ahora + timedelta(hours=1)).isoformat(), "end": (ahora + timedelta(hours=2)).isoformat()}
+    viva = {**EVENTO, "conferencing": {"url": "https://meet.google.com/ggg-hhhh-iii"},
+            "start": (ahora + timedelta(hours=2)).isoformat(), "end": (ahora + timedelta(hours=3)).isoformat()}
+    ids = {}
+    for nombre, e in (("vieja", vieja), ("futura", futura), ("viva", viva)):
+        r = reuniones.proponer("u1", e)
+        reuniones.pedir("u1", r["id"])
+        ids[nombre] = r["id"]
+    reuniones.recibir_evento(ids["viva"], {"tipo": "admitido"})
+    assert [x["id"] for x in reuniones.en_curso("u1")] == [ids["viva"], ids["futura"]]
+
+
+def test_sacar_al_bot_mientras_graba(bot):
+    rid = _agendada(bot)
+    reuniones.recibir_evento(rid, {"tipo": "admitido"})
+    assert "saco al bot" in reuniones.sacar("u1", rid)
+    assert bot["canceladas"] == [rid]
+    assert rd.obtener(rid)["estado"] == "grabando"   # lo grabado llega con el "terminado" del bot
+
+
+def test_sacar_antes_de_que_entre_lo_cancela(bot):
+    rid = _agendada(bot)
+    reuniones.sacar("u1", rid)
+    assert rd.obtener(rid)["estado"] == "cancelada"
+
+
+def test_sacarlo_en_la_sala_de_espera_no_avisa_como_rechazo(bot, monkeypatch):
+    avisos_creados = []
+    monkeypatch.setattr(reuniones, "_avisar", lambda rid, texto: avisos_creados.append(texto))
+    rid = _agendada(bot)
+    reuniones.recibir_evento(rid, {"tipo": "esperando"})
+    reuniones.sacar("u1", rid)
+    reuniones.recibir_evento(rid, {"tipo": "rechazado", "motivo": "cancelada"})
+    assert rd.obtener(rid)["estado"] == "cancelada" and avisos_creados == []
+
+
+def test_sacar_solo_quien_la_pidio(bot):
+    rid = _agendada(bot)
+    assert "No encontré" in reuniones.sacar("u2", rid) and bot["canceladas"] == []
+
+
 def test_enlace_firmado(bot, monkeypatch):
     monkeypatch.setenv("JARVIS_CLAVE_SECRETA", "x" * 40)
     r = reuniones.proponer("u1", EVENTO)

@@ -136,6 +136,18 @@ async function cargarResumen() {
     } else proximo.hidden = true;
   } catch { /* sin red: en el proximo minuto */ }
 }
+// Reuniones: globo con cuántas está grabando el bot ahora (las agendadas no cuentan).
+async function cargarReunionesEnCurso() {
+  try {
+    const r = await fetch("/api/reuniones/en-curso");
+    if (!r.ok) return;
+    const { reuniones = [] } = await r.json();
+    globo("reuniones", reuniones.filter((x) => x.estado === "grabando").length);
+    const b = document.querySelector('.riel-boton[data-vista="reuniones"]');
+    if (b) b.title = reuniones.some((x) => x.estado === "grabando") ? "Reuniones · el bot está grabando" : "Reuniones";
+  } catch { /* sin red: en la próxima vuelta */ }
+}
+
 function globo(vista, n) {
   const g = document.querySelector(`.riel-boton[data-vista="${vista}"] .globo`);
   if (!g) return;
@@ -416,8 +428,10 @@ async function arrancar() {
   } catch { /* sin estado: se queda con lo de usuario */ }
   cargarResumen();
   cargarAvisos();
+  cargarReunionesEnCurso();
   setInterval(cargarResumen, 60000);
   setInterval(cargarAvisos, 60000);
+  setInterval(cargarReunionesEnCurso, 30000);
   // Las demas apps se precargan en silencio despues de un rato: el primer cambio ya es instantaneo.
   setTimeout(() => {
     for (const v of VISTAS) {

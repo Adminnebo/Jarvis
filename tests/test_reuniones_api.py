@@ -91,6 +91,20 @@ def test_grabar_un_link_desde_la_vista(reunion, entrar):
     assert malo.status_code == 400
 
 
+def test_en_curso_y_sacar_desde_la_vista(reunion, entrar, monkeypatch):
+    rid, _ = reunion
+    canceladas = []
+    monkeypatch.setattr(bot_meet, "cancelar", lambda r: canceladas.append(r) or True)
+    reuniones.pedir("admin", rid)
+    c = entrar("la-del-admin")
+    (x,) = c.get("/api/reuniones/en-curso").json()["reuniones"]
+    assert x["id"] == rid and x["estado"] == "agendada" and "grabando_desde" in x
+    assert "no va a entrar" in c.post(f"/api/reuniones/{rid}/sacar").json()["mensaje"]   # aún no había entrado
+    assert canceladas == [rid]
+    assert c.get("/api/reuniones/en-curso").json()["reuniones"] == []
+    assert entrar("la-de-ana").post(f"/api/reuniones/{rid}/sacar").json()["mensaje"].startswith("No encontré")
+
+
 def test_grabar_desde_la_campanita(reunion, entrar):
     rid, _ = reunion
     c = entrar("la-de-ana")
